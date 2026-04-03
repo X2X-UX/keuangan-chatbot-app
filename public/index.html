@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Arunika Finance</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="backdrop backdrop-one"></div>
+    <div class="backdrop backdrop-two"></div>
+
+    <section id="authGate" class="auth-gate">
+      <div class="auth-card card">
+        <span class="eyebrow">Akses Aman</span>
+        <h2 id="authTitle">Masuk ke Arunika Finance</h2>
+        <p id="authSubtitle">
+          Masuk untuk mengakses dashboard keuangan pribadi. Data transaksi setiap akun akan
+          dipisahkan otomatis di sistem.
+        </p>
+
+        <div class="auth-tabs">
+          <button id="loginTabButton" class="auth-tab is-active" type="button">Login</button>
+          <button id="registerTabButton" class="auth-tab" type="button">Daftar</button>
+        </div>
+
+        <form id="authForm" class="auth-form">
+          <label id="nameField">
+            <span>Nama</span>
+            <input id="authName" name="name" type="text" placeholder="Nama lengkap" />
+          </label>
+          <label>
+            <span>Email</span>
+            <input id="authEmail" name="email" type="email" placeholder="nama@email.com" required />
+          </label>
+          <label>
+            <span>Password</span>
+            <input id="authPassword" name="password" type="password" placeholder="Minimal 8 karakter" required />
+          </label>
+          <button id="authSubmitButton" class="primary-button" type="submit">Masuk</button>
+        </form>
+
+        <p id="authMessage" class="auth-message"></p>
+        <p class="auth-hint">
+          Akun demo: <strong>demo@arunika.local</strong> / <strong>demo12345</strong>
+        </p>
+      </div>
+    </section>
+
+    <main id="appShell" class="shell">
+      <section class="hero card">
+        <div class="hero-copy">
+          <span class="eyebrow">Financial Control Center</span>
+          <h1>Arunika Finance</h1>
+          <p>
+            Platform keuangan online untuk mencatat arus kas, menganalisis pola pengeluaran,
+            dan berdiskusi dengan asisten keuangan berbasis data transaksi Anda.
+          </p>
+        </div>
+
+        <div class="hero-status">
+          <span class="status-chip" id="chatModeChip">Memuat mode chatbot...</span>
+          <p id="heroSummaryText">Masuk ke akun untuk memuat ringkasan keuangan terbaru.</p>
+
+          <div class="session-panel">
+            <div>
+              <strong id="sessionName">Belum masuk</strong>
+              <span id="sessionEmail">Gunakan akun demo atau daftar akun baru.</span>
+            </div>
+            <button id="logoutButton" class="secondary-button is-hidden" type="button">Keluar</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="overview">
+        <article class="metric card">
+          <span class="metric-label">Saldo Bersih</span>
+          <strong class="metric-value" id="balanceValue">Rp0</strong>
+          <span class="metric-foot" id="balanceFoot">Menunggu data transaksi</span>
+        </article>
+        <article class="metric card">
+          <span class="metric-label">Pemasukan</span>
+          <strong class="metric-value" id="incomeValue">Rp0</strong>
+          <span class="metric-foot" id="incomeFoot">0 kategori income</span>
+        </article>
+        <article class="metric card">
+          <span class="metric-label">Pengeluaran</span>
+          <strong class="metric-value" id="expenseValue">Rp0</strong>
+          <span class="metric-foot" id="expenseFoot">0 kategori expense</span>
+        </article>
+        <article class="metric card">
+          <span class="metric-label">Rasio Tabungan</span>
+          <strong class="metric-value" id="savingsValue">0%</strong>
+          <span class="metric-foot" id="savingsFoot">Belum cukup data</span>
+        </article>
+      </section>
+
+      <section class="workspace">
+        <div class="left-column">
+          <article class="card form-card">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">Tambah Cepat</span>
+                <h2>Input transaksi baru</h2>
+              </div>
+            </div>
+
+            <form id="transactionForm" class="transaction-form">
+              <label>
+                <span>Tipe</span>
+                <select name="type" required>
+                  <option value="income">Pemasukan</option>
+                  <option value="expense">Pengeluaran</option>
+                </select>
+              </label>
+              <label>
+                <span>Deskripsi transaksi</span>
+                <input type="text" name="description" placeholder="Contoh: Bayar listrik" required />
+              </label>
+              <label>
+                <span>Nominal</span>
+                <input type="number" name="amount" min="1" step="1000" placeholder="500000" required />
+              </label>
+              <label>
+                <span>Kategori transaksi</span>
+                <input type="text" name="category" placeholder="Kebutuhan, Gaji, Freelance..." required />
+              </label>
+              <label>
+                <span>Tanggal</span>
+                <input type="date" name="date" required />
+              </label>
+              <label class="full-span">
+                <span>Catatan</span>
+                <textarea name="notes" rows="3" placeholder="Tambahan informasi jika perlu"></textarea>
+              </label>
+              <button class="primary-button full-span" type="submit">Simpan Transaksi</button>
+            </form>
+          </article>
+
+          <section class="charts-grid">
+            <article class="card chart-card">
+              <div class="section-heading">
+                <div>
+                  <span class="eyebrow">Tren</span>
+                <h2>Arus kas 6 bulan terakhir</h2>
+              </div>
+            </div>
+              <div id="cashflowChart" class="chart-list"></div>
+            </article>
+
+            <article class="card chart-card">
+              <div class="section-heading">
+                <div>
+                  <span class="eyebrow">Fokus</span>
+                <h2>Komposisi pengeluaran utama</h2>
+              </div>
+            </div>
+              <div id="categoryChart" class="chart-list"></div>
+            </article>
+          </section>
+
+          <article class="card table-card">
+            <div class="section-heading split-heading">
+              <div>
+                <span class="eyebrow">Riwayat</span>
+                <h2>Daftar transaksi terbaru</h2>
+              </div>
+
+              <div class="filters">
+                <input id="searchInput" type="search" placeholder="Cari deskripsi atau kategori..." />
+                <select id="typeFilter">
+                  <option value="all">Semua tipe</option>
+                  <option value="income">Pemasukan</option>
+                  <option value="expense">Pengeluaran</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Tanggal</th>
+                    <th>Deskripsi</th>
+                    <th>Kategori</th>
+                    <th>Tipe</th>
+                    <th>Nominal</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="transactionTableBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+
+        <aside class="right-column">
+          <article class="card telegram-card">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">Telegram</span>
+                <h2>Koneksi chatbot</h2>
+              </div>
+            </div>
+
+            <p id="telegramStatusText" class="telegram-status">
+              Login untuk melihat status koneksi Telegram.
+            </p>
+
+            <div class="telegram-actions">
+              <button id="telegramLinkButton" class="secondary-button" type="button">Buat kode tautan</button>
+              <button id="telegramUnlinkButton" class="secondary-button is-hidden" type="button">Putuskan koneksi</button>
+            </div>
+
+            <div id="telegramCodeBox" class="telegram-code is-hidden">
+              <span>Kirim perintah berikut ke bot Telegram:</span>
+              <strong id="telegramCodeText">/link XXXXXXXX</strong>
+              <small id="telegramCodeMeta">Kode berlaku 10 menit.</small>
+            </div>
+          </article>
+
+          <article class="card chatbot-card">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">Chatbot</span>
+                <h2>Asisten keuangan</h2>
+              </div>
+            </div>
+
+            <div class="quick-prompts" id="quickPrompts">
+              <button type="button" data-prompt="Buat ringkasan keuangan saya.">Ringkasan keuangan</button>
+              <button type="button" data-prompt="Pengeluaran terbesar saya apa?">Pengeluaran terbesar</button>
+              <button type="button" data-prompt="Beri saran supaya saya lebih hemat.">Rekomendasi penghematan</button>
+            </div>
+
+            <div id="chatMessages" class="chat-messages"></div>
+
+            <form id="chatForm" class="chat-form">
+              <textarea
+                id="chatInput"
+                rows="3"
+                placeholder="Tanyakan kondisi keuangan Anda..."
+                required
+              ></textarea>
+              <button class="primary-button" type="submit">Kirim</button>
+            </form>
+          </article>
+
+          <article class="card insight-card">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">Insight</span>
+                <h2>Sorotan otomatis</h2>
+              </div>
+            </div>
+            <div id="insightList" class="insight-list"></div>
+          </article>
+        </aside>
+      </section>
+    </main>
+
+    <template id="chatBubbleTemplate">
+      <div class="chat-bubble">
+        <span class="chat-role"></span>
+        <p class="chat-text"></p>
+      </div>
+    </template>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

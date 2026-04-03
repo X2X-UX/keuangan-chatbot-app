@@ -1,0 +1,65 @@
+[
+  {
+    "id": "seed-salary-mar",
+    "type": "income",
+    "description": "Gaji Bulanan",
+    "amount": 12500000,
+    "category": "Gaji",
+    "date": "2026-03-25",
+    "notes": "Transfer payroll"
+  },
+  {
+    "id": "seed-dining-mar",
+    "type": "expense",
+    "description": "Makan di Luar",
+    "amount": 610000,
+    "category": "Makanan",
+    "date": "2026-03-22",
+    "notes": "Meeting dan akhir pekan"
+  },
+  {
+    "id": "seed-freelance-mar",
+    "type": "income",
+    "description": "Proyek Landing Page",
+    "amount": 3500000,
+    "category": "Freelance",
+    "date": "2026-03-21",
+    "notes": "Klien startup retail"
+  },
+  {
+    "id": "seed-transport-mar",
+    "type": "expense",
+    "description": "Transportasi Online",
+    "amount": 420000,
+    "category": "Transportasi",
+    "date": "2026-03-18",
+    "notes": "Perjalanan kantor dan klien"
+  },
+  {
+    "id": "seed-entertainment-mar",
+    "type": "expense",
+    "description": "Langganan Hiburan",
+    "amount": 185000,
+    "category": "Hiburan",
+    "date": "2026-03-16",
+    "notes": "Streaming dan musik"
+  },
+  {
+    "id": "seed-groceries-mar",
+    "type": "expense",
+    "description": "Belanja Bulanan",
+    "amount": 1180000,
+    "category": "Kebutuhan",
+    "date": "2026-03-12",
+    "notes": "Supermarket dan kebutuhan rumah"
+  },
+  {
+    "id": "seed-rent-mar",
+    "type": "expense",
+    "description": "Sewa Apartemen",
+    "amount": 3200000,
+    "category": "Hunian",
+    "date": "2026-03-03",
+    "notes": "Pembayaran bulanan"
+  }
+]

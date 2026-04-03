@@ -1,0 +1,16 @@
+{
+  "name": "keuangan-chatbot-app",
+  "version": "1.0.0",
+  "description": "Aplikasi keuangan online dengan dashboard transaksi dan chatbot finansial.",
+  "main": "server.next.js",
+  "scripts": {
+    "preflight": "node scripts/preflight.js",
+    "sync:public": "node scripts/sync-public.js",
+    "prestart": "npm run sync:public",
+    "predev": "npm run sync:public",
+    "start": "node server.next.js",
+    "dev": "node server.next.js",
+    "telegram:webhook": "node register-telegram-webhook.js"
+  },
+  "license": "MIT"
+}
