@@ -101,6 +101,49 @@
         </article>
       </section>
 
+      <section class="flow-story card">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Flow Statistik</span>
+            <h2>Pergerakan pemasukan dan pengeluaran</h2>
+          </div>
+          <button id="compactModeButton" class="secondary-button compact-toggle" type="button" aria-pressed="false">
+            Mode Ringkas: Nonaktif
+          </button>
+        </div>
+
+        <div class="flow-grid">
+          <article class="flow-step income">
+            <span class="flow-label">Pemasukan</span>
+            <strong class="flow-value" id="flowIncomeValue">Rp0</strong>
+            <span class="flow-meta" id="flowIncomeMeta">Menunggu data pemasukan</span>
+            <div class="flow-meter">
+              <span class="flow-fill income" id="flowIncomeBar"></span>
+            </div>
+          </article>
+
+          <article class="flow-step expense">
+            <span class="flow-label">Pengeluaran</span>
+            <strong class="flow-value" id="flowExpenseValue">Rp0</strong>
+            <span class="flow-meta" id="flowExpenseMeta">Menunggu data pengeluaran</span>
+            <div class="flow-meter">
+              <span class="flow-fill expense" id="flowExpenseBar"></span>
+            </div>
+          </article>
+
+          <article class="flow-step net">
+            <span class="flow-label">Neraca Akhir</span>
+            <strong class="flow-value" id="flowNetValue">Rp0</strong>
+            <span class="flow-meta" id="flowNetMeta">Menunggu data neraca</span>
+            <div class="flow-meter">
+              <span class="flow-fill net" id="flowNetBar"></span>
+            </div>
+          </article>
+        </div>
+
+        <div class="flow-timeline" id="flowTimeline"></div>
+      </section>
+
       <section class="workspace">
         <div class="left-column">
           <article class="card form-card">

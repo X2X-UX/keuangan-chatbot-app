@@ -1,6 +1,7 @@
 const state = {
   authMode: "login",
   chatHistory: [],
+  compactMode: false,
   health: null,
   summary: null,
   telegramCommand: null,
@@ -8,6 +9,7 @@ const state = {
   transactions: [],
   user: null
 };
+const COMPACT_MODE_STORAGE_KEY = "arunika_compact_mode";
 
 const currencyFormatter = new Intl.NumberFormat("id-ID", {
   currency: "IDR",
@@ -19,6 +21,11 @@ const percentFormatter = new Intl.NumberFormat("id-ID", {
   maximumFractionDigits: 1,
   minimumFractionDigits: 1
 });
+const animatedValues = new Map();
+const prefersReducedMotion =
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const elements = {
   appShell: document.getElementById("appShell"),
@@ -40,8 +47,19 @@ const elements = {
   chatMessages: document.getElementById("chatMessages"),
   chatModeChip: document.getElementById("chatModeChip"),
   chatTemplate: document.getElementById("chatBubbleTemplate"),
+  compactModeButton: document.getElementById("compactModeButton"),
   expenseFoot: document.getElementById("expenseFoot"),
   expenseValue: document.getElementById("expenseValue"),
+  flowExpenseBar: document.getElementById("flowExpenseBar"),
+  flowExpenseMeta: document.getElementById("flowExpenseMeta"),
+  flowExpenseValue: document.getElementById("flowExpenseValue"),
+  flowIncomeBar: document.getElementById("flowIncomeBar"),
+  flowIncomeMeta: document.getElementById("flowIncomeMeta"),
+  flowIncomeValue: document.getElementById("flowIncomeValue"),
+  flowNetBar: document.getElementById("flowNetBar"),
+  flowNetMeta: document.getElementById("flowNetMeta"),
+  flowNetValue: document.getElementById("flowNetValue"),
+  flowTimeline: document.getElementById("flowTimeline"),
   heroSummaryText: document.getElementById("heroSummaryText"),
   incomeFoot: document.getElementById("incomeFoot"),
   incomeValue: document.getElementById("incomeValue"),
@@ -73,6 +91,113 @@ function formatCurrency(value) {
 
 function formatPercent(value) {
   return `${percentFormatter.format(Number(value) || 0)}%`;
+}
+
+function formatSignedCurrency(value) {
+  const amount = Number(value) || 0;
+  const sign = amount < 0 ? "-" : "+";
+  return `${sign}${formatCurrency(Math.abs(amount))}`;
+}
+
+function easeOutCubic(value) {
+  return 1 - (1 - value) ** 3;
+}
+
+function setAnimatedValue(key, value) {
+  animatedValues.set(key, Number(value) || 0);
+}
+
+function getAnimatedValue(key) {
+  return animatedValues.has(key) ? animatedValues.get(key) : null;
+}
+
+function animateValue(key, target, onFrame, duration = 700) {
+  const to = Number(target) || 0;
+  const from = animatedValues.has(key) ? animatedValues.get(key) : 0;
+  if (prefersReducedMotion || Math.abs(to - from) < 1) {
+    onFrame(to);
+    setAnimatedValue(key, to);
+    return;
+  }
+
+  const startedAt = performance.now();
+  const run = (now) => {
+    const progress = Math.min((now - startedAt) / duration, 1);
+    const eased = easeOutCubic(progress);
+    const current = from + (to - from) * eased;
+    onFrame(current);
+
+    if (progress < 1) {
+      requestAnimationFrame(run);
+      return;
+    }
+
+    setAnimatedValue(key, to);
+  };
+
+  requestAnimationFrame(run);
+}
+
+function pulseElement(element, direction) {
+  if (!element) {
+    return;
+  }
+
+  const className = direction === "down" ? "is-pulse-down" : "is-pulse-up";
+  element.classList.remove("is-pulse-up", "is-pulse-down");
+  void element.offsetWidth;
+  element.classList.add(className);
+
+  setTimeout(() => {
+    element.classList.remove(className);
+  }, 650);
+}
+
+function shouldDefaultCompactMode() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return false;
+  }
+
+  return window.matchMedia("(max-width: 760px)").matches;
+}
+
+function setCompactMode(enabled, options = {}) {
+  const persist = options.persist !== false;
+  state.compactMode = Boolean(enabled);
+
+  elements.appShell.classList.toggle("is-compact", state.compactMode);
+
+  if (elements.compactModeButton) {
+    elements.compactModeButton.textContent = `Mode Ringkas: ${state.compactMode ? "Aktif" : "Nonaktif"}`;
+    elements.compactModeButton.setAttribute("aria-pressed", String(state.compactMode));
+  }
+
+  if (!persist) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(COMPACT_MODE_STORAGE_KEY, state.compactMode ? "1" : "0");
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function loadCompactModePreference() {
+  try {
+    const saved = window.localStorage.getItem(COMPACT_MODE_STORAGE_KEY);
+    if (saved === "1") {
+      return true;
+    }
+
+    if (saved === "0") {
+      return false;
+    }
+  } catch {
+    // ignore storage errors
+  }
+
+  return shouldDefaultCompactMode();
 }
 
 function formatDate(value) {
@@ -250,6 +375,24 @@ function clearDashboard() {
   elements.heroSummaryText.textContent = state.user
     ? "Memuat ringkasan keuangan terbaru."
     : "Masuk ke akun untuk memuat ringkasan keuangan terbaru.";
+  elements.flowIncomeValue.textContent = "Rp0";
+  elements.flowExpenseValue.textContent = "Rp0";
+  elements.flowNetValue.textContent = "Rp0";
+  elements.flowIncomeMeta.textContent = "Menunggu data pemasukan";
+  elements.flowExpenseMeta.textContent = "Menunggu data pengeluaran";
+  elements.flowNetMeta.textContent = "Menunggu data neraca";
+  elements.flowIncomeBar.style.width = "0%";
+  elements.flowExpenseBar.style.width = "0%";
+  elements.flowNetBar.style.width = "0%";
+  elements.flowNetBar.classList.remove("is-negative");
+  setAnimatedValue("balance", 0);
+  setAnimatedValue("income", 0);
+  setAnimatedValue("expense", 0);
+  setAnimatedValue("savingsRate", 0);
+  setAnimatedValue("flowIncome", 0);
+  setAnimatedValue("flowExpense", 0);
+  setAnimatedValue("flowNet", 0);
+  elements.flowTimeline.innerHTML = '<div class="empty-state">Flow bulanan akan tampil setelah data transaksi tersedia.</div>';
   elements.cashflowChart.innerHTML = '<div class="empty-state">Masuk untuk melihat arus kas bulanan.</div>';
   elements.categoryChart.innerHTML = '<div class="empty-state">Masuk untuk melihat komposisi pengeluaran.</div>';
   elements.insightList.innerHTML = '<div class="empty-state">Insight akan tampil setelah data akun berhasil dimuat.</div>';
@@ -314,10 +457,48 @@ function renderSummary() {
     return;
   }
 
-  elements.balanceValue.textContent = formatCurrency(summary.balance);
-  elements.incomeValue.textContent = formatCurrency(summary.totalIncome);
-  elements.expenseValue.textContent = formatCurrency(summary.totalExpense);
-  elements.savingsValue.textContent = formatPercent(summary.savingsRate);
+  const previousBalance = getAnimatedValue("balance");
+  const previousIncome = getAnimatedValue("income");
+  const previousExpense = getAnimatedValue("expense");
+  const previousSavings = getAnimatedValue("savingsRate");
+
+  animateValue("balance", summary.balance, (value) => {
+    elements.balanceValue.textContent = formatCurrency(value);
+  });
+  animateValue("income", summary.totalIncome, (value) => {
+    elements.incomeValue.textContent = formatCurrency(value);
+  });
+  animateValue("expense", summary.totalExpense, (value) => {
+    elements.expenseValue.textContent = formatCurrency(value);
+  });
+  animateValue("savingsRate", summary.savingsRate, (value) => {
+    elements.savingsValue.textContent = formatPercent(value);
+  });
+
+  if (previousBalance !== null && Number(summary.balance) !== previousBalance) {
+    pulseElement(elements.balanceValue.closest(".metric"), Number(summary.balance) > previousBalance ? "up" : "down");
+  }
+
+  if (previousIncome !== null && Number(summary.totalIncome) !== previousIncome) {
+    pulseElement(
+      elements.incomeValue.closest(".metric"),
+      Number(summary.totalIncome) > previousIncome ? "up" : "down"
+    );
+  }
+
+  if (previousExpense !== null && Number(summary.totalExpense) !== previousExpense) {
+    pulseElement(
+      elements.expenseValue.closest(".metric"),
+      Number(summary.totalExpense) > previousExpense ? "up" : "down"
+    );
+  }
+
+  if (previousSavings !== null && Number(summary.savingsRate) !== previousSavings) {
+    pulseElement(
+      elements.savingsValue.closest(".metric"),
+      Number(summary.savingsRate) > previousSavings ? "up" : "down"
+    );
+  }
 
   elements.balanceFoot.textContent = `${summary.transactionCount} transaksi tercatat`;
   elements.incomeFoot.textContent = `${summary.incomeCategories.length} kategori income`;
@@ -327,6 +508,90 @@ function renderSummary() {
   elements.heroSummaryText.textContent = summary.topExpenseCategory
     ? `Saldo saat ini ${formatCurrency(summary.balance)}. Pengeluaran terbesar ada di ${summary.topExpenseCategory.category}.`
     : `Saldo saat ini ${formatCurrency(summary.balance)}. Tambahkan transaksi untuk memperkaya analisis.`;
+
+  renderFlowStats(summary);
+}
+
+function renderFlowStats(summary) {
+  if (!summary) {
+    return;
+  }
+
+  const income = Number(summary.totalIncome) || 0;
+  const expense = Number(summary.totalExpense) || 0;
+  const balance = Number(summary.balance) || 0;
+  const previousFlowIncome = getAnimatedValue("flowIncome");
+  const previousFlowExpense = getAnimatedValue("flowExpense");
+  const previousFlowNet = getAnimatedValue("flowNet");
+  const throughput = Math.max(income + expense, 1);
+  const balanceMagnitude = Math.max(Math.abs(balance), 1);
+
+  const incomeShare = (income / throughput) * 100;
+  const expenseShare = (expense / throughput) * 100;
+  const balanceShare = Math.min((balanceMagnitude / throughput) * 100, 100);
+
+  animateValue("flowIncome", income, (value) => {
+    elements.flowIncomeValue.textContent = formatCurrency(value);
+  });
+  animateValue("flowExpense", expense, (value) => {
+    elements.flowExpenseValue.textContent = formatCurrency(value);
+  });
+  animateValue("flowNet", balance, (value) => {
+    elements.flowNetValue.textContent = formatSignedCurrency(value);
+  });
+
+  if (previousFlowIncome !== null && income !== previousFlowIncome) {
+    pulseElement(
+      elements.flowIncomeValue.closest(".flow-step"),
+      income > previousFlowIncome ? "up" : "down"
+    );
+  }
+
+  if (previousFlowExpense !== null && expense !== previousFlowExpense) {
+    pulseElement(
+      elements.flowExpenseValue.closest(".flow-step"),
+      expense > previousFlowExpense ? "up" : "down"
+    );
+  }
+
+  if (previousFlowNet !== null && balance !== previousFlowNet) {
+    pulseElement(
+      elements.flowNetValue.closest(".flow-step"),
+      balance > previousFlowNet ? "up" : "down"
+    );
+  }
+  elements.flowIncomeMeta.textContent = `${formatPercent(incomeShare)} dari total arus kas`;
+  elements.flowExpenseMeta.textContent = `${formatPercent(expenseShare)} dari total arus kas`;
+  elements.flowNetMeta.textContent =
+    balance >= 0
+      ? `Surplus ${formatCurrency(balance)} pada periode berjalan`
+      : `Defisit ${formatCurrency(Math.abs(balance))} pada periode berjalan`;
+
+  elements.flowIncomeBar.style.width = `${Math.max(incomeShare, income > 0 ? 8 : 0)}%`;
+  elements.flowExpenseBar.style.width = `${Math.max(expenseShare, expense > 0 ? 8 : 0)}%`;
+  elements.flowNetBar.style.width = `${Math.max(balanceShare, balance !== 0 ? 8 : 0)}%`;
+  elements.flowNetBar.classList.toggle("is-negative", balance < 0);
+
+  elements.flowTimeline.innerHTML = "";
+  const monthly = (summary.monthlyCashflow || []).slice(-6);
+  if (monthly.length === 0) {
+    elements.flowTimeline.innerHTML = '<div class="empty-state">Flow bulanan akan tampil setelah data transaksi tersedia.</div>';
+    return;
+  }
+
+  monthly.forEach((entry) => {
+    const node = document.createElement("article");
+    const net = Number(entry.net) || 0;
+    const trendClass = net >= 0 ? "up" : "down";
+    const trendLabel = net >= 0 ? "Surplus" : "Defisit";
+    node.className = `flow-node ${trendClass}`;
+    node.innerHTML = `
+      <span class="flow-node-month">${formatMonth(entry.month)}</span>
+      <strong class="flow-node-net">${formatSignedCurrency(net)}</strong>
+      <small class="flow-node-detail">${trendLabel} dari ${formatCurrency(entry.income)} vs ${formatCurrency(entry.expense)}</small>
+    `;
+    elements.flowTimeline.appendChild(node);
+  });
 }
 
 function renderCashflowChart() {
@@ -755,6 +1020,12 @@ function bindEvents() {
 
     await sendChatMessage(button.dataset.prompt);
   });
+
+  if (elements.compactModeButton) {
+    elements.compactModeButton.addEventListener("click", () => {
+      setCompactMode(!state.compactMode);
+    });
+  }
 }
 
 async function registerServiceWorker() {
@@ -772,6 +1043,7 @@ async function registerServiceWorker() {
 async function initializeApp() {
   elements.transactionForm.date.value = todayInputValue();
   setAuthMode("login");
+  setCompactMode(loadCompactModePreference(), { persist: false });
   renderSession();
   clearDashboard();
   resetChat();
