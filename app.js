@@ -706,6 +706,10 @@ async function sendChatMessage(message) {
 
     appendChatMessage("assistant", payload.reply);
     state.chatHistory.push({ role: "assistant", content: payload.reply });
+
+    if (payload.action === "transaction-created") {
+      await reloadDashboard();
+    }
   } catch (error) {
     if (handleUnauthorized(error)) {
       return;

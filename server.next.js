@@ -269,6 +269,93 @@ function sanitizeTransaction(payload) {
   };
 }
 
+function parseAmountNumber(value) {
+  const digits = String(value || "").replace(/[^\d]/g, "");
+  if (!digits) {
+    return null;
+  }
+
+  return Number.parseInt(digits, 10);
+}
+
+function parseChatTransactionCommand(message) {
+  const raw = String(message || "").trim();
+  if (!raw) {
+    return null;
+  }
+
+  const lower = raw.toLowerCase();
+  const looksLikeInputCommand = /^\/?catat\b/i.test(raw) || /\b(?:catat|tambah|input)\b/.test(lower);
+  if (!looksLikeInputCommand) {
+    return null;
+  }
+
+  const type = /\b(?:pemasukan|income)\b/.test(lower)
+    ? "income"
+    : /\b(?:pengeluaran|expense)\b/.test(lower)
+      ? "expense"
+      : null;
+
+  if (!type) {
+    return {
+      error: "Perintah input dikenali, tetapi tipe transaksi belum jelas. Gunakan `pemasukan` atau `pengeluaran`."
+    };
+  }
+
+  const amountMatch = raw.match(/(?:rp\.?\s*)?(\d[\d.,]*)/i);
+  const amount = amountMatch ? parseAmountNumber(amountMatch[1]) : null;
+  if (!amount || amount <= 0) {
+    return {
+      error: "Nominal transaksi belum valid. Sertakan angka, contoh `15000` atau `Rp15000`."
+    };
+  }
+
+  const dateMatch = raw.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  const categoryMatch = raw.match(
+    /(?:kategori|category)\s*[:=]?\s*(.+?)(?=(?:\s+(?:tanggal|date|catatan|note|notes|deskripsi|keterangan)\b)|$)/i
+  );
+  const descriptionMatch = raw.match(
+    /(?:deskripsi|keterangan|desc)\s*[:=]?\s*(.+?)(?=(?:\s+(?:kategori|category|tanggal|date|catatan|note|notes)\b)|$)/i
+  );
+  const notesMatch = raw.match(/(?:catatan|note|notes)\s*[:=]?\s*(.+)$/i);
+
+  let description = descriptionMatch ? sanitizeText(descriptionMatch[1], 120) : "";
+  if (!description) {
+    const textAfterAmount = amountMatch ? raw.slice(amountMatch.index + amountMatch[0].length) : raw;
+    description = textAfterAmount
+      .replace(/(?:kategori|category)\s*[:=]?\s*.+$/i, "")
+      .replace(/(?:tanggal|date)\s*[:=]?\s*\d{4}-\d{2}-\d{2}/i, "")
+      .replace(/(?:catatan|note|notes)\s*[:=]?\s*.+$/i, "")
+      .trim();
+    description = sanitizeText(description, 120);
+  }
+
+  const category = categoryMatch
+    ? sanitizeText(categoryMatch[1], 60)
+    : type === "income"
+      ? "Pemasukan Lainnya"
+      : "Pengeluaran Lainnya";
+
+  return {
+    payload: {
+      amount,
+      category,
+      date: dateMatch ? dateMatch[1] : todayDateValue(),
+      description: description || (type === "income" ? "Pemasukan" : "Pengeluaran"),
+      notes: notesMatch ? sanitizeText(notesMatch[1], 240) : "",
+      type
+    }
+  };
+}
+
+function buildTransactionInputGuide() {
+  return [
+    "Format input yang didukung:",
+    "- `catat pengeluaran 25000 makan siang kategori Makanan tanggal 2026-04-03`",
+    "- `catat pemasukan 1500000 gaji kategori Gaji`"
+  ].join("\n");
+}
+
 function formatCurrency(value) {
   return new Intl.NumberFormat("id-ID", {
     currency: "IDR",
@@ -404,7 +491,7 @@ function generateLocalReply(message, summary) {
   return [
     `Saldo Anda saat ini ${formatCurrency(summary.balance)} dari ${summary.transactionCount} transaksi.`,
     advice[0] || "Arus kas masih bisa dioptimalkan dengan menjaga pengeluaran rutin tetap proporsional.",
-    "Anda dapat meminta ringkasan, melihat pengeluaran terbesar, atau meminta rekomendasi penghematan."
+    "Anda dapat meminta ringkasan, melihat pengeluaran terbesar, meminta rekomendasi penghematan, atau mencatat transaksi lewat format `catat ...`."
   ].join(" ");
 }
 
@@ -443,6 +530,41 @@ async function requestOpenAI(message, history, summary, userTransactions, user) 
 }
 
 async function buildChatReply(message, history, user) {
+  const parsedInput = parseChatTransactionCommand(message);
+  if (parsedInput) {
+    if (parsedInput.error) {
+      return {
+        action: "transaction-input-invalid",
+        mode: "local",
+        reply: `${parsedInput.error}\n\n${buildTransactionInputGuide()}`
+      };
+    }
+
+    try {
+      const transaction = createTransactionForUser(user.id, sanitizeTransaction(parsedInput.payload));
+      const summary = computeSummary(listTransactionsByUser(user.id));
+
+      return {
+        action: "transaction-created",
+        mode: "local",
+        reply: [
+          "Transaksi berhasil dicatat.",
+          `${transaction.type === "income" ? "Pemasukan" : "Pengeluaran"} ${formatCurrency(transaction.amount)} untuk ${transaction.description}.`,
+          `Kategori: ${transaction.category}. Tanggal: ${transaction.date}.`,
+          `Saldo terbaru: ${formatCurrency(summary.balance)}.`
+        ].join(" "),
+        summary,
+        transaction
+      };
+    } catch (error) {
+      return {
+        action: "transaction-input-invalid",
+        mode: "local",
+        reply: `Data belum dapat disimpan: ${error.message}\n\n${buildTransactionInputGuide()}`
+      };
+    }
+  }
+
   const userTransactions = listTransactionsByUser(user.id);
   const summary = computeSummary(userTransactions);
 
@@ -594,9 +716,13 @@ function telegramHelpText() {
     "Perintah Telegram yang tersedia:",
     "/start - lihat panduan singkat",
     "/link KODE - hubungkan akun web ke Telegram",
+    "/catat ... - catat transaksi baru lewat chat",
     "/summary - minta ringkasan keuangan",
     "/unlink - putuskan koneksi Telegram dari akun",
     "/help - tampilkan bantuan",
+    "",
+    "Contoh input:",
+    "`/catat pengeluaran 25000 makan siang kategori Makanan`",
     "",
     "Setelah akun terhubung, Anda juga dapat mengirim pertanyaan bebas seperti di web app."
   ].join("\n");
@@ -670,6 +796,13 @@ async function handleTelegramTextMessage(message) {
 
   if (/^\/summary\b/i.test(text)) {
     const result = await buildChatReply("Buat ringkasan keuangan saya.", [], linked.user);
+    await sendTelegramMessage(chatId, result.reply);
+    return;
+  }
+
+  if (/^\/catat\b/i.test(text)) {
+    const command = text.replace(/^\/catat(?:@\w+)?/i, "catat");
+    const result = await buildChatReply(command, [], linked.user);
     await sendTelegramMessage(chatId, result.reply);
     return;
   }
