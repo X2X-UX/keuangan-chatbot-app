@@ -38,6 +38,15 @@ const TELEGRAM_WEBHOOK_SECRET = String(process.env.TELEGRAM_WEBHOOK_SECRET || ""
 const TELEGRAM_BOT_USERNAME = String(process.env.TELEGRAM_BOT_USERNAME || "").trim();
 const APP_BASE_URL = String(process.env.APP_BASE_URL || "").trim();
 const TELEGRAM_AUTO_SET_WEBHOOK = String(process.env.TELEGRAM_AUTO_SET_WEBHOOK || "").trim().toLowerCase() === "true";
+const ALLOWED_ORIGINS = buildAllowedOrigins();
+const RATE_LIMIT_STORE = new Map();
+const RATE_LIMITS = {
+  api: { max: 240, windowMs: 60_000 },
+  auth: { max: 20, windowMs: 10 * 60_000 },
+  chat: { max: 50, windowMs: 60_000 },
+  telegramWebhook: { max: 1_200, windowMs: 60_000 },
+  transactionWrite: { max: 60, windowMs: 60_000 }
+};
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -46,6 +55,53 @@ const MIME_TYPES = {
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml"
 };
+
+function parseEnvOrigins(value) {
+  const items = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const origins = new Set();
+  for (const item of items) {
+    try {
+      origins.add(new URL(item).origin);
+    } catch {
+      // ignore malformed origin values from env
+    }
+  }
+
+  return origins;
+}
+
+function buildAllowedOrigins() {
+  const origins = new Set();
+  const defaults = [
+    `http://localhost:${PORT}`,
+    `http://127.0.0.1:${PORT}`,
+    "http://localhost:3000",
+    "http://127.0.0.1:3000"
+  ];
+
+  for (const item of defaults) {
+    origins.add(item);
+  }
+
+  try {
+    if (APP_BASE_URL) {
+      origins.add(new URL(APP_BASE_URL).origin);
+    }
+  } catch {
+    // APP_BASE_URL validation is handled elsewhere
+  }
+
+  const extraOrigins = parseEnvOrigins(process.env.ALLOWED_ORIGINS);
+  for (const origin of extraOrigins) {
+    origins.add(origin);
+  }
+
+  return origins;
+}
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) {
@@ -158,11 +214,162 @@ function computeSummary(items) {
   };
 }
 
-function sendJson(res, statusCode, payload, extraHeaders = {}) {
-  res.writeHead(statusCode, {
-    "Access-Control-Allow-Headers": "Content-Type",
+function getRequestOrigin(req) {
+  const origin = String(req?.headers?.origin || "").trim();
+  if (origin) {
+    try {
+      return new URL(origin).origin;
+    } catch {
+      return "";
+    }
+  }
+
+  const referer = String(req?.headers?.referer || "").trim();
+  if (!referer) {
+    return "";
+  }
+
+  try {
+    return new URL(referer).origin;
+  } catch {
+    return "";
+  }
+}
+
+function getCorsHeaders(req) {
+  const origin = getRequestOrigin(req);
+  if (!origin || !ALLOWED_ORIGINS.has(origin)) {
+    return {};
+  }
+
+  return {
+    "Access-Control-Allow-Headers": "Content-Type, X-Requested-With",
     "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": origin,
+    Vary: "Origin"
+  };
+}
+
+function getSecurityHeaders(req) {
+  const headers = {
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY"
+  };
+
+  headers["Content-Security-Policy"] = [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "img-src 'self' data:",
+    "object-src 'none'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'"
+  ].join("; ");
+
+  if (process.env.NODE_ENV === "production") {
+    const forwardedProto = String(req?.headers?.["x-forwarded-proto"] || "").toLowerCase();
+    if (forwardedProto.includes("https")) {
+      headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload";
+    }
+  }
+
+  return headers;
+}
+
+function sweepRateLimitStore(now = Date.now()) {
+  for (const [key, entry] of RATE_LIMIT_STORE.entries()) {
+    if (entry.resetAt <= now) {
+      RATE_LIMIT_STORE.delete(key);
+    }
+  }
+}
+
+function getClientIp(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "").trim();
+  if (forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+
+  return String(req.socket?.remoteAddress || "unknown");
+}
+
+function takeRateLimit(bucket, identifier) {
+  const config = RATE_LIMITS[bucket];
+  if (!config) {
+    return { limited: false, retryAfterSeconds: 0 };
+  }
+
+  const now = Date.now();
+  if (RATE_LIMIT_STORE.size > 10_000) {
+    sweepRateLimitStore(now);
+  }
+
+  const key = `${bucket}:${identifier}`;
+  const current = RATE_LIMIT_STORE.get(key);
+  if (!current || current.resetAt <= now) {
+    RATE_LIMIT_STORE.set(key, { count: 1, resetAt: now + config.windowMs });
+    return { limited: false, retryAfterSeconds: 0 };
+  }
+
+  current.count += 1;
+  RATE_LIMIT_STORE.set(key, current);
+  if (current.count <= config.max) {
+    return { limited: false, retryAfterSeconds: 0 };
+  }
+
+  return {
+    limited: true,
+    retryAfterSeconds: Math.max(1, Math.ceil((current.resetAt - now) / 1000))
+  };
+}
+
+function isUnsafeApiMutation(method) {
+  return method === "POST" || method === "DELETE" || method === "PUT" || method === "PATCH";
+}
+
+function isTrustedRequestOrigin(req) {
+  const secFetchSite = String(req.headers["sec-fetch-site"] || "").toLowerCase();
+  if (secFetchSite && !["same-origin", "same-site", "none"].includes(secFetchSite)) {
+    return false;
+  }
+
+  const origin = getRequestOrigin(req);
+  if (!origin) {
+    return true;
+  }
+
+  return ALLOWED_ORIGINS.has(origin);
+}
+
+function enforceRateLimit(req, res, bucket, identifierSuffix = "") {
+  const identifier = `${getClientIp(req)}:${identifierSuffix}`;
+  const { limited, retryAfterSeconds } = takeRateLimit(bucket, identifier);
+  if (!limited) {
+    return false;
+  }
+
+  sendJson(req, res, 429, { error: "Terlalu banyak permintaan. Silakan coba kembali beberapa saat lagi." }, {
+    "Retry-After": String(retryAfterSeconds)
+  });
+  return true;
+}
+
+function sendJson(arg1, arg2, arg3, arg4, arg5) {
+  const hasReq = Boolean(arg1 && typeof arg1.method === "string" && arg1.headers);
+  const req = hasReq ? arg1 : null;
+  const res = hasReq ? arg2 : arg1;
+  const statusCode = hasReq ? arg3 : arg2;
+  const payload = hasReq ? arg4 : arg3;
+  const extraHeaders = hasReq ? arg5 || {} : arg4 || {};
+
+  res.writeHead(statusCode, {
+    ...getSecurityHeaders(req),
+    ...getCorsHeaders(req),
     "Cache-Control": "no-store",
     "Content-Type": "application/json; charset=utf-8",
     ...extraHeaders
@@ -170,17 +377,24 @@ function sendJson(res, statusCode, payload, extraHeaders = {}) {
   res.end(JSON.stringify(payload));
 }
 
-function sendText(res, statusCode, text) {
+function sendText(arg1, arg2, arg3, arg4) {
+  const hasReq = Boolean(arg1 && typeof arg1.method === "string" && arg1.headers);
+  const req = hasReq ? arg1 : null;
+  const res = hasReq ? arg2 : arg1;
+  const statusCode = hasReq ? arg3 : arg2;
+  const text = hasReq ? arg4 : arg3;
+
   res.writeHead(statusCode, {
-    "Access-Control-Allow-Origin": "*",
+    ...getSecurityHeaders(req),
+    ...getCorsHeaders(req),
     "Cache-Control": "no-store",
     "Content-Type": "text/plain; charset=utf-8"
   });
   res.end(text);
 }
 
-function sendUnauthorized(res) {
-  sendJson(res, 401, { error: "Silakan masuk terlebih dahulu." });
+function sendUnauthorized(req, res) {
+  sendJson(req, res, 401, { error: "Silakan masuk terlebih dahulu." });
 }
 
 function isTelegramConfigured() {
@@ -820,48 +1034,59 @@ async function handleTelegramUpdate(update) {
   await handleTelegramTextMessage(update.message);
 }
 
-async function serveStatic(res, pathname) {
+async function serveStatic(req, res, pathname) {
   const targetPath = pathname === "/" ? "/index.html" : pathname;
   const safeRelative = path
     .normalize(decodeURIComponent(targetPath))
     .replace(/^([/\\])+/, "")
     .replace(/^(\.\.[/\\])+/, "");
   const filePath = path.join(PUBLIC_DIR, safeRelative);
+  const relativePath = path.relative(PUBLIC_DIR, filePath);
 
-  if (!filePath.startsWith(PUBLIC_DIR)) {
-    sendText(res, 403, "Akses file ditolak.");
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    sendText(req, res, 403, "Akses file ditolak.");
     return;
   }
 
   try {
     const stat = await fsp.stat(filePath);
     if (!stat.isFile()) {
-      sendText(res, 404, "File tidak ditemukan.");
+      sendText(req, res, 404, "File tidak ditemukan.");
       return;
     }
 
     const extension = path.extname(filePath).toLowerCase();
     res.writeHead(200, {
+      ...getSecurityHeaders(req),
+      ...getCorsHeaders(req),
       "Cache-Control": extension === ".html" ? "no-store" : "public, max-age=300",
       "Content-Type": MIME_TYPES[extension] || "application/octet-stream"
     });
     fs.createReadStream(filePath).pipe(res);
   } catch {
-    sendText(res, 404, "File tidak ditemukan.");
+    sendText(req, res, 404, "File tidak ditemukan.");
   }
 }
 
 async function handleRequest(req, res) {
   if (!req.url) {
-    sendText(res, 400, "Permintaan tidak valid.");
+    sendText(req, res, 400, "Permintaan tidak valid.");
     return;
   }
 
   if (req.method === "OPTIONS") {
+    const corsHeaders = getCorsHeaders(req);
+    const hasOrigin = Boolean(String(req.headers.origin || "").trim());
+    if (hasOrigin && Object.keys(corsHeaders).length === 0) {
+      sendJson(req, res, 403, { error: "Origin tidak diizinkan." });
+      return;
+    }
+
     res.writeHead(204, {
-      "Access-Control-Allow-Headers": "Content-Type",
-      "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
-      "Access-Control-Allow-Origin": "*"
+      ...getSecurityHeaders(req),
+      ...corsHeaders,
+      "Access-Control-Allow-Headers": "Content-Type, X-Requested-With",
+      "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS"
     });
     res.end();
     return;
@@ -871,19 +1096,35 @@ async function handleRequest(req, res) {
   const { pathname } = url;
 
   try {
+    const isApiPath = pathname.startsWith("/api/");
+    const isWebhookPath = pathname === "/api/telegram/webhook";
+
+    if (isApiPath && isUnsafeApiMutation(req.method) && !isWebhookPath && !isTrustedRequestOrigin(req)) {
+      sendJson(req, res, 403, { error: "Origin permintaan tidak diizinkan." });
+      return;
+    }
+
+    if (isWebhookPath) {
+      if (enforceRateLimit(req, res, "telegramWebhook")) {
+        return;
+      }
+    } else if (isApiPath && enforceRateLimit(req, res, "api")) {
+      return;
+    }
+
     if (req.method === "POST" && pathname === "/api/telegram/webhook") {
       if (!isTelegramConfigured()) {
-        sendJson(res, 503, { error: "Telegram bot belum dikonfigurasi." });
+        sendJson(req, res, 503, { error: "Telegram bot belum dikonfigurasi." });
         return;
       }
 
       if (!validateTelegramWebhookRequest(req)) {
-        sendJson(res, 403, { error: "Webhook Telegram ditolak." });
+        sendJson(req, res, 403, { error: "Webhook Telegram ditolak." });
         return;
       }
 
       const payload = await parseJsonBody(req);
-      sendJson(res, 200, { ok: true });
+      sendJson(req, res, 200, { ok: true });
       handleTelegramUpdate(payload).catch((error) => {
         console.error("Telegram update failed:", error.message);
       });
@@ -891,7 +1132,7 @@ async function handleRequest(req, res) {
     }
 
     if (req.method === "GET" && pathname === "/api/health") {
-      sendJson(res, 200, {
+      sendJson(req, res, 200, {
         appName: "Arunika Finance",
         authRequired: true,
         chatMode: process.env.OPENAI_API_KEY ? "openai" : "local",
@@ -905,11 +1146,16 @@ async function handleRequest(req, res) {
     }
 
     if (req.method === "POST" && pathname === "/api/auth/register") {
+      if (enforceRateLimit(req, res, "auth", "register")) {
+        return;
+      }
+
       const payload = await parseJsonBody(req);
       const user = createUser(payload);
       const session = createSession(user.id);
 
       sendJson(
+        req,
         res,
         201,
         { message: "Akun berhasil dibuat.", user },
@@ -920,15 +1166,20 @@ async function handleRequest(req, res) {
 
     if (req.method === "POST" && pathname === "/api/auth/login") {
       const payload = await parseJsonBody(req);
+      if (enforceRateLimit(req, res, "auth", `login:${String(payload.email || "").toLowerCase()}`)) {
+        return;
+      }
+
       const user = authenticateUser(payload.email, payload.password);
 
       if (!user) {
-        sendJson(res, 401, { error: "Email atau password salah." });
+        sendJson(req, res, 401, { error: "Email atau password salah." });
         return;
       }
 
       const session = createSession(user.id);
       sendJson(
+        req,
         res,
         200,
         { message: "Berhasil masuk.", user },
@@ -944,6 +1195,7 @@ async function handleRequest(req, res) {
       }
 
       sendJson(
+        req,
         res,
         200,
         { message: "Berhasil keluar." },
@@ -955,35 +1207,35 @@ async function handleRequest(req, res) {
     if (req.method === "GET" && pathname === "/api/auth/me") {
       const session = getSessionFromRequest(req);
       if (!session) {
-        sendUnauthorized(res);
+        sendUnauthorized(req, res);
         return;
       }
 
-      sendJson(res, 200, { user: session.user });
+      sendJson(req, res, 200, { user: session.user });
       return;
     }
 
     const session = getSessionFromRequest(req);
     if (!session && pathname.startsWith("/api/")) {
-      sendUnauthorized(res);
+      sendUnauthorized(req, res);
       return;
     }
 
     if (req.method === "GET" && pathname === "/api/telegram/status") {
-      sendJson(res, 200, buildTelegramStatus(session.user.id));
+      sendJson(req, res, 200, buildTelegramStatus(session.user.id));
       return;
     }
 
     if (req.method === "POST" && pathname === "/api/telegram/link-code") {
       if (!isTelegramConfigured()) {
-        sendJson(res, 400, {
+        sendJson(req, res, 400, {
           error: "Telegram belum siap. Isi TELEGRAM_BOT_TOKEN setelah aplikasi dihosting."
         });
         return;
       }
 
       const code = createTelegramLinkCode(session.user.id);
-      sendJson(res, 201, {
+      sendJson(req, res, 201, {
         ...buildTelegramStatus(session.user.id),
         command: `/link ${code.code}`,
         expiresAt: code.expiresAt,
@@ -994,7 +1246,7 @@ async function handleRequest(req, res) {
 
     if (req.method === "POST" && pathname === "/api/telegram/unlink") {
       const removed = unlinkTelegramByUserId(session.user.id);
-      sendJson(res, 200, {
+      sendJson(req, res, 200, {
         ...buildTelegramStatus(session.user.id),
         message: removed ? "Telegram berhasil diputus dari akun ini." : "Akun ini belum terhubung ke Telegram."
       });
@@ -1002,14 +1254,18 @@ async function handleRequest(req, res) {
     }
 
     if (req.method === "GET" && pathname === "/api/transactions") {
-      sendJson(res, 200, { transactions: listTransactionsByUser(session.user.id) });
+      sendJson(req, res, 200, { transactions: listTransactionsByUser(session.user.id) });
       return;
     }
 
     if (req.method === "POST" && pathname === "/api/transactions") {
+      if (enforceRateLimit(req, res, "transactionWrite", `user:${session.user.id}`)) {
+        return;
+      }
+
       const payload = await parseJsonBody(req);
       const transaction = createTransactionForUser(session.user.id, sanitizeTransaction(payload));
-      sendJson(res, 201, {
+      sendJson(req, res, 201, {
         message: "Transaksi berhasil disimpan.",
         summary: computeSummary(listTransactionsByUser(session.user.id)),
         transaction
@@ -1022,11 +1278,11 @@ async function handleRequest(req, res) {
       const deleted = deleteTransactionForUser(session.user.id, id);
 
       if (!deleted) {
-        sendJson(res, 404, { error: "Transaksi tidak ditemukan." });
+        sendJson(req, res, 404, { error: "Transaksi tidak ditemukan." });
         return;
       }
 
-      sendJson(res, 200, {
+      sendJson(req, res, 200, {
         message: "Transaksi berhasil dihapus.",
         summary: computeSummary(listTransactionsByUser(session.user.id))
       });
@@ -1034,27 +1290,37 @@ async function handleRequest(req, res) {
     }
 
     if (req.method === "GET" && pathname === "/api/summary") {
-      sendJson(res, 200, { summary: computeSummary(listTransactionsByUser(session.user.id)) });
+      sendJson(req, res, 200, { summary: computeSummary(listTransactionsByUser(session.user.id)) });
       return;
     }
 
     if (req.method === "POST" && pathname === "/api/chat") {
+      if (enforceRateLimit(req, res, "chat", `user:${session.user.id}`)) {
+        return;
+      }
+
       const payload = await parseJsonBody(req);
       const message = String(payload.message || "").trim();
       if (!message) {
-        sendJson(res, 400, { error: "Pesan asisten tidak boleh kosong." });
+        sendJson(req, res, 400, { error: "Pesan asisten tidak boleh kosong." });
         return;
       }
 
       const result = await buildChatReply(message, Array.isArray(payload.history) ? payload.history : [], session.user);
-      sendJson(res, 200, result);
+      sendJson(req, res, 200, result);
       return;
     }
 
-    await serveStatic(res, pathname);
+    await serveStatic(req, res, pathname);
   } catch (error) {
     const statusCode = /wajib|harus|valid|password|email|telegram/i.test(error.message) ? 400 : 500;
-    sendJson(res, statusCode, { error: error.message || "Terjadi kesalahan pada server. Silakan coba kembali." });
+    if (statusCode >= 500) {
+      console.error("Unhandled server error:", error);
+      sendJson(req, res, 500, { error: "Terjadi kesalahan pada server. Silakan coba kembali." });
+      return;
+    }
+
+    sendJson(req, res, statusCode, { error: error.message || "Permintaan tidak dapat diproses." });
   }
 }
 

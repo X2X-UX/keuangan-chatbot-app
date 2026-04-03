@@ -32,6 +32,16 @@ npm.cmd start
 
 Catatan:
 - Saat `npm start` atau `npm run dev`, file frontend root (`index.html`, `styles.css`, `app.js`) otomatis disinkronkan ke folder `public/`.
+- Backend menerapkan header keamanan HTTP, rate limit API, serta validasi origin untuk endpoint mutasi.
+
+## Instal sebagai aplikasi HP (PWA)
+
+Setelah aplikasi sudah live di domain HTTPS (Railway/hosting lain), aplikasi bisa diinstal ke HP:
+
+1. Buka URL aplikasi di browser HP.
+2. Android (Chrome): pilih menu -> `Install app` atau `Add to Home screen`.
+3. iPhone (Safari): tap `Share` -> `Add to Home Screen`.
+4. Jalankan dari ikon home screen seperti aplikasi native.
 
 ## Deploy ke Render (siap produksi)
 
@@ -47,6 +57,7 @@ Proyek ini sudah menyertakan blueprint [render.yaml](render.yaml) yang siap dipa
    - Opsional:
      - `TELEGRAM_BOT_USERNAME`
      - `OPENAI_API_KEY` (kalau ingin mode AI OpenAI)
+     - `ALLOWED_ORIGINS` (opsional, pisahkan dengan koma jika ada origin frontend tambahan)
 5. Deploy service.
 6. Verifikasi health check: `GET /api/health` harus status `ok`.
 

@@ -757,6 +757,18 @@ function bindEvents() {
   });
 }
 
+async function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) {
+    return;
+  }
+
+  try {
+    await navigator.serviceWorker.register("/sw.js");
+  } catch (error) {
+    console.warn("Service worker registration failed:", error);
+  }
+}
+
 async function initializeApp() {
   elements.transactionForm.date.value = todayInputValue();
   setAuthMode("login");
@@ -764,6 +776,7 @@ async function initializeApp() {
   clearDashboard();
   resetChat();
   bindEvents();
+  await registerServiceWorker();
 
   try {
     await loadHealth();
