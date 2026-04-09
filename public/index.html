@@ -150,14 +150,14 @@
             <div class="section-heading">
               <div>
                 <span class="eyebrow">Tambah Cepat</span>
-                <h2>Input transaksi baru</h2>
+                <h2 id="transactionFormTitle">Input transaksi baru</h2>
               </div>
             </div>
 
             <form id="transactionForm" class="transaction-form">
               <label>
                 <span>Tipe</span>
-                <select name="type" required>
+                <select id="transactionType" name="type" required>
                   <option value="income">Pemasukan</option>
                   <option value="expense">Pengeluaran</option>
                 </select>
@@ -168,11 +168,22 @@
               </label>
               <label>
                 <span>Nominal</span>
-                <input type="number" name="amount" min="1" step="1000" placeholder="500000" required />
+                <input
+                  id="transactionAmount"
+                  type="text"
+                  name="amount"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  placeholder="Contoh: 500000, 15.000, 15rb, 1,5jt"
+                  required
+                />
+                <small id="transactionAmountHint" class="field-hint">
+                  Bisa isi nominal fleksibel seperti `Rp15.000`, `15rb`, atau `1,5jt`.
+                </small>
               </label>
               <label>
                 <span>Kategori transaksi</span>
-                <input type="text" name="category" placeholder="Kebutuhan, Gaji, Freelance..." required />
+                <select id="transactionCategory" name="category" required></select>
               </label>
               <label>
                 <span>Tanggal</span>
@@ -182,7 +193,10 @@
                 <span>Catatan</span>
                 <textarea name="notes" rows="3" placeholder="Tambahan informasi jika perlu"></textarea>
               </label>
-              <button class="primary-button full-span" type="submit">Simpan Transaksi</button>
+              <div class="transaction-form-actions full-span">
+                <button id="transactionSubmitButton" class="primary-button" type="submit">Simpan transaksi</button>
+                <button id="transactionCancelButton" class="secondary-button is-hidden" type="button">Batal edit</button>
+              </div>
             </form>
           </article>
 
@@ -234,7 +248,7 @@
                     <th>Kategori</th>
                     <th>Tipe</th>
                     <th>Nominal</th>
-                    <th></th>
+                    <th>Aksi</th>
                   </tr>
                 </thead>
                 <tbody id="transactionTableBody"></tbody>
@@ -262,9 +276,9 @@
             </div>
 
             <div id="telegramCodeBox" class="telegram-code is-hidden">
-              <span>Kirim perintah berikut ke bot Telegram:</span>
-              <strong id="telegramCodeText">/link XXXXXXXX</strong>
-              <small id="telegramCodeMeta">Kode berlaku 10 menit.</small>
+              <span>Kirim atau tempel kode berikut ke bot Telegram:</span>
+              <strong id="telegramCodeText">XXXXXXXX</strong>
+              <small id="telegramCodeMeta">Bot akan membaca kode ini langsung lewat parsing teks. Kode berlaku 10 menit.</small>
             </div>
           </article>
 
@@ -315,6 +329,8 @@
       </div>
     </template>
 
+    <script src="/transaction-categories.js"></script>
+    <script src="/transaction-amount.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

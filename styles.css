@@ -135,6 +135,29 @@ textarea {
   }
 }
 
+@keyframes drift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes soft-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .shell.is-locked {
   filter: blur(4px);
   pointer-events: none;
@@ -321,6 +344,33 @@ th {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.2);
   color: #f8fbff;
+  position: relative;
+  overflow: hidden;
+}
+
+.status-chip::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  margin-right: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.45);
+  animation: pulse-dot 1.8s ease infinite;
+}
+
+@keyframes pulse-dot {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.42);
+  }
+
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 255, 255, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
 }
 
 .session-panel {
@@ -356,6 +406,47 @@ th {
   border: 1px solid rgba(255, 255, 255, 0.9);
   position: relative;
   overflow: hidden;
+}
+
+.metric-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.metric-icon,
+.section-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.metric-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+  background: linear-gradient(145deg, rgba(12, 74, 135, 0.13), rgba(14, 139, 118, 0.12));
+  color: var(--primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  animation: drift 4.8s ease-in-out infinite;
+}
+
+.metric:nth-child(2) .metric-icon {
+  animation-delay: 0.4s;
+}
+
+.metric:nth-child(3) .metric-icon {
+  animation-delay: 0.8s;
+}
+
+.metric:nth-child(4) .metric-icon {
+  animation-delay: 1.2s;
+}
+
+.metric-icon svg,
+.section-icon svg {
+  width: 19px;
+  height: 19px;
 }
 
 .metric::after {
@@ -487,6 +578,8 @@ th {
   gap: 4px;
   position: relative;
   overflow: hidden;
+  animation: soft-slide-up 0.45s ease both;
+  animation-delay: calc(var(--item-index, 0) * 70ms);
 }
 
 .flow-node::before {
@@ -560,6 +653,22 @@ th {
   margin-bottom: 18px;
 }
 
+.section-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.section-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  flex: 0 0 auto;
+  background: linear-gradient(145deg, rgba(12, 74, 135, 0.1), rgba(14, 139, 118, 0.08));
+  color: var(--primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
 .split-heading {
   align-items: center;
 }
@@ -575,6 +684,16 @@ th {
   gap: 8px;
   color: var(--muted);
   font-size: 0.92rem;
+}
+
+.field-hint {
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.field-hint.is-error {
+  color: var(--danger);
 }
 
 .transaction-form input,
@@ -608,6 +727,7 @@ th {
 }
 
 .primary-button,
+.edit-button,
 .quick-prompts button,
 .delete-button {
   border: none;
@@ -650,6 +770,12 @@ th {
 .chart-row {
   display: grid;
   gap: 8px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(248, 251, 254, 0.75);
+  border: 1px solid rgba(12, 74, 135, 0.07);
+  animation: soft-slide-up 0.45s ease both;
+  animation-delay: calc(var(--item-index, 0) * 70ms);
 }
 
 .chart-head {
@@ -752,8 +878,27 @@ tbody tr:hover {
   font-weight: 700;
 }
 
+.edit-button {
+  padding: 8px 11px;
+  border-radius: 11px;
+  background: rgba(12, 74, 135, 0.12);
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.edit-button:hover {
+  background: rgba(12, 74, 135, 0.18);
+}
+
 .delete-button:hover {
   background: rgba(180, 35, 24, 0.18);
+}
+
+.table-actions,
+.transaction-form-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .telegram-status {
@@ -858,6 +1003,8 @@ tbody tr:hover {
   border-radius: 13px;
   background: #f8fbfe;
   border: 1px solid rgba(12, 74, 135, 0.09);
+  animation: soft-slide-up 0.45s ease both;
+  animation-delay: calc(var(--item-index, 0) * 80ms);
 }
 
 .insight-item strong {
@@ -942,6 +1089,12 @@ tbody tr:hover {
 
   .shell.is-compact .overview {
     gap: 10px;
+  }
+
+  .shell.is-compact .metric-icon,
+  .shell.is-compact .section-icon {
+    width: 32px;
+    height: 32px;
   }
 
   .shell.is-compact .metric {

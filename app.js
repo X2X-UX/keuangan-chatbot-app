@@ -2,6 +2,7 @@ const state = {
   authMode: "login",
   chatHistory: [],
   compactMode: false,
+  editingTransactionId: null,
   health: null,
   summary: null,
   telegramCommand: null,
@@ -10,6 +11,24 @@ const state = {
   user: null
 };
 const COMPACT_MODE_STORAGE_KEY = "arunika_compact_mode";
+const TRANSACTION_CATEGORY_OPTIONS = globalThis.TRANSACTION_CATEGORY_OPTIONS || {
+  expense: ["Makanan", "Transportasi", "Tagihan", "Belanja", "Kesehatan", "Pendidikan", "Hiburan", "Rumah Tangga"],
+  income: ["Gaji", "Freelance", "Bonus", "Penjualan", "Investasi", "Hadiah"]
+};
+const parseFlexibleAmount =
+  globalThis.parseFlexibleAmount ||
+  ((value) => {
+    const digits = String(value || "").replace(/[^\d]/g, "");
+    return digits ? Number.parseInt(digits, 10) : null;
+  });
+const formatFlexibleCurrency =
+  globalThis.formatFlexibleCurrency ||
+  ((value) =>
+    new Intl.NumberFormat("id-ID", {
+      currency: "IDR",
+      maximumFractionDigits: 0,
+      style: "currency"
+    }).format(Number(value) || 0));
 
 const currencyFormatter = new Intl.NumberFormat("id-ID", {
   currency: "IDR",
@@ -81,7 +100,14 @@ const elements = {
   telegramStatusText: document.getElementById("telegramStatusText"),
   telegramUnlinkButton: document.getElementById("telegramUnlinkButton"),
   transactionForm: document.getElementById("transactionForm"),
+  transactionCategory: document.getElementById("transactionCategory"),
+  transactionAmount: document.getElementById("transactionAmount"),
+  transactionAmountHint: document.getElementById("transactionAmountHint"),
+  transactionCancelButton: document.getElementById("transactionCancelButton"),
   transactionTableBody: document.getElementById("transactionTableBody"),
+  transactionFormTitle: document.getElementById("transactionFormTitle"),
+  transactionSubmitButton: document.getElementById("transactionSubmitButton"),
+  transactionType: document.getElementById("transactionType"),
   typeFilter: document.getElementById("typeFilter")
 };
 
@@ -226,6 +252,98 @@ function todayInputValue() {
   return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
 }
 
+function getTransactionCategories(type) {
+  return TRANSACTION_CATEGORY_OPTIONS[type] || TRANSACTION_CATEGORY_OPTIONS.expense;
+}
+
+function syncTransactionCategoryOptions(preferredValue) {
+  const categories = getTransactionCategories(elements.transactionType.value);
+  const nextValue = categories.includes(preferredValue) ? preferredValue : categories[0];
+
+  elements.transactionCategory.innerHTML = categories
+    .map((category) => `<option value="${escapeHTML(category)}">${escapeHTML(category)}</option>`)
+    .join("");
+
+  elements.transactionCategory.value = nextValue;
+}
+
+function renderTransactionAmountHint() {
+  const rawValue = elements.transactionAmount.value.trim();
+  if (!rawValue) {
+    elements.transactionAmountHint.textContent =
+      "Bisa isi nominal fleksibel seperti Rp15.000, 15rb, atau 1,5jt.";
+    elements.transactionAmountHint.classList.remove("is-error");
+    return;
+  }
+
+  const amount = parseFlexibleAmount(rawValue);
+  if (!amount) {
+    elements.transactionAmountHint.textContent =
+      "Nominal belum terbaca. Coba format seperti 15000, 15.000, 15rb, atau 1,5jt.";
+    elements.transactionAmountHint.classList.add("is-error");
+    return;
+  }
+
+  elements.transactionAmountHint.textContent = `Akan disimpan sebagai ${formatFlexibleCurrency(amount)}.`;
+  elements.transactionAmountHint.classList.remove("is-error");
+}
+
+function handleTransactionAmountFocus() {
+  const amount = parseFlexibleAmount(elements.transactionAmount.value);
+  if (!amount) {
+    renderTransactionAmountHint();
+    return;
+  }
+
+  elements.transactionAmount.value = String(amount);
+  renderTransactionAmountHint();
+}
+
+function handleTransactionAmountBlur() {
+  const amount = parseFlexibleAmount(elements.transactionAmount.value);
+  if (!amount) {
+    renderTransactionAmountHint();
+    return;
+  }
+
+  elements.transactionAmount.value = formatFlexibleCurrency(amount);
+  renderTransactionAmountHint();
+}
+
+function setTransactionFormMode(editing) {
+  const isEditing = Boolean(editing);
+  state.editingTransactionId = isEditing ? state.editingTransactionId : null;
+  elements.transactionFormTitle.textContent = isEditing ? "Edit transaksi" : "Input transaksi baru";
+  elements.transactionSubmitButton.textContent = isEditing ? "Simpan perubahan" : "Simpan transaksi";
+  elements.transactionCancelButton.classList.toggle("is-hidden", !isEditing);
+}
+
+function resetTransactionForm() {
+  state.editingTransactionId = null;
+  elements.transactionForm.reset();
+  elements.transactionForm.date.value = todayInputValue();
+  syncTransactionCategoryOptions();
+  renderTransactionAmountHint();
+  setTransactionFormMode(false);
+}
+
+function populateTransactionForm(transaction) {
+  if (!transaction) {
+    return;
+  }
+
+  state.editingTransactionId = transaction.id;
+  elements.transactionType.value = transaction.type;
+  syncTransactionCategoryOptions(transaction.category);
+  elements.transactionForm.elements.description.value = transaction.description || "";
+  elements.transactionAmount.value = formatFlexibleCurrency(transaction.amount);
+  elements.transactionForm.elements.date.value = transaction.date || todayInputValue();
+  elements.transactionForm.elements.notes.value = transaction.notes || "";
+  renderTransactionAmountHint();
+  setTransactionFormMode(true);
+  elements.transactionForm.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
+}
+
 function escapeHTML(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -347,12 +465,12 @@ function renderTelegramStatus() {
     elements.telegramStatusText.textContent = `Telegram sudah terhubung ke ${handle}.`;
   } else {
     const botHint = status.botUrl ? ` Buka bot: ${status.botUrl}` : "";
-    elements.telegramStatusText.textContent = `Bot siap dihubungkan.${botHint}`;
+    elements.telegramStatusText.textContent = `Bot siap dihubungkan. Tempel kode tautan dari dashboard ke chat bot.${botHint}`;
   }
 
   if (state.telegramCommand) {
     elements.telegramCodeText.textContent = state.telegramCommand;
-    elements.telegramCodeMeta.textContent = "Kirim perintah itu ke bot Telegram. Kode berlaku 10 menit.";
+    elements.telegramCodeMeta.textContent = "Kirim kode ini apa adanya ke bot Telegram. Bot akan memprosesnya lewat parsing teks. Kode berlaku 10 menit.";
     elements.telegramCodeBox.classList.remove("is-hidden");
   } else {
     elements.telegramCodeBox.classList.add("is-hidden");
@@ -360,6 +478,7 @@ function renderTelegramStatus() {
 }
 
 function clearDashboard() {
+  state.editingTransactionId = null;
   state.summary = null;
   state.telegramCommand = null;
   state.telegramStatus = null;
@@ -682,7 +801,12 @@ function renderTransactions() {
       <td>${escapeHTML(item.category)}</td>
       <td><span class="type-pill ${item.type}">${item.type === "income" ? "Pemasukan" : "Pengeluaran"}</span></td>
       <td class="amount ${item.type}">${item.type === "income" ? "+" : "-"}${formatCurrency(item.amount)}</td>
-      <td><button class="delete-button" data-id="${item.id}" type="button">Hapus</button></td>
+      <td>
+        <div class="table-actions">
+          <button class="edit-button" data-id="${item.id}" type="button">Edit</button>
+          <button class="delete-button" data-id="${item.id}" type="button">Hapus</button>
+        </div>
+      </td>
     `;
     elements.transactionTableBody.appendChild(row);
   });
@@ -736,6 +860,7 @@ function handleUnauthorized(error) {
   }
 
   state.user = null;
+  resetTransactionForm();
   renderSession();
   clearDashboard();
   resetChat();
@@ -809,7 +934,7 @@ async function handleAuthSubmit(event) {
     renderSession();
     hideAuthGate();
     elements.authForm.reset();
-    elements.transactionForm.date.value = todayInputValue();
+    resetTransactionForm();
     resetChat();
     await reloadDashboard();
   } catch (error) {
@@ -829,6 +954,7 @@ async function handleLogout() {
     }
   } finally {
     state.user = null;
+    resetTransactionForm();
     renderSession();
     clearDashboard();
     resetChat();
@@ -846,7 +972,7 @@ async function handleGenerateTelegramLinkCode() {
   try {
     const payload = await request("/api/telegram/link-code", { method: "POST" });
     state.telegramStatus = payload;
-    state.telegramCommand = payload.command || null;
+    state.telegramCommand = payload.linkCode || payload.command || null;
     renderTelegramStatus();
   } catch (error) {
     if (!handleUnauthorized(error)) {
@@ -886,25 +1012,30 @@ async function handleTransactionSubmit(event) {
 
   const formData = new FormData(elements.transactionForm);
   const payload = Object.fromEntries(formData.entries());
-  const button = elements.transactionForm.querySelector("button[type='submit']");
+  const button = elements.transactionSubmitButton;
+  const isEditing = Boolean(state.editingTransactionId);
+  const requestPath = isEditing ? `/api/transactions/${state.editingTransactionId}` : "/api/transactions";
+  const requestMethod = isEditing ? "PUT" : "POST";
 
   try {
     button.disabled = true;
-    button.textContent = "Menyimpan...";
+    button.textContent = isEditing ? "Menyimpan perubahan..." : "Menyimpan...";
+    elements.transactionCancelButton.disabled = true;
 
-    await request("/api/transactions", {
-      method: "POST",
+    await request(requestPath, {
+      method: requestMethod,
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify(payload)
     });
 
-    elements.transactionForm.reset();
-    elements.transactionForm.date.value = todayInputValue();
+    resetTransactionForm();
     await reloadDashboard();
 
-    const note = "Transaksi baru berhasil disimpan. Saya siap membantu menganalisis dampaknya terhadap arus kas Anda.";
+    const note = isEditing
+      ? "Transaksi berhasil diperbarui. Ringkasan keuangan sudah disesuaikan dengan data terbaru."
+      : "Transaksi baru berhasil disimpan. Saya siap membantu menganalisis dampaknya terhadap arus kas Anda.";
     appendChatMessage("assistant", note);
     state.chatHistory.push({ role: "assistant", content: note });
   } catch (error) {
@@ -913,8 +1044,19 @@ async function handleTransactionSubmit(event) {
     }
   } finally {
     button.disabled = false;
-    button.textContent = "Simpan transaksi";
+    elements.transactionCancelButton.disabled = false;
+    setTransactionFormMode(Boolean(state.editingTransactionId));
   }
+}
+
+function handleEdit(event) {
+  const button = event.target.closest(".edit-button");
+  if (!button) {
+    return;
+  }
+
+  const transaction = state.transactions.find((item) => item.id === button.dataset.id);
+  populateTransactionForm(transaction);
 }
 
 async function handleDelete(event) {
@@ -929,6 +1071,9 @@ async function handleDelete(event) {
 
   try {
     await request(`/api/transactions/${button.dataset.id}`, { method: "DELETE" });
+    if (state.editingTransactionId === button.dataset.id) {
+      resetTransactionForm();
+    }
     await reloadDashboard();
   } catch (error) {
     if (!handleUnauthorized(error)) {
@@ -1008,7 +1153,17 @@ function bindEvents() {
   elements.telegramLinkButton.addEventListener("click", handleGenerateTelegramLinkCode);
   elements.telegramUnlinkButton.addEventListener("click", handleTelegramUnlink);
   elements.transactionForm.addEventListener("submit", handleTransactionSubmit);
-  elements.transactionTableBody.addEventListener("click", handleDelete);
+  elements.transactionCancelButton.addEventListener("click", resetTransactionForm);
+  elements.transactionAmount.addEventListener("input", renderTransactionAmountHint);
+  elements.transactionAmount.addEventListener("focus", handleTransactionAmountFocus);
+  elements.transactionAmount.addEventListener("blur", handleTransactionAmountBlur);
+  elements.transactionType.addEventListener("change", () => {
+    syncTransactionCategoryOptions(elements.transactionCategory.value);
+  });
+  elements.transactionTableBody.addEventListener("click", (event) => {
+    handleEdit(event);
+    handleDelete(event);
+  });
   elements.chatForm.addEventListener("submit", handleChatSubmit);
   elements.searchInput.addEventListener("input", renderTransactions);
   elements.typeFilter.addEventListener("change", renderTransactions);
@@ -1041,7 +1196,7 @@ async function registerServiceWorker() {
 }
 
 async function initializeApp() {
-  elements.transactionForm.date.value = todayInputValue();
+  resetTransactionForm();
   setAuthMode("login");
   setCompactMode(loadCompactModePreference(), { persist: false });
   renderSession();

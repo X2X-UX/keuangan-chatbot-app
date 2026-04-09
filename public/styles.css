@@ -577,6 +577,16 @@ th {
   font-size: 0.92rem;
 }
 
+.field-hint {
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.field-hint.is-error {
+  color: var(--danger);
+}
+
 .transaction-form input,
 .transaction-form select,
 .transaction-form textarea,
@@ -608,6 +618,7 @@ th {
 }
 
 .primary-button,
+.edit-button,
 .quick-prompts button,
 .delete-button {
   border: none;
@@ -752,8 +763,27 @@ tbody tr:hover {
   font-weight: 700;
 }
 
+.edit-button {
+  padding: 8px 11px;
+  border-radius: 11px;
+  background: rgba(12, 74, 135, 0.12);
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.edit-button:hover {
+  background: rgba(12, 74, 135, 0.18);
+}
+
 .delete-button:hover {
   background: rgba(180, 35, 24, 0.18);
+}
+
+.table-actions,
+.transaction-form-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .telegram-status {

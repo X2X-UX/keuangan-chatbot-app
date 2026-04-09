@@ -357,6 +357,54 @@ function createTransactionForUser(userId, transaction) {
   };
 }
 
+function updateTransactionForUser(userId, transactionId, transaction) {
+  const database = getDatabase();
+  const existing = database
+    .prepare(
+      `
+        SELECT id, created_at AS createdAt
+        FROM transactions
+        WHERE id = ? AND user_id = ?
+      `
+    )
+    .get(transactionId, userId);
+
+  if (!existing) {
+    return null;
+  }
+
+  database
+    .prepare(
+      `
+        UPDATE transactions
+        SET
+          type = ?,
+          description = ?,
+          amount = ?,
+          category = ?,
+          date = ?,
+          notes = ?
+        WHERE id = ? AND user_id = ?
+      `
+    )
+    .run(
+      transaction.type,
+      transaction.description,
+      transaction.amount,
+      transaction.category,
+      transaction.date,
+      transaction.notes,
+      transactionId,
+      userId
+    );
+
+  return {
+    createdAt: existing.createdAt,
+    ...transaction,
+    id: transactionId
+  };
+}
+
 function deleteTransactionForUser(userId, transactionId) {
   const database = getDatabase();
   const result = database.prepare("DELETE FROM transactions WHERE id = ? AND user_id = ?").run(transactionId, userId);
@@ -571,5 +619,6 @@ module.exports = {
   linkTelegramChatByCode,
   listTransactionsByUser,
   unlinkTelegramByChatId,
-  unlinkTelegramByUserId
+  unlinkTelegramByUserId,
+  updateTransactionForUser
 };

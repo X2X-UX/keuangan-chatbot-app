@@ -3,7 +3,7 @@ const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
 const PUBLIC_DIR = path.join(ROOT, "public");
-const FILES = ["index.html", "styles.css", "app.js"];
+const FILES = ["index.html", "styles.css", "app.js", "transaction-categories.js", "transaction-amount.js"];
 
 fs.mkdirSync(PUBLIC_DIR, { recursive: true });
 
