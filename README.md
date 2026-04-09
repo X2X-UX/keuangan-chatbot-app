@@ -79,11 +79,12 @@ Catatan penting deploy:
 
 1. Login ke dashboard web.
 2. Buka panel Telegram lalu klik `Buat kode tautan`.
-3. Kirim perintah `/link KODE` ke bot Telegram.
+3. Kirim atau tempel kode tautan itu langsung ke bot Telegram.
 4. Setelah terhubung, Anda bisa gunakan:
    - `/summary`
    - `/help`
    - pesan bebas untuk analisis keuangan
+   - input transaksi dengan parsing teks seperti `pengeluaran 25000 makan siang kategori Makanan`
 
 ## Demo account
 

@@ -20,8 +20,15 @@ const {
   linkTelegramChatByCode,
   listTransactionsByUser,
   unlinkTelegramByChatId,
-  unlinkTelegramByUserId
+  unlinkTelegramByUserId,
+  updateTransactionForUser
 } = require("./database.next");
+const {
+  findCanonicalCategory,
+  formatTransactionCategoryList,
+  inferTransactionCategory
+} = require("./transaction-categories");
+const { parseFlexibleAmount } = require("./transaction-amount");
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
@@ -244,7 +251,7 @@ function getCorsHeaders(req) {
 
   return {
     "Access-Control-Allow-Headers": "Content-Type, X-Requested-With",
-    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
     "Access-Control-Allow-Origin": origin,
     Vary: "Origin"
   };
@@ -447,9 +454,10 @@ function sanitizeText(value, maxLength) {
 
 function sanitizeTransaction(payload) {
   const type = payload.type === "income" ? "income" : payload.type === "expense" ? "expense" : null;
-  const amount = Number(payload.amount);
+  const amount = parseFlexibleAmount(payload.amount);
   const description = sanitizeText(payload.description, 120);
-  const category = sanitizeText(payload.category, 60);
+  const rawCategory = sanitizeText(payload.category, 60);
+  const category = type ? findCanonicalCategory(type, rawCategory) : null;
   const notes = sanitizeText(payload.notes, 240);
   const date = sanitizeText(payload.date, 10) || todayDateValue();
 
@@ -461,8 +469,14 @@ function sanitizeTransaction(payload) {
     throw new Error("Deskripsi transaksi wajib diisi.");
   }
 
-  if (!category) {
+  if (!rawCategory) {
     throw new Error("Kategori transaksi wajib diisi.");
+  }
+
+  if (!category) {
+    throw new Error(
+      `Kategori transaksi tidak sesuai daftar ${type === "income" ? "pemasukan" : "pengeluaran"}: ${formatTransactionCategoryList(type)}.`
+    );
   }
 
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -483,15 +497,6 @@ function sanitizeTransaction(payload) {
   };
 }
 
-function parseAmountNumber(value) {
-  const digits = String(value || "").replace(/[^\d]/g, "");
-  if (!digits) {
-    return null;
-  }
-
-  return Number.parseInt(digits, 10);
-}
-
 function parseChatTransactionCommand(message) {
   const raw = String(message || "").trim();
   if (!raw) {
@@ -499,7 +504,10 @@ function parseChatTransactionCommand(message) {
   }
 
   const lower = raw.toLowerCase();
-  const looksLikeInputCommand = /^\/?catat\b/i.test(raw) || /\b(?:catat|tambah|input)\b/.test(lower);
+  const looksLikeInputCommand =
+    /^\/?catat\b/i.test(raw) ||
+    /^(?:tambah|input)\b/i.test(raw) ||
+    /^(?:pemasukan|income|pengeluaran|expense)\b/i.test(raw);
   if (!looksLikeInputCommand) {
     return null;
   }
@@ -516,11 +524,11 @@ function parseChatTransactionCommand(message) {
     };
   }
 
-  const amountMatch = raw.match(/(?:rp\.?\s*)?(\d[\d.,]*)/i);
-  const amount = amountMatch ? parseAmountNumber(amountMatch[1]) : null;
+  const amountMatch = raw.match(/(?:rp\.?\s*)?(\d+(?:[\d.,\s]*\d)?(?:\s*(?:rb|ribu|k|jt|juta|m|j))?)/i);
+  const amount = amountMatch ? parseFlexibleAmount(amountMatch[1]) : null;
   if (!amount || amount <= 0) {
     return {
-      error: "Nominal transaksi belum valid. Sertakan angka, contoh `15000` atau `Rp15000`."
+      error: "Nominal transaksi belum valid. Gunakan contoh seperti `15000`, `15.000`, `15rb`, atau `1,5jt`."
     };
   }
 
@@ -544,11 +552,21 @@ function parseChatTransactionCommand(message) {
     description = sanitizeText(description, 120);
   }
 
-  const category = categoryMatch
-    ? sanitizeText(categoryMatch[1], 60)
-    : type === "income"
-      ? "Pemasukan Lainnya"
-      : "Pengeluaran Lainnya";
+  const rawCategory = categoryMatch ? sanitizeText(categoryMatch[1], 60) : "";
+  const inferredCategory = inferTransactionCategory(type, `${description} ${rawCategory}`) || null;
+  const category = rawCategory ? findCanonicalCategory(type, rawCategory) : inferredCategory;
+
+  if (rawCategory && !category) {
+    return {
+      error: `Kategori \`${rawCategory}\` belum cocok dengan daftar ${type === "income" ? "pemasukan" : "pengeluaran"}. Pilih salah satu: ${formatTransactionCategoryList(type)}.`
+    };
+  }
+
+  if (!category) {
+    return {
+      error: `Kategori transaksi belum dikenali. Gunakan salah satu kategori ${type === "income" ? "pemasukan" : "pengeluaran"}: ${formatTransactionCategoryList(type)}.`
+    };
+  }
 
   return {
     payload: {
@@ -565,8 +583,14 @@ function parseChatTransactionCommand(message) {
 function buildTransactionInputGuide() {
   return [
     "Format input yang didukung:",
-    "- `catat pengeluaran 25000 makan siang kategori Makanan tanggal 2026-04-03`",
-    "- `catat pemasukan 1500000 gaji kategori Gaji`"
+    "- `pengeluaran 25000 makan siang kategori Makanan tanggal 2026-04-03`",
+    "- `pemasukan 1,5jt gaji kategori Gaji`",
+    "- `catat pengeluaran 80rb bensin kategori Transportasi`",
+    "",
+    "Format nominal fleksibel: 15000, 15.000, Rp15.000, 15rb, 1,5jt",
+    "",
+    `Kategori pengeluaran: ${formatTransactionCategoryList("expense")}`,
+    `Kategori pemasukan: ${formatTransactionCategoryList("income")}`
   ].join("\n");
 }
 
@@ -592,6 +616,24 @@ function getTelegramWebhookUrl() {
   }
 
   return new URL("/api/telegram/webhook", APP_BASE_URL).toString();
+}
+
+function extractTelegramLinkCode(text) {
+  const raw = String(text || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const directMatch = raw.match(/\b(?:\/?link|hubungkan|tautkan|kode)\s+([A-HJ-NP-Z2-9-]{8,})\b/i);
+  if (directMatch) {
+    return directMatch[1].replace(/-/g, "").toUpperCase();
+  }
+
+  if (/^[A-HJ-NP-Z2-9-]{8,}$/.test(raw)) {
+    return raw.replace(/-/g, "").toUpperCase();
+  }
+
+  return "";
 }
 
 function createFinanceContext(summary, items, history, user) {
@@ -927,18 +969,23 @@ async function ensureTelegramWebhook() {
 
 function telegramHelpText() {
   return [
-    "Perintah Telegram yang tersedia:",
+    "Bot Telegram Arunika membaca pesan teks biasa.",
+    "Kategori transaksi mengikuti pilihan utama di form web.",
+    "Anda bisa langsung kirim:",
+    "- kode tautan dari dashboard web untuk menghubungkan akun",
+    "- `pengeluaran 25rb makan siang kategori Makanan`",
+    "- `pemasukan 1,5jt gaji kategori Gaji`",
+    "- pertanyaan bebas seperti `ringkasan keuangan saya`",
+    "",
+    "Format nominal fleksibel: 15000, 15.000, Rp15.000, 15rb, 1,5jt",
+    "",
+    "Perintah opsional yang masih didukung:",
     "/start - lihat panduan singkat",
-    "/link KODE - hubungkan akun web ke Telegram",
-    "/catat ... - catat transaksi baru lewat chat",
     "/summary - minta ringkasan keuangan",
     "/unlink - putuskan koneksi Telegram dari akun",
     "/help - tampilkan bantuan",
     "",
-    "Contoh input:",
-    "`/catat pengeluaran 25000 makan siang kategori Makanan`",
-    "",
-    "Setelah akun terhubung, Anda juga dapat mengirim pertanyaan bebas seperti di web app."
+    "Anda juga tetap bisa memakai format `catat ...` jika lebih nyaman."
   ].join("\n");
 }
 
@@ -957,7 +1004,7 @@ async function handleTelegramTextMessage(message) {
       "Halo, saya bot Arunika Finance.",
       linked
         ? `Akun Telegram ini sudah terhubung ke ${linked.user.email}. Anda dapat langsung bertanya mengenai kondisi keuangan.`
-        : "Untuk memulai, masuk ke web app lalu buat kode Telegram di panel Telegram. Setelah itu kirim `/link KODE` ke bot ini.",
+        : "Untuk memulai, masuk ke web app lalu buat kode Telegram di panel Telegram. Setelah itu kirim atau tempel kode tautan ke bot ini.",
       getTelegramBotUrl() ? `Buka bot: ${getTelegramBotUrl()}` : "",
       "Ketik /help untuk melihat daftar perintah."
     ].filter(Boolean);
@@ -971,9 +1018,9 @@ async function handleTelegramTextMessage(message) {
     return;
   }
 
-  const linkMatch = text.match(/^\/link(?:@\w+)?\s+([A-Z0-9-]+)/i);
-  if (linkMatch) {
-    const result = linkTelegramChatByCode(linkMatch[1], message.chat);
+  const linkCode = extractTelegramLinkCode(text);
+  if (linkCode) {
+    const result = linkTelegramChatByCode(linkCode, message.chat);
     if (!result) {
       await sendTelegramMessage(
         chatId,
@@ -1003,20 +1050,13 @@ async function handleTelegramTextMessage(message) {
   if (!linked) {
     await sendTelegramMessage(
       chatId,
-      "Chat ini belum terhubung ke akun Arunika Finance. Masuk ke web app, buat kode Telegram, lalu kirim `/link KODE` ke bot ini."
+      "Chat ini belum terhubung ke akun Arunika Finance. Masuk ke web app, buat kode Telegram, lalu kirim atau tempel kode tautan ke bot ini."
     );
     return;
   }
 
   if (/^\/summary\b/i.test(text)) {
     const result = await buildChatReply("Buat ringkasan keuangan saya.", [], linked.user);
-    await sendTelegramMessage(chatId, result.reply);
-    return;
-  }
-
-  if (/^\/catat\b/i.test(text)) {
-    const command = text.replace(/^\/catat(?:@\w+)?/i, "catat");
-    const result = await buildChatReply(command, [], linked.user);
     await sendTelegramMessage(chatId, result.reply);
     return;
   }
@@ -1086,7 +1126,7 @@ async function handleRequest(req, res) {
       ...getSecurityHeaders(req),
       ...corsHeaders,
       "Access-Control-Allow-Headers": "Content-Type, X-Requested-With",
-      "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS"
+      "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS"
     });
     res.end();
     return;
@@ -1237,7 +1277,7 @@ async function handleRequest(req, res) {
       const code = createTelegramLinkCode(session.user.id);
       sendJson(req, res, 201, {
         ...buildTelegramStatus(session.user.id),
-        command: `/link ${code.code}`,
+        command: code.code,
         expiresAt: code.expiresAt,
         linkCode: code.code
       });
@@ -1267,6 +1307,28 @@ async function handleRequest(req, res) {
       const transaction = createTransactionForUser(session.user.id, sanitizeTransaction(payload));
       sendJson(req, res, 201, {
         message: "Transaksi berhasil disimpan.",
+        summary: computeSummary(listTransactionsByUser(session.user.id)),
+        transaction
+      });
+      return;
+    }
+
+    if (req.method === "PUT" && pathname.startsWith("/api/transactions/")) {
+      if (enforceRateLimit(req, res, "transactionWrite", `user:${session.user.id}`)) {
+        return;
+      }
+
+      const id = pathname.split("/").pop();
+      const payload = await parseJsonBody(req);
+      const transaction = updateTransactionForUser(session.user.id, id, sanitizeTransaction(payload));
+
+      if (!transaction) {
+        sendJson(req, res, 404, { error: "Transaksi tidak ditemukan." });
+        return;
+      }
+
+      sendJson(req, res, 200, {
+        message: "Transaksi berhasil diperbarui.",
         summary: computeSummary(listTransactionsByUser(session.user.id)),
         transaction
       });
@@ -1313,7 +1375,9 @@ async function handleRequest(req, res) {
 
     await serveStatic(req, res, pathname);
   } catch (error) {
-    const statusCode = /wajib|harus|valid|password|email|telegram/i.test(error.message) ? 400 : 500;
+    const statusCode = /wajib|harus|valid|password|email|telegram|kategori|nominal|tanggal|transaksi/i.test(error.message)
+      ? 400
+      : 500;
     if (statusCode >= 500) {
       console.error("Unhandled server error:", error);
       sendJson(req, res, 500, { error: "Terjadi kesalahan pada server. Silakan coba kembali." });

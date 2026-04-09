@@ -80,22 +80,56 @@
 
       <section class="overview">
         <article class="metric card">
-          <span class="metric-label">Saldo Bersih</span>
+          <div class="metric-head">
+            <span class="metric-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="6.5" width="18" height="11" rx="2.5"></rect>
+                <path d="M16 12h.01"></path>
+                <path d="M6 10.5h5"></path>
+                <path d="M6 13.5h3"></path>
+              </svg>
+            </span>
+            <span class="metric-label">Saldo Bersih</span>
+          </div>
           <strong class="metric-value" id="balanceValue">Rp0</strong>
           <span class="metric-foot" id="balanceFoot">Menunggu data transaksi</span>
         </article>
         <article class="metric card">
-          <span class="metric-label">Pemasukan</span>
+          <div class="metric-head">
+            <span class="metric-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 19V5"></path>
+                <path d="M6.5 10.5 12 5l5.5 5.5"></path>
+              </svg>
+            </span>
+            <span class="metric-label">Pemasukan</span>
+          </div>
           <strong class="metric-value" id="incomeValue">Rp0</strong>
           <span class="metric-foot" id="incomeFoot">0 kategori income</span>
         </article>
         <article class="metric card">
-          <span class="metric-label">Pengeluaran</span>
+          <div class="metric-head">
+            <span class="metric-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 5v14"></path>
+                <path d="M17.5 13.5 12 19l-5.5-5.5"></path>
+              </svg>
+            </span>
+            <span class="metric-label">Pengeluaran</span>
+          </div>
           <strong class="metric-value" id="expenseValue">Rp0</strong>
           <span class="metric-foot" id="expenseFoot">0 kategori expense</span>
         </article>
         <article class="metric card">
-          <span class="metric-label">Rasio Tabungan</span>
+          <div class="metric-head">
+            <span class="metric-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3.5a7.5 7.5 0 1 0 7.5 7.5"></path>
+                <path d="M12 3.5v8l5.7 3.3"></path>
+              </svg>
+            </span>
+            <span class="metric-label">Rasio Tabungan</span>
+          </div>
           <strong class="metric-value" id="savingsValue">0%</strong>
           <span class="metric-foot" id="savingsFoot">Belum cukup data</span>
         </article>
@@ -103,9 +137,17 @@
 
       <section class="flow-story card">
         <div class="section-heading">
-          <div>
+          <div class="section-title">
+            <span class="section-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 16c2.2 0 2.8-8 5-8s2.8 10 5 10 2.8-6 6-6"></path>
+                <path d="m17 8 3 4-4 2"></path>
+              </svg>
+            </span>
+            <div>
             <span class="eyebrow">Flow Statistik</span>
             <h2>Pergerakan pemasukan dan pengeluaran</h2>
+            </div>
           </div>
           <button id="compactModeButton" class="secondary-button compact-toggle" type="button" aria-pressed="false">
             Mode Ringkas: Nonaktif
@@ -148,16 +190,24 @@
         <div class="left-column">
           <article class="card form-card">
             <div class="section-heading">
-              <div>
+              <div class="section-title">
+                <span class="section-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 5v14"></path>
+                    <path d="M5 12h14"></path>
+                  </svg>
+                </span>
+                <div>
                 <span class="eyebrow">Tambah Cepat</span>
-                <h2>Input transaksi baru</h2>
+                <h2 id="transactionFormTitle">Input transaksi baru</h2>
+                </div>
               </div>
             </div>
 
             <form id="transactionForm" class="transaction-form">
               <label>
                 <span>Tipe</span>
-                <select name="type" required>
+                <select id="transactionType" name="type" required>
                   <option value="income">Pemasukan</option>
                   <option value="expense">Pengeluaran</option>
                 </select>
@@ -168,11 +218,22 @@
               </label>
               <label>
                 <span>Nominal</span>
-                <input type="number" name="amount" min="1" step="1000" placeholder="500000" required />
+                <input
+                  id="transactionAmount"
+                  type="text"
+                  name="amount"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  placeholder="Contoh: 500000, 15.000, 15rb, 1,5jt"
+                  required
+                />
+                <small id="transactionAmountHint" class="field-hint">
+                  Bisa isi nominal fleksibel seperti `Rp15.000`, `15rb`, atau `1,5jt`.
+                </small>
               </label>
               <label>
                 <span>Kategori transaksi</span>
-                <input type="text" name="category" placeholder="Kebutuhan, Gaji, Freelance..." required />
+                <select id="transactionCategory" name="category" required></select>
               </label>
               <label>
                 <span>Tanggal</span>
@@ -182,37 +243,67 @@
                 <span>Catatan</span>
                 <textarea name="notes" rows="3" placeholder="Tambahan informasi jika perlu"></textarea>
               </label>
-              <button class="primary-button full-span" type="submit">Simpan Transaksi</button>
+              <div class="transaction-form-actions full-span">
+                <button id="transactionSubmitButton" class="primary-button" type="submit">Simpan transaksi</button>
+                <button id="transactionCancelButton" class="secondary-button is-hidden" type="button">Batal edit</button>
+              </div>
             </form>
           </article>
 
           <section class="charts-grid">
             <article class="card chart-card">
               <div class="section-heading">
-                <div>
+                <div class="section-title">
+                  <span class="section-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M5 18V9"></path>
+                      <path d="M12 18V5"></path>
+                      <path d="M19 18v-6"></path>
+                    </svg>
+                  </span>
+                  <div>
                   <span class="eyebrow">Tren</span>
-                <h2>Arus kas 6 bulan terakhir</h2>
+                  <h2>Arus kas 6 bulan terakhir</h2>
+                  </div>
+                </div>
               </div>
-            </div>
               <div id="cashflowChart" class="chart-list"></div>
             </article>
 
             <article class="card chart-card">
               <div class="section-heading">
-                <div>
+                <div class="section-title">
+                  <span class="section-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4.5 12a7.5 7.5 0 0 1 15 0"></path>
+                      <path d="M12 12 18.5 8.5"></path>
+                      <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"></circle>
+                    </svg>
+                  </span>
+                  <div>
                   <span class="eyebrow">Fokus</span>
-                <h2>Komposisi pengeluaran utama</h2>
+                  <h2>Komposisi pengeluaran utama</h2>
+                  </div>
+                </div>
               </div>
-            </div>
               <div id="categoryChart" class="chart-list"></div>
             </article>
           </section>
 
           <article class="card table-card">
             <div class="section-heading split-heading">
-              <div>
+              <div class="section-title">
+                <span class="section-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 6.5h16"></path>
+                    <path d="M4 12h16"></path>
+                    <path d="M4 17.5h16"></path>
+                  </svg>
+                </span>
+                <div>
                 <span class="eyebrow">Riwayat</span>
                 <h2>Daftar transaksi terbaru</h2>
+                </div>
               </div>
 
               <div class="filters">
@@ -234,7 +325,7 @@
                     <th>Kategori</th>
                     <th>Tipe</th>
                     <th>Nominal</th>
-                    <th></th>
+                    <th>Aksi</th>
                   </tr>
                 </thead>
                 <tbody id="transactionTableBody"></tbody>
@@ -246,9 +337,16 @@
         <aside class="right-column">
           <article class="card telegram-card">
             <div class="section-heading">
-              <div>
+              <div class="section-title">
+                <span class="section-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m21 4-7.5 16-2.8-6.2L4.5 11 21 4Z"></path>
+                  </svg>
+                </span>
+                <div>
                 <span class="eyebrow">Telegram</span>
                 <h2>Koneksi chatbot</h2>
+                </div>
               </div>
             </div>
 
@@ -262,17 +360,27 @@
             </div>
 
             <div id="telegramCodeBox" class="telegram-code is-hidden">
-              <span>Kirim perintah berikut ke bot Telegram:</span>
-              <strong id="telegramCodeText">/link XXXXXXXX</strong>
-              <small id="telegramCodeMeta">Kode berlaku 10 menit.</small>
+              <span>Kirim atau tempel kode berikut ke bot Telegram:</span>
+              <strong id="telegramCodeText">XXXXXXXX</strong>
+              <small id="telegramCodeMeta">Bot akan membaca kode ini langsung lewat parsing teks. Kode berlaku 10 menit.</small>
             </div>
           </article>
 
           <article class="card chatbot-card">
             <div class="section-heading">
-              <div>
+              <div class="section-title">
+                <span class="section-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M7 18.5h8l4 2v-5.2a7.2 7.2 0 0 0 1-3.7A7.8 7.8 0 0 0 12 4 7.8 7.8 0 0 0 4 11.6c0 2 .8 3.8 2 5.2v1.7"></path>
+                    <path d="M9 11.5h.01"></path>
+                    <path d="M12 11.5h.01"></path>
+                    <path d="M15 11.5h.01"></path>
+                  </svg>
+                </span>
+                <div>
                 <span class="eyebrow">Chatbot</span>
                 <h2>Asisten keuangan</h2>
+                </div>
               </div>
             </div>
 
@@ -297,9 +405,18 @@
 
           <article class="card insight-card">
             <div class="section-heading">
-              <div>
+              <div class="section-title">
+                <span class="section-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 4.5A6.5 6.5 0 0 0 8.2 16l.8 1.6h6l.8-1.6A6.5 6.5 0 0 0 12 4.5Z"></path>
+                    <path d="M10 20h4"></path>
+                    <path d="M9.5 17.6h5"></path>
+                  </svg>
+                </span>
+                <div>
                 <span class="eyebrow">Insight</span>
                 <h2>Sorotan otomatis</h2>
+                </div>
               </div>
             </div>
             <div id="insightList" class="insight-list"></div>
@@ -315,6 +432,8 @@
       </div>
     </template>
 
+    <script src="/transaction-categories.js"></script>
+    <script src="/transaction-amount.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>
