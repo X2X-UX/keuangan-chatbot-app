@@ -1060,6 +1060,11 @@ tbody tr:hover {
     flex-direction: column;
   }
 
+  .hero-status {
+    min-width: 0;
+    width: 100%;
+  }
+
   .overview,
   .transaction-form {
     grid-template-columns: 1fr;
@@ -1128,5 +1133,156 @@ tbody tr:hover {
 
   .filters input {
     min-width: 0;
+  }
+
+  .section-heading,
+  .split-heading,
+  .session-panel,
+  .telegram-actions,
+  .transaction-form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .section-heading {
+    margin-bottom: 16px;
+  }
+
+  .compact-toggle,
+  .session-panel .secondary-button,
+  .telegram-actions .secondary-button,
+  .transaction-form-actions .primary-button,
+  .transaction-form-actions .secondary-button,
+  .chat-form .primary-button {
+    width: 100%;
+  }
+
+  .quick-prompts button,
+  .telegram-actions .secondary-button,
+  .table-actions button {
+    flex: 1 1 100%;
+  }
+
+  .chart-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .chat-messages {
+    min-height: 300px;
+    max-height: 420px;
+  }
+
+  .chat-bubble {
+    max-width: 100%;
+  }
+
+  .table-wrap {
+    overflow: visible;
+    border: none;
+    background: transparent;
+  }
+
+  .table-wrap table,
+  .table-wrap thead,
+  .table-wrap tbody,
+  .table-wrap tr,
+  .table-wrap td {
+    display: block;
+    width: 100%;
+  }
+
+  .table-wrap thead {
+    display: none;
+  }
+
+  .table-wrap tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  .table-wrap tbody tr {
+    padding: 15px;
+    border-radius: 16px;
+    border: 1px solid var(--line-soft);
+    background: var(--surface-strong);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .table-wrap tbody tr:hover {
+    background: var(--surface-strong);
+  }
+
+  .table-wrap td {
+    padding: 0;
+    border-bottom: none;
+    white-space: normal;
+  }
+
+  .table-wrap td + td {
+    margin-top: 10px;
+  }
+
+  .table-wrap td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .table-wrap td[data-label="Aksi"] {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .table-wrap td[colspan] {
+    margin-top: 0;
+  }
+
+  .table-wrap td[colspan]::before {
+    content: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .auth-gate {
+    padding: 16px;
+  }
+
+  .auth-tabs {
+    flex-direction: column;
+  }
+
+  .auth-tab {
+    width: 100%;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(2rem, 11vw, 2.8rem);
+  }
+
+  .overview,
+  .flow-timeline {
+    grid-template-columns: 1fr;
+  }
+
+  .section-title {
+    gap: 10px;
+  }
+
+  .metric,
+  .flow-story,
+  .table-wrap tbody tr {
+    padding: 14px;
+  }
+
+  .quick-prompts {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 }

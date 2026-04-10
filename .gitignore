@@ -1,2 +1,8 @@
 .env
+.env.*
+!.env.example
 node_modules/
+*.log
+data/*.sqlite
+data/*.sqlite-*
+!data/transactions.json

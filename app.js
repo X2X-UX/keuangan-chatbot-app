@@ -802,13 +802,14 @@ function renderTransactions() {
 
   rows.forEach((item) => {
     const row = document.createElement("tr");
+    row.className = "transaction-row";
     row.innerHTML = `
-      <td>${formatDate(item.date)}</td>
-      <td>${escapeHTML(item.description)}</td>
-      <td>${escapeHTML(item.category)}</td>
-      <td><span class="type-pill ${item.type}">${item.type === "income" ? "Pemasukan" : "Pengeluaran"}</span></td>
-      <td class="amount ${item.type}">${item.type === "income" ? "+" : "-"}${formatCurrency(item.amount)}</td>
-      <td>
+      <td data-label="Tanggal">${formatDate(item.date)}</td>
+      <td data-label="Deskripsi">${escapeHTML(item.description)}</td>
+      <td data-label="Kategori">${escapeHTML(item.category)}</td>
+      <td data-label="Tipe"><span class="type-pill ${item.type}">${item.type === "income" ? "Pemasukan" : "Pengeluaran"}</span></td>
+      <td data-label="Nominal" class="amount ${item.type}">${item.type === "income" ? "+" : "-"}${formatCurrency(item.amount)}</td>
+      <td data-label="Aksi">
         <div class="table-actions">
           <button class="edit-button" data-id="${item.id}" type="button">Edit</button>
           <button class="delete-button" data-id="${item.id}" type="button">Hapus</button>

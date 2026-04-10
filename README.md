@@ -33,6 +33,13 @@ npm.cmd start
 Catatan:
 - Saat `npm start` atau `npm run dev`, file frontend root (`index.html`, `styles.css`, `app.js`) otomatis disinkronkan ke folder `public/`.
 - Backend menerapkan header keamanan HTTP, rate limit API, serta validasi origin untuk endpoint mutasi.
+- Sebelum push ke GitHub, jalankan verifikasi cepat:
+
+```powershell
+npm.cmd run verify
+```
+
+Perintah ini akan menyinkronkan aset `public/` lalu mengecek sintaks file JavaScript utama.
 
 ## Instal sebagai aplikasi HP (PWA)
 
