@@ -1,15 +1,26 @@
-const STATIC_CACHE = "arunika-static-v1";
+const STATIC_CACHE = "arunika-static-v2";
 
 const STATIC_ASSETS = [
   "/",
   "/index.html",
   "/styles.css",
   "/app.js",
+  "/transaction-categories.js",
+  "/transaction-amount.js",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/offline.html"
 ];
+
+const NETWORK_FIRST_ASSETS = new Set([
+  "/",
+  "/index.html",
+  "/styles.css",
+  "/app.js",
+  "/transaction-categories.js",
+  "/transaction-amount.js"
+]);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -56,12 +67,29 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
+    (async () => {
+      if (NETWORK_FIRST_ASSETS.has(url.pathname)) {
+        try {
+          const freshResponse = await fetch(event.request);
+          const cache = await caches.open(STATIC_CACHE);
+          cache.put(event.request, freshResponse.clone());
+          return freshResponse;
+        } catch {
+          const cached = await caches.match(event.request);
+          if (cached) {
+            return cached;
+          }
+
+          throw new Error("Network request failed.");
+        }
+      }
+
+      const cached = await caches.match(event.request);
       if (cached) {
         return cached;
       }
 
       return fetch(event.request);
-    })
+    })()
   );
 });
