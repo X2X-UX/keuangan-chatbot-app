@@ -497,26 +497,49 @@ function sanitizeTransaction(payload) {
   };
 }
 
+function parseTransactionTypeToken(value) {
+  if (/\b(?:pemasukan|income)\b/i.test(value)) {
+    return "income";
+  }
+
+  if (/\b(?:pengeluaran|expense)\b/i.test(value)) {
+    return "expense";
+  }
+
+  return null;
+}
+
 function parseChatTransactionCommand(message) {
   const raw = String(message || "").trim();
   if (!raw) {
     return null;
   }
 
-  const lower = raw.toLowerCase();
-  const looksLikeInputCommand =
-    /^\/?catat\b/i.test(raw) ||
-    /^(?:tambah|input)\b/i.test(raw) ||
-    /^(?:pemasukan|income|pengeluaran|expense)\b/i.test(raw);
-  if (!looksLikeInputCommand) {
+  const commandMatch = raw.match(/^\/?catat(?:@\w+)?\b|^(?:tambah|input)\b/i);
+  const directTypeMatch = raw.match(/^(pemasukan|income|pengeluaran|expense)\b/i);
+  if (!commandMatch && !directTypeMatch) {
     return null;
   }
 
-  const type = /\b(?:pemasukan|income)\b/.test(lower)
-    ? "income"
-    : /\b(?:pengeluaran|expense)\b/.test(lower)
-      ? "expense"
-      : null;
+  const parseMode = commandMatch ? "command" : "direct";
+  let type = null;
+  let remainder = raw;
+
+  if (commandMatch) {
+    remainder = raw.slice(commandMatch[0].length).trim();
+    const commandTypeMatch = remainder.match(/^(pemasukan|income|pengeluaran|expense)\b/i);
+    type = parseTransactionTypeToken(commandTypeMatch?.[0] || "");
+    if (!type || !commandTypeMatch) {
+      return {
+        error: "Perintah input dikenali, tetapi tipe transaksi belum jelas. Gunakan `pemasukan` atau `pengeluaran`."
+      };
+    }
+
+    remainder = remainder.slice(commandTypeMatch[0].length).trim();
+  } else {
+    type = parseTransactionTypeToken(directTypeMatch?.[0] || "");
+    remainder = raw.slice(directTypeMatch[0].length).trim();
+  }
 
   if (!type) {
     return {
@@ -524,7 +547,13 @@ function parseChatTransactionCommand(message) {
     };
   }
 
-  const amountMatch = raw.match(/(?:rp\.?\s*)?(\d+(?:[\d.,\s]*\d)?(?:\s*(?:rb|ribu|k|jt|juta|m|j))?)/i);
+  const amountMatch = remainder.match(
+    /^(?:[:=-]\s*)?(?:rp\.?\s*)?(\d+(?:[\d.,\s]*\d)?(?:\s*(?:rb|ribu|k|jt|juta|m|j))?)(?=\s|$)/i
+  );
+  if (!amountMatch && parseMode === "direct") {
+    return null;
+  }
+
   const amount = amountMatch ? parseFlexibleAmount(amountMatch[1]) : null;
   if (!amount || amount <= 0) {
     return {
@@ -532,19 +561,19 @@ function parseChatTransactionCommand(message) {
     };
   }
 
-  const dateMatch = raw.match(/\b(\d{4}-\d{2}-\d{2})\b/);
-  const categoryMatch = raw.match(
+  const content = remainder.slice(amountMatch[0].length).trim();
+  const dateMatch = content.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  const categoryMatch = content.match(
     /(?:kategori|category)\s*[:=]?\s*(.+?)(?=(?:\s+(?:tanggal|date|catatan|note|notes|deskripsi|keterangan)\b)|$)/i
   );
-  const descriptionMatch = raw.match(
+  const descriptionMatch = content.match(
     /(?:deskripsi|keterangan|desc)\s*[:=]?\s*(.+?)(?=(?:\s+(?:kategori|category|tanggal|date|catatan|note|notes)\b)|$)/i
   );
-  const notesMatch = raw.match(/(?:catatan|note|notes)\s*[:=]?\s*(.+)$/i);
+  const notesMatch = content.match(/(?:catatan|note|notes)\s*[:=]?\s*(.+)$/i);
 
   let description = descriptionMatch ? sanitizeText(descriptionMatch[1], 120) : "";
   if (!description) {
-    const textAfterAmount = amountMatch ? raw.slice(amountMatch.index + amountMatch[0].length) : raw;
-    description = textAfterAmount
+    description = content
       .replace(/(?:kategori|category)\s*[:=]?\s*.+$/i, "")
       .replace(/(?:tanggal|date)\s*[:=]?\s*\d{4}-\d{2}-\d{2}/i, "")
       .replace(/(?:catatan|note|notes)\s*[:=]?\s*.+$/i, "")

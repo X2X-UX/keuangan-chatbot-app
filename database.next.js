@@ -560,20 +560,24 @@ function unlinkTelegramByChatId(chatId) {
 
 function seedDemoAccount() {
   const database = getDatabase();
-  const userCountRow = database.prepare("SELECT COUNT(*) AS count FROM users").get();
+  const existingDemoUser = getUserByEmail("demo@arunika.local");
+  const demoUser =
+    existingDemoUser ||
+    createUser(
+      {
+        email: "demo@arunika.local",
+        name: "Demo User",
+        password: "demo12345"
+      },
+      { allowEmptyName: false }
+    );
 
-  if (userCountRow.count > 0) {
+  const demoTransactionCount = database
+    .prepare("SELECT COUNT(*) AS count FROM transactions WHERE user_id = ?")
+    .get(demoUser.id);
+  if (demoTransactionCount.count > 0) {
     return;
   }
-
-  const demoUser = createUser(
-    {
-      email: "demo@arunika.local",
-      name: "Demo User",
-      password: "demo12345"
-    },
-    { allowEmptyName: false }
-  );
 
   const seedTransactions = loadLegacySeedTransactions();
   for (const item of seedTransactions) {

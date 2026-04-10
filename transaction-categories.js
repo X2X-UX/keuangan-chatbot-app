@@ -24,8 +24,8 @@
     expense: {
       Makanan: ["makan", "makanan", "kuliner", "sarapan", "makan siang", "makan malam", "snack", "jajan"],
       Transportasi: ["transport", "transportasi", "bensin", "bbm", "parkir", "ojek", "tol", "kereta", "bus"],
-      Tagihan: ["tagihan", "listrik", "air", "ipl", "pln", "pam", "bpjs", "asuransi", "telepon"],
-      Belanja: ["belanja", "shopping", "sembako", "minimarket", "supermarket", "marketplace"],
+      Tagihan: ["tagihan", "hunian", "listrik", "air", "ipl", "pln", "pam", "bpjs", "asuransi", "telepon"],
+      Belanja: ["belanja", "kebutuhan", "shopping", "sembako", "minimarket", "supermarket", "marketplace"],
       Kesehatan: ["kesehatan", "obat", "dokter", "klinik", "rumah sakit", "vitamin"],
       Pendidikan: ["pendidikan", "sekolah", "kuliah", "kursus", "buku", "les"],
       Hiburan: ["hiburan", "bioskop", "game", "streaming", "rekreasi", "nongkrong"],
@@ -121,5 +121,6 @@
 
   if (typeof globalThis !== "undefined") {
     globalThis.TRANSACTION_CATEGORY_OPTIONS = sharedTransactionCategoryOptions;
+    globalThis.findCanonicalTransactionCategory = findCanonicalCategory;
   }
 })();

@@ -15,6 +15,12 @@ const TRANSACTION_CATEGORY_OPTIONS = globalThis.TRANSACTION_CATEGORY_OPTIONS || 
   expense: ["Makanan", "Transportasi", "Tagihan", "Belanja", "Kesehatan", "Pendidikan", "Hiburan", "Rumah Tangga"],
   income: ["Gaji", "Freelance", "Bonus", "Penjualan", "Investasi", "Hadiah"]
 };
+const findCanonicalTransactionCategory =
+  globalThis.findCanonicalTransactionCategory ||
+  ((type, value) => {
+    const categories = TRANSACTION_CATEGORY_OPTIONS[type] || [];
+    return categories.find((category) => category.toLowerCase() === String(value || "").trim().toLowerCase()) || null;
+  });
 const parseFlexibleAmount =
   globalThis.parseFlexibleAmount ||
   ((value) => {
@@ -258,7 +264,8 @@ function getTransactionCategories(type) {
 
 function syncTransactionCategoryOptions(preferredValue) {
   const categories = getTransactionCategories(elements.transactionType.value);
-  const nextValue = categories.includes(preferredValue) ? preferredValue : categories[0];
+  const canonicalPreferredValue = findCanonicalTransactionCategory(elements.transactionType.value, preferredValue);
+  const nextValue = categories.includes(canonicalPreferredValue) ? canonicalPreferredValue : categories[0];
 
   elements.transactionCategory.innerHTML = categories
     .map((category) => `<option value="${escapeHTML(category)}">${escapeHTML(category)}</option>`)
