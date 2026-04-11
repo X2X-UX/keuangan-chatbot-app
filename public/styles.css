@@ -374,13 +374,16 @@ th {
 }
 
 .session-panel {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
   margin-top: 18px;
   padding-top: 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.23);
+}
+
+.session-summary {
+  min-width: 0;
 }
 
 .session-panel strong,
@@ -397,6 +400,7 @@ th {
 .logout-button {
   display: inline-flex;
   align-items: center;
+  justify-self: end;
   gap: 10px;
   padding: 12px 16px;
   border-color: rgba(255, 255, 255, 0.18);
@@ -1207,6 +1211,10 @@ tbody tr:hover {
   .telegram-actions .secondary-button,
   .table-actions button {
     flex: 1 1 100%;
+  }
+
+  .session-panel .logout-button {
+    justify-self: stretch;
   }
 
   .chart-head {
