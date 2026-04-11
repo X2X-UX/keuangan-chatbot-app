@@ -2,6 +2,7 @@ const state = {
   authMode: "login",
   chatHistory: [],
   compactMode: false,
+  csvImport: null,
   editingTransactionId: null,
   health: null,
   summary: null,
@@ -88,6 +89,25 @@ const elements = {
   heroSummaryText: document.getElementById("heroSummaryText"),
   incomeFoot: document.getElementById("incomeFoot"),
   incomeValue: document.getElementById("incomeValue"),
+  importAmountColumn: document.getElementById("importAmountColumn"),
+  importCategoryColumn: document.getElementById("importCategoryColumn"),
+  importCreditColumn: document.getElementById("importCreditColumn"),
+  importDateColumn: document.getElementById("importDateColumn"),
+  importDebitColumn: document.getElementById("importDebitColumn"),
+  importDescriptionColumn: document.getElementById("importDescriptionColumn"),
+  importFileInput: document.getElementById("importFileInput"),
+  importFileName: document.getElementById("importFileName"),
+  importForm: document.getElementById("importForm"),
+  importMappingSection: document.getElementById("importMappingSection"),
+  importMessage: document.getElementById("importMessage"),
+  importMetaText: document.getElementById("importMetaText"),
+  importNotesColumn: document.getElementById("importNotesColumn"),
+  importPreviewButton: document.getElementById("importPreviewButton"),
+  importPreviewList: document.getElementById("importPreviewList"),
+  importPreviewSection: document.getElementById("importPreviewSection"),
+  importPreviewSummary: document.getElementById("importPreviewSummary"),
+  importSubmitButton: document.getElementById("importSubmitButton"),
+  importTypeColumn: document.getElementById("importTypeColumn"),
   insightList: document.getElementById("insightList"),
   loginTabButton: document.getElementById("loginTabButton"),
   logoutButton: document.getElementById("logoutButton"),
@@ -115,6 +135,28 @@ const elements = {
   transactionSubmitButton: document.getElementById("transactionSubmitButton"),
   transactionType: document.getElementById("transactionType"),
   typeFilter: document.getElementById("typeFilter")
+};
+
+const IMPORT_COLUMN_FIELDS = ["date", "description", "amount", "debit", "credit", "type", "category", "notes"];
+const IMPORT_MAPPING_ELEMENTS = {
+  amount: elements.importAmountColumn,
+  category: elements.importCategoryColumn,
+  credit: elements.importCreditColumn,
+  date: elements.importDateColumn,
+  debit: elements.importDebitColumn,
+  description: elements.importDescriptionColumn,
+  notes: elements.importNotesColumn,
+  type: elements.importTypeColumn
+};
+const IMPORT_FIELD_KEYWORDS = {
+  amount: ["amount", "nominal", "jumlah", "nilai", "mutasi", "trx amount"],
+  category: ["category", "kategori", "jenis"],
+  credit: ["credit", "kredit", "cr", "masuk"],
+  date: ["date", "tanggal", "tgl", "posting date", "transaction date"],
+  debit: ["debit", "db", "keluar"],
+  description: ["description", "deskripsi", "keterangan", "uraian", "remark", "narasi", "transaksi"],
+  notes: ["notes", "catatan", "memo", "info", "detail"],
+  type: ["type", "tipe", "jenis transaksi", "dc", "status"]
 };
 
 function formatCurrency(value) {
@@ -332,6 +374,509 @@ function resetTransactionForm() {
   syncTransactionCategoryOptions();
   renderTransactionAmountHint();
   setTransactionFormMode(false);
+}
+
+function resetImportState(options = {}) {
+  const preserveMessage = options.preserveMessage === true;
+  state.csvImport = null;
+  elements.importMappingSection.classList.add("is-hidden");
+  elements.importPreviewSection.classList.add("is-hidden");
+  elements.importPreviewList.innerHTML = "";
+  elements.importPreviewSummary.textContent = "Belum ada data yang dipreview.";
+  elements.importFileName.textContent = "Belum ada file";
+  elements.importMetaText.textContent = "Unggah file untuk melihat mapping kolom.";
+  elements.importPreviewButton.disabled = true;
+  elements.importSubmitButton.disabled = true;
+
+  for (const element of Object.values(IMPORT_MAPPING_ELEMENTS)) {
+    if (element) {
+      element.innerHTML = "";
+    }
+  }
+
+  if (!preserveMessage) {
+    setImportMessage("");
+  }
+}
+
+function setImportMessage(message, tone = "") {
+  elements.importMessage.textContent = message;
+  elements.importMessage.classList.toggle("is-error", tone === "error");
+  elements.importMessage.classList.toggle("is-success", tone === "success");
+}
+
+function normalizeImportHeader(value, index) {
+  const trimmed = String(value || "").trim();
+  return trimmed || `Kolom ${index + 1}`;
+}
+
+function normalizeImportHeaderToken(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function detectCsvDelimiter(text) {
+  const sample = String(text || "").split(/\r?\n/, 1)[0] || "";
+  const commaCount = (sample.match(/,/g) || []).length;
+  const semicolonCount = (sample.match(/;/g) || []).length;
+  return semicolonCount > commaCount ? ";" : ",";
+}
+
+function parseCsvText(text) {
+  const rows = [];
+  let current = "";
+  let row = [];
+  let inQuotes = false;
+  const delimiter = detectCsvDelimiter(text);
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (char === "\"") {
+      if (inQuotes && next === "\"") {
+        current += "\"";
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === delimiter && !inQuotes) {
+      row.push(current);
+      current = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") {
+        index += 1;
+      }
+      row.push(current);
+      if (row.some((cell) => String(cell || "").trim())) {
+        rows.push(row);
+      }
+      row = [];
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  row.push(current);
+  if (row.some((cell) => String(cell || "").trim())) {
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function buildImportRecords(parsedRows) {
+  if (!Array.isArray(parsedRows) || parsedRows.length < 2) {
+    return null;
+  }
+
+  const headers = parsedRows[0].map((header, index) => normalizeImportHeader(header, index));
+  const rows = parsedRows
+    .slice(1)
+    .map((values, index) => ({
+      index,
+      values: headers.map((_, headerIndex) => String(values[headerIndex] || "").trim())
+    }))
+    .filter((entry) => entry.values.some((value) => value));
+
+  if (!rows.length) {
+    return null;
+  }
+
+  return { headers, rows };
+}
+
+function guessImportColumnIndex(headers, field) {
+  const keywords = IMPORT_FIELD_KEYWORDS[field] || [];
+  return headers.findIndex((header) => {
+    const normalized = normalizeImportHeaderToken(header);
+    return keywords.some((keyword) => normalized.includes(keyword));
+  });
+}
+
+function renderImportColumnOptions(headers) {
+  for (const [field, element] of Object.entries(IMPORT_MAPPING_ELEMENTS)) {
+    if (!element) {
+      continue;
+    }
+
+    element.innerHTML = [
+      '<option value="">Tidak dipakai</option>',
+      ...headers.map((header, index) => `<option value="${index}">${escapeHTML(header)}</option>`)
+    ].join("");
+
+    const guessedIndex = guessImportColumnIndex(headers, field);
+    if (guessedIndex >= 0) {
+      element.value = String(guessedIndex);
+    }
+  }
+}
+
+function getImportMappings() {
+  return Object.fromEntries(
+    Object.entries(IMPORT_MAPPING_ELEMENTS).map(([field, element]) => {
+      const value = element ? element.value : "";
+      return [field, value === "" ? null : Number(value)];
+    })
+  );
+}
+
+function getImportCellValue(record, columnIndex) {
+  if (!record || columnIndex === null || columnIndex === undefined || columnIndex < 0) {
+    return "";
+  }
+
+  return String(record.values[columnIndex] || "").trim();
+}
+
+function parseImportTypeToken(value) {
+  const normalized = normalizeImportHeaderToken(value);
+  if (!normalized) {
+    return null;
+  }
+
+  if (/\b(?:income|pemasukan|kredit|credit|cr|masuk)\b/.test(normalized)) {
+    return "income";
+  }
+
+  if (/\b(?:expense|pengeluaran|debit|db|keluar)\b/.test(normalized)) {
+    return "expense";
+  }
+
+  return null;
+}
+
+function parseImportMoneyValue(value) {
+  const raw = String(value || "")
+    .replace(/[^\d,.\-+()]/g, "")
+    .trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  const unsigned = raw.replace(/[()+-]/g, "");
+  const lastComma = unsigned.lastIndexOf(",");
+  const lastDot = unsigned.lastIndexOf(".");
+  const decimalIndex = Math.max(lastComma, lastDot);
+
+  if (decimalIndex === -1) {
+    const digits = unsigned.replace(/[^\d]/g, "");
+    return digits ? Number.parseInt(digits, 10) : null;
+  }
+
+  const integerPart = unsigned.slice(0, decimalIndex).replace(/[^\d]/g, "");
+  const decimalPart = unsigned.slice(decimalIndex + 1).replace(/[^\d]/g, "");
+
+  if (!integerPart && !decimalPart) {
+    return null;
+  }
+
+  if (decimalPart.length > 2) {
+    return Number.parseInt(`${integerPart}${decimalPart}`, 10);
+  }
+
+  const normalized = Number(`${integerPart || "0"}.${decimalPart || "0"}`);
+  return Number.isFinite(normalized) ? Math.round(normalized) : null;
+}
+
+function parseSignedImportAmount(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return { amount: null, sign: 0 };
+  }
+
+  const amount = parseImportMoneyValue(raw);
+  if (!amount) {
+    return { amount: null, sign: 0 };
+  }
+
+  if (/\(.*\)/.test(raw) || /-\s*\d/.test(raw)) {
+    return { amount, sign: -1 };
+  }
+
+  if (/^\+/.test(raw)) {
+    return { amount, sign: 1 };
+  }
+
+  return { amount, sign: 0 };
+}
+
+function formatDateParts(year, month, day) {
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function parseImportDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw;
+  }
+
+  const normalized = raw.replace(/\./g, "/").replace(/-/g, "/");
+  let match = normalized.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  if (match) {
+    return formatDateParts(match[1], match[2], match[3]);
+  }
+
+  match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (match) {
+    const day = Number(match[1]);
+    const month = Number(match[2]);
+    const year = Number(match[3].length === 2 ? `20${match[3]}` : match[3]);
+    return formatDateParts(year, month, day);
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  const offsetMs = parsed.getTimezoneOffset() * 60_000;
+  return new Date(parsed.getTime() - offsetMs).toISOString().slice(0, 10);
+}
+
+function inferImportCategory(type, rawCategory, description) {
+  const preferred = rawCategory ? findCanonicalTransactionCategory(type, rawCategory) : null;
+  if (preferred) {
+    return preferred;
+  }
+
+  const inferred = findCanonicalTransactionCategory(type, description) || null;
+  if (inferred) {
+    return inferred;
+  }
+
+  return type === "expense" ? "Belanja" : "Hadiah";
+}
+
+function buildImportPreviewData() {
+  if (!state.csvImport) {
+    return null;
+  }
+
+  const mappings = getImportMappings();
+  const previewRows = state.csvImport.rows.map((record) => {
+    const rawDate = getImportCellValue(record, mappings.date);
+    const rawDescription = getImportCellValue(record, mappings.description);
+    const rawAmount = getImportCellValue(record, mappings.amount);
+    const rawDebit = getImportCellValue(record, mappings.debit);
+    const rawCredit = getImportCellValue(record, mappings.credit);
+    const rawType = getImportCellValue(record, mappings.type);
+    const rawCategory = getImportCellValue(record, mappings.category);
+    const rawNotes = getImportCellValue(record, mappings.notes);
+
+    const debit = parseSignedImportAmount(rawDebit);
+    const credit = parseSignedImportAmount(rawCredit);
+    const amount = parseSignedImportAmount(rawAmount);
+
+    let type = parseImportTypeToken(rawType);
+    let normalizedAmount = null;
+
+    if (!type && debit.amount) {
+      type = "expense";
+      normalizedAmount = debit.amount;
+    }
+
+    if (!type && credit.amount) {
+      type = "income";
+      normalizedAmount = credit.amount;
+    }
+
+    if (!type && amount.sign === -1) {
+      type = "expense";
+      normalizedAmount = amount.amount;
+    }
+
+    if (!type && amount.sign === 1) {
+      type = "income";
+      normalizedAmount = amount.amount;
+    }
+
+    if (type && !normalizedAmount) {
+      normalizedAmount = type === "expense" ? debit.amount || amount.amount : credit.amount || amount.amount;
+    }
+
+    const normalizedDate = parseImportDate(rawDate);
+    const description = rawDescription || "Transaksi mutasi";
+    const category = type ? inferImportCategory(type, rawCategory, `${description} ${rawNotes}`) : "";
+    const notes = [rawNotes, `Import CSV: ${state.csvImport.fileName}`].filter(Boolean).join(" | ");
+
+    if (!normalizedDate) {
+      return { error: "Tanggal belum terbaca. Pilih kolom tanggal yang benar atau rapikan format tanggal di CSV.", ok: false, rowNumber: record.index + 2 };
+    }
+
+    if (!description.trim()) {
+      return { error: "Deskripsi transaksi belum terbaca.", ok: false, rowNumber: record.index + 2 };
+    }
+
+    if (!type) {
+      return {
+        error: "Tipe transaksi belum bisa ditebak. Gunakan kolom debit/kredit, kolom tipe, atau nominal bertanda plus/minus.",
+        ok: false,
+        rowNumber: record.index + 2
+      };
+    }
+
+    if (!normalizedAmount) {
+      return { error: "Nominal belum bisa dibaca dari kolom yang dipilih.", ok: false, rowNumber: record.index + 2 };
+    }
+
+    return {
+      ok: true,
+      rowNumber: record.index + 2,
+      transaction: {
+        amount: String(normalizedAmount),
+        category,
+        date: normalizedDate,
+        description,
+        notes,
+        type
+      }
+    };
+  });
+
+  const validRows = previewRows.filter((entry) => entry.ok).map((entry) => entry.transaction);
+  const invalidCount = previewRows.length - validRows.length;
+
+  return {
+    invalidCount,
+    previewRows: previewRows.slice(0, 12),
+    totalRows: previewRows.length,
+    validRows
+  };
+}
+
+function renderImportPreview() {
+  const preview = buildImportPreviewData();
+  if (!preview) {
+    return;
+  }
+
+  state.csvImport.preview = preview;
+  elements.importPreviewSection.classList.remove("is-hidden");
+  elements.importPreviewList.innerHTML = "";
+
+  elements.importPreviewSummary.textContent = `${preview.validRows.length} valid, ${preview.invalidCount} perlu perhatian, dari ${preview.totalRows} baris.`;
+
+  preview.previewRows.forEach((entry) => {
+    const item = document.createElement("article");
+    item.className = `import-preview-item ${entry.ok ? "valid" : "invalid"}`;
+
+    if (entry.ok) {
+      item.innerHTML = `
+        <div class="import-preview-row">
+          <div class="import-preview-title">
+            <strong>${escapeHTML(entry.transaction.description)}</strong>
+            <span>Baris CSV ${entry.rowNumber} • ${escapeHTML(formatDate(entry.transaction.date))}</span>
+          </div>
+          <span class="import-status valid">Siap impor</span>
+        </div>
+        <div class="import-preview-meta">
+          <span class="import-chip">${entry.transaction.type === "income" ? "Pemasukan" : "Pengeluaran"}</span>
+          <span class="import-chip">${escapeHTML(entry.transaction.category)}</span>
+          <span class="import-chip">${escapeHTML(formatCurrency(entry.transaction.amount))}</span>
+        </div>
+      `;
+    } else {
+      item.innerHTML = `
+        <div class="import-preview-row">
+          <div class="import-preview-title">
+            <strong>Baris CSV ${entry.rowNumber}</strong>
+            <span>Baris ini belum bisa diimpor.</span>
+          </div>
+          <span class="import-status invalid">Perlu cek</span>
+        </div>
+        <div class="import-preview-error">${escapeHTML(entry.error)}</div>
+      `;
+    }
+
+    elements.importPreviewList.appendChild(item);
+  });
+
+  if (preview.totalRows > preview.previewRows.length) {
+    const tail = document.createElement("div");
+    tail.className = "empty-state";
+    tail.textContent = `Preview menampilkan ${preview.previewRows.length} baris pertama dari ${preview.totalRows} baris CSV.`;
+    elements.importPreviewList.appendChild(tail);
+  }
+
+  elements.importSubmitButton.disabled = preview.validRows.length === 0;
+}
+
+async function handleImportFileChange(event) {
+  const file = event.target.files?.[0];
+  resetImportState({ preserveMessage: true });
+
+  if (!file) {
+    setImportMessage("");
+    return;
+  }
+
+  try {
+    const text = await file.text();
+    const records = buildImportRecords(parseCsvText(text.replace(/^\uFEFF/, "")));
+
+    if (!records) {
+      throw new Error("File CSV belum berisi header dan baris transaksi yang bisa diproses.");
+    }
+
+    state.csvImport = {
+      fileName: file.name,
+      headers: records.headers,
+      preview: null,
+      rows: records.rows
+    };
+
+    renderImportColumnOptions(records.headers);
+    elements.importMappingSection.classList.remove("is-hidden");
+    elements.importPreviewButton.disabled = false;
+    elements.importFileName.textContent = file.name;
+    elements.importMetaText.textContent = `${records.rows.length} baris transaksi terdeteksi. Silakan cek mapping kolom lalu preview.`;
+    setImportMessage("File CSV berhasil dibaca. Lanjutkan ke preview untuk mengecek hasil normalisasi.", "success");
+  } catch (error) {
+    resetImportState();
+    if (elements.importFileInput) {
+      elements.importFileInput.value = "";
+    }
+    setImportMessage(error.message, "error");
+  }
+}
+
+function handleImportPreview() {
+  if (!state.csvImport) {
+    setImportMessage("Unggah file CSV terlebih dahulu sebelum melihat preview.", "error");
+    return;
+  }
+
+  renderImportPreview();
+  setImportMessage("Preview import berhasil diperbarui.", "success");
+}
+
+function handleImportMappingChange() {
+  if (!state.csvImport) {
+    return;
+  }
+
+  state.csvImport.preview = null;
+  elements.importSubmitButton.disabled = true;
+  if (!elements.importPreviewSection.classList.contains("is-hidden")) {
+    setImportMessage("Mapping kolom berubah. Jalankan preview lagi sebelum import.", "");
+  }
 }
 
 function populateTransactionForm(transaction) {
@@ -963,6 +1508,10 @@ async function handleLogout() {
   } finally {
     state.user = null;
     resetTransactionForm();
+    resetImportState();
+    if (elements.importFileInput) {
+      elements.importFileInput.value = "";
+    }
     renderSession();
     clearDashboard();
     resetChat();
@@ -1054,6 +1603,53 @@ async function handleTransactionSubmit(event) {
     button.disabled = false;
     elements.transactionCancelButton.disabled = false;
     setTransactionFormMode(Boolean(state.editingTransactionId));
+  }
+}
+
+async function handleImportSubmit(event) {
+  event.preventDefault();
+  if (!state.user) {
+    showAuthGate("Silakan masuk sebelum import transaksi.");
+    return;
+  }
+
+  const preview = state.csvImport?.preview || buildImportPreviewData();
+  if (!preview || preview.validRows.length === 0) {
+    setImportMessage("Belum ada baris valid untuk diimport. Cek mapping kolom lalu lihat preview.", "error");
+    return;
+  }
+
+  try {
+    elements.importSubmitButton.disabled = true;
+    elements.importPreviewButton.disabled = true;
+    elements.importSubmitButton.textContent = "Mengimpor...";
+
+    const payload = await request("/api/transactions/import", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        rows: preview.validRows,
+        source: state.csvImport?.fileName || "import.csv"
+      })
+    });
+
+    await reloadDashboard();
+    resetImportState({ preserveMessage: true });
+    elements.importFileInput.value = "";
+    setImportMessage(payload.message, "success");
+
+    appendChatMessage("assistant", payload.message);
+    state.chatHistory.push({ role: "assistant", content: payload.message });
+  } catch (error) {
+    if (!handleUnauthorized(error)) {
+      setImportMessage(error.message, "error");
+    }
+  } finally {
+    elements.importSubmitButton.textContent = "Import ke transaksi";
+    elements.importPreviewButton.disabled = !state.csvImport;
+    elements.importSubmitButton.disabled = !(state.csvImport?.preview?.validRows?.length > 0);
   }
 }
 
@@ -1157,6 +1753,12 @@ function bindEvents() {
   elements.loginTabButton.addEventListener("click", () => setAuthMode("login"));
   elements.registerTabButton.addEventListener("click", () => setAuthMode("register"));
   elements.authForm.addEventListener("submit", handleAuthSubmit);
+  elements.importFileInput.addEventListener("change", handleImportFileChange);
+  elements.importPreviewButton.addEventListener("click", handleImportPreview);
+  elements.importForm.addEventListener("submit", handleImportSubmit);
+  Object.values(IMPORT_MAPPING_ELEMENTS).forEach((element) => {
+    element.addEventListener("change", handleImportMappingChange);
+  });
   elements.logoutButton.addEventListener("click", handleLogout);
   elements.telegramLinkButton.addEventListener("click", handleGenerateTelegramLinkCode);
   elements.telegramUnlinkButton.addEventListener("click", handleTelegramUnlink);
@@ -1205,6 +1807,7 @@ async function registerServiceWorker() {
 
 async function initializeApp() {
   resetTransactionForm();
+  resetImportState();
   setAuthMode("login");
   setCompactMode(loadCompactModePreference(), { persist: false });
   renderSession();

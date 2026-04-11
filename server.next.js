@@ -497,6 +497,33 @@ function sanitizeTransaction(payload) {
   };
 }
 
+function buildTransactionFingerprint(transaction) {
+  return [
+    transaction.type,
+    transaction.date,
+    String(Math.round(Number(transaction.amount) || 0)),
+    sanitizeText(transaction.description, 120).toLowerCase()
+  ].join("|");
+}
+
+function sanitizeImportedTransaction(payload, sourceLabel) {
+  const type = payload.type === "income" ? "income" : payload.type === "expense" ? "expense" : null;
+  const description = sanitizeText(payload.description, 120);
+  const rawCategory = sanitizeText(payload.category, 60);
+  const inferredCategory = type ? inferTransactionCategory(type, `${description} ${rawCategory}`) : null;
+  const fallbackCategory = type === "expense" ? "Belanja" : type === "income" ? "Hadiah" : "";
+  const sourceNote = sourceLabel ? `Import CSV: ${sanitizeText(sourceLabel, 80)}` : "Import CSV";
+  const rawNotes = sanitizeText(payload.notes, 240);
+  const notes = [sourceNote, rawNotes].filter(Boolean).join(" | ").slice(0, 240);
+
+  return sanitizeTransaction({
+    ...payload,
+    category: rawCategory || inferredCategory || fallbackCategory,
+    description,
+    notes
+  });
+}
+
 function parseTransactionTypeToken(value) {
   if (/\b(?:pemasukan|income)\b/i.test(value)) {
     return "income";
@@ -1338,6 +1365,74 @@ async function handleRequest(req, res) {
         message: "Transaksi berhasil disimpan.",
         summary: computeSummary(listTransactionsByUser(session.user.id)),
         transaction
+      });
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/transactions/import") {
+      if (enforceRateLimit(req, res, "transactionWrite", `user:${session.user.id}`)) {
+        return;
+      }
+
+      const payload = await parseJsonBody(req);
+      const rows = Array.isArray(payload.rows) ? payload.rows : [];
+      const sourceLabel = sanitizeText(payload.source, 80);
+
+      if (!rows.length) {
+        sendJson(req, res, 400, { error: "Tidak ada baris transaksi valid untuk diimport." });
+        return;
+      }
+
+      if (rows.length > 500) {
+        sendJson(req, res, 400, { error: "Maksimal 500 transaksi per sekali import." });
+        return;
+      }
+
+      const existingTransactions = listTransactionsByUser(session.user.id);
+      const fingerprints = new Set(existingTransactions.map((item) => buildTransactionFingerprint(item)));
+      let importedCount = 0;
+      let skippedDuplicates = 0;
+      let skippedInvalid = 0;
+      const importedTransactions = [];
+
+      for (const row of rows) {
+        try {
+          const transaction = sanitizeImportedTransaction(row, sourceLabel);
+          const fingerprint = buildTransactionFingerprint(transaction);
+
+          if (fingerprints.has(fingerprint)) {
+            skippedDuplicates += 1;
+            continue;
+          }
+
+          fingerprints.add(fingerprint);
+          importedTransactions.push(createTransactionForUser(session.user.id, transaction));
+          importedCount += 1;
+        } catch {
+          skippedInvalid += 1;
+        }
+      }
+
+      const summary = computeSummary(listTransactionsByUser(session.user.id));
+      const detailParts = [];
+      if (skippedDuplicates) {
+        detailParts.push(`${skippedDuplicates} duplikat dilewati`);
+      }
+      if (skippedInvalid) {
+        detailParts.push(`${skippedInvalid} baris gagal validasi akhir`);
+      }
+
+      const message = importedCount
+        ? `Import selesai. ${importedCount} transaksi berhasil ditambahkan${detailParts.length ? `, ${detailParts.join(", ")}.` : "."}`
+        : `Import tidak menambah transaksi baru${detailParts.length ? ` karena ${detailParts.join(" dan ")}.` : "."}`;
+
+      sendJson(req, res, 200, {
+        importedCount,
+        message,
+        skippedDuplicates,
+        skippedInvalid,
+        summary,
+        transactions: importedTransactions.slice(0, 10)
       });
       return;
     }

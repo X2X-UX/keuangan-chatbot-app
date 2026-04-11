@@ -687,6 +687,7 @@ th {
 }
 
 .form-card,
+.import-card,
 .telegram-card,
 .chatbot-card,
 .insight-card,
@@ -729,7 +730,9 @@ th {
   gap: 15px;
 }
 
-.transaction-form label {
+.transaction-form label,
+.import-form label,
+.import-mapping-grid label {
   display: grid;
   gap: 8px;
   color: var(--muted);
@@ -749,6 +752,8 @@ th {
 .transaction-form input,
 .transaction-form select,
 .transaction-form textarea,
+.import-form input,
+.import-form select,
 .filters input,
 .filters select,
 .chat-form textarea {
@@ -764,6 +769,8 @@ th {
 .transaction-form input:focus,
 .transaction-form select:focus,
 .transaction-form textarea:focus,
+.import-form input:focus,
+.import-form select:focus,
 .filters input:focus,
 .filters select:focus,
 .chat-form textarea:focus {
@@ -804,6 +811,180 @@ th {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+}
+
+.import-form {
+  display: grid;
+  gap: 16px;
+}
+
+.import-mapping {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(12, 74, 135, 0.05);
+  border: 1px solid rgba(12, 74, 135, 0.08);
+}
+
+.import-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.import-meta strong {
+  font-family: var(--font-display);
+  color: var(--primary-strong);
+}
+
+.import-meta span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.import-mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.import-form-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.import-message {
+  min-height: 1.4rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.import-message.is-error {
+  color: var(--danger);
+}
+
+.import-message.is-success {
+  color: var(--success);
+}
+
+.import-preview {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(248, 251, 254, 0.8);
+  border: 1px solid rgba(12, 74, 135, 0.08);
+}
+
+.import-preview-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.import-preview-head strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--primary-strong);
+  font-family: var(--font-display);
+}
+
+.import-preview-head span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.import-preview-list {
+  display: grid;
+  gap: 10px;
+}
+
+.import-preview-item {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface-strong);
+  border: 1px solid var(--line-soft);
+}
+
+.import-preview-item.valid {
+  border-color: rgba(20, 128, 74, 0.16);
+}
+
+.import-preview-item.invalid {
+  border-color: rgba(180, 35, 24, 0.16);
+}
+
+.import-preview-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.import-preview-title {
+  display: grid;
+  gap: 4px;
+}
+
+.import-preview-title strong {
+  color: var(--text);
+}
+
+.import-preview-title span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.import-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.import-status.valid {
+  background: rgba(20, 128, 74, 0.12);
+  color: var(--success);
+}
+
+.import-status.invalid {
+  background: rgba(180, 35, 24, 0.12);
+  color: var(--danger);
+}
+
+.import-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.import-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(12, 74, 135, 0.07);
+  color: var(--primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.import-preview-error {
+  color: var(--danger);
+  font-size: 0.88rem;
+  line-height: 1.5;
 }
 
 .charts-grid {
@@ -1116,7 +1297,8 @@ tbody tr:hover {
   }
 
   .overview,
-  .transaction-form {
+  .transaction-form,
+  .import-mapping-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1209,7 +1391,8 @@ tbody tr:hover {
 
   .quick-prompts button,
   .telegram-actions .secondary-button,
-  .table-actions button {
+  .table-actions button,
+  .import-form-actions button {
     flex: 1 1 100%;
   }
 
@@ -1229,6 +1412,11 @@ tbody tr:hover {
 
   .chat-bubble {
     max-width: 100%;
+  }
+
+  .import-preview-row,
+  .import-preview-head {
+    flex-direction: column;
   }
 
   .table-wrap {

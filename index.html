@@ -259,6 +259,93 @@
             </form>
           </article>
 
+          <article class="card import-card">
+            <div class="section-heading">
+              <div class="section-title">
+                <span class="section-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 4v10"></path>
+                    <path d="m8.5 10.5 3.5 3.5 3.5-3.5"></path>
+                    <path d="M4 17.5A2.5 2.5 0 0 0 6.5 20h11A2.5 2.5 0 0 0 20 17.5"></path>
+                  </svg>
+                </span>
+                <div>
+                <span class="eyebrow">Import CSV</span>
+                <h2>Import mutasi transaksi</h2>
+                </div>
+              </div>
+            </div>
+
+            <form id="importForm" class="import-form">
+              <label class="full-span">
+                <span>File CSV mutasi</span>
+                <input id="importFileInput" type="file" accept=".csv,text/csv" />
+                <small class="field-hint">
+                  Cocok untuk file mutasi bank atau e-wallet berbentuk CSV. Sistem akan bantu tebak kolom dan kategori.
+                </small>
+              </label>
+
+              <div id="importMappingSection" class="import-mapping is-hidden full-span">
+                <div class="import-meta">
+                  <strong id="importFileName">Belum ada file</strong>
+                  <span id="importMetaText">Unggah file untuk melihat mapping kolom.</span>
+                </div>
+
+                <div class="import-mapping-grid">
+                  <label>
+                    <span>Kolom tanggal</span>
+                    <select id="importDateColumn"></select>
+                  </label>
+                  <label>
+                    <span>Kolom deskripsi</span>
+                    <select id="importDescriptionColumn"></select>
+                  </label>
+                  <label>
+                    <span>Kolom nominal</span>
+                    <select id="importAmountColumn"></select>
+                  </label>
+                  <label>
+                    <span>Kolom debit</span>
+                    <select id="importDebitColumn"></select>
+                  </label>
+                  <label>
+                    <span>Kolom kredit</span>
+                    <select id="importCreditColumn"></select>
+                  </label>
+                  <label>
+                    <span>Kolom tipe</span>
+                    <select id="importTypeColumn"></select>
+                  </label>
+                  <label>
+                    <span>Kolom kategori</span>
+                    <select id="importCategoryColumn"></select>
+                  </label>
+                  <label>
+                    <span>Kolom catatan</span>
+                    <select id="importNotesColumn"></select>
+                  </label>
+                </div>
+              </div>
+
+              <div class="import-form-actions full-span">
+                <button id="importPreviewButton" class="secondary-button" type="button" disabled>Lihat preview</button>
+                <button id="importSubmitButton" class="primary-button" type="submit" disabled>Import ke transaksi</button>
+              </div>
+
+              <p id="importMessage" class="import-message full-span"></p>
+
+              <div id="importPreviewSection" class="import-preview is-hidden full-span">
+                <div class="import-preview-head">
+                  <div>
+                    <strong>Preview hasil import</strong>
+                    <span id="importPreviewSummary">Belum ada data yang dipreview.</span>
+                  </div>
+                </div>
+                <div id="importPreviewList" class="import-preview-list"></div>
+              </div>
+            </form>
+          </article>
+
           <section class="charts-grid">
             <article class="card chart-card">
               <div class="section-heading">
