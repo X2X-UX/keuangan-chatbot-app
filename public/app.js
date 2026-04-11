@@ -483,7 +483,7 @@ function renderTransactionReceiptPanel() {
   if (hasUpload) {
     elements.transactionReceiptStatus.textContent = receiptState.upload.fileName;
     elements.transactionReceiptHint.textContent = "Struk baru akan diunggah saat transaksi disimpan.";
-    elements.transactionReceiptAnalyzeButton.textContent = "Baca struk AI";
+    elements.transactionReceiptAnalyzeButton.textContent = "Baca struk";
     elements.transactionReceiptAnalyzeButton.disabled = false;
     elements.transactionReceiptAnalyzeButton.classList.remove("is-hidden");
     elements.transactionReceiptLink.href = receiptState.upload.dataUrl;
@@ -674,7 +674,7 @@ async function handleTransactionReceiptAnalyze() {
     }
   } finally {
     button.disabled = false;
-    button.textContent = "Baca struk AI";
+    button.textContent = "Baca struk";
   }
 }
 

@@ -41,6 +41,8 @@ loadEnvFile(ENV_FILE);
 const PORT = Number(process.env.PORT || 3000);
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, "");
+const OCR_SPACE_API_KEY = String(process.env.OCR_SPACE_API_KEY || "").trim();
+const OCR_SPACE_API_URL = "https://api.ocr.space/parse/image";
 const COOKIE_NAME = "session_id";
 const TELEGRAM_BOT_TOKEN = String(process.env.TELEGRAM_BOT_TOKEN || "").trim();
 const TELEGRAM_WEBHOOK_SECRET = String(process.env.TELEGRAM_WEBHOOK_SECRET || "").trim();
@@ -935,6 +937,220 @@ function sanitizeReceiptSuggestion(payload, preferredType = "") {
   });
 }
 
+function normalizeReceiptOcrLines(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => sanitizeText(line, 160))
+    .filter(Boolean);
+}
+
+function extractReceiptDateFromText(text) {
+  const raw = String(text || "");
+  const patterns = [
+    /\b(\d{4}[/-]\d{2}[/-]\d{2})\b/,
+    /\b(\d{2}[/-]\d{2}[/-]\d{4})\b/
+  ];
+
+  for (const pattern of patterns) {
+    const match = raw.match(pattern);
+    if (match?.[1]) {
+      return normalizeReceiptDate(match[1]);
+    }
+  }
+
+  return todayDateValue();
+}
+
+function scoreReceiptAmountLine(line) {
+  const text = String(line || "").toLowerCase();
+  let score = 0;
+
+  if (/\b(total|grand total|jumlah|tagihan|total bayar|amount due|net total)\b/.test(text)) {
+    score += 6;
+  }
+
+  if (/\b(paid|payment|debit|kartu|qris|cash|tunai|bayar)\b/.test(text)) {
+    score += 2;
+  }
+
+  if (/\b(subtotal|tax|ppn|pb1|service|diskon|discount|voucher|kembalian|change|rounding|admin)\b/.test(text)) {
+    score -= 4;
+  }
+
+  return score;
+}
+
+function extractReceiptAmountFromText(text) {
+  const lines = normalizeReceiptOcrLines(text);
+  let bestCandidate = null;
+
+  for (const line of lines) {
+    const matches = line.match(/(?:rp\.?\s*)?\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?|(?:rp\.?\s*)?\d{4,}(?:[.,]\d{2})?/gi) || [];
+    for (const match of matches) {
+      const amount = parseFlexibleAmount(match);
+      if (!amount || amount <= 0) {
+        continue;
+      }
+
+      const candidate = {
+        amount,
+        line,
+        score: scoreReceiptAmountLine(line)
+      };
+
+      if (
+        !bestCandidate ||
+        candidate.score > bestCandidate.score ||
+        (candidate.score === bestCandidate.score && candidate.amount > bestCandidate.amount)
+      ) {
+        bestCandidate = candidate;
+      }
+    }
+  }
+
+  if (bestCandidate) {
+    return bestCandidate.amount;
+  }
+
+  const fallbackMatches = String(text || "").match(/\d+/g) || [];
+  const fallbackAmounts = fallbackMatches.map((item) => Number(item)).filter((item) => item >= 1000);
+  return fallbackAmounts.length ? Math.max(...fallbackAmounts) : null;
+}
+
+function inferReceiptTypeFromText(text, preferredType = "") {
+  if (preferredType === "income" || preferredType === "expense") {
+    return preferredType;
+  }
+
+  const raw = String(text || "").toLowerCase();
+  if (/\b(transfer masuk|uang masuk|kredit masuk|received|payment received|gaji|salary|bonus|income)\b/.test(raw)) {
+    return "income";
+  }
+
+  return "expense";
+}
+
+function pickReceiptDescriptionFromText(text, preferredType = "") {
+  const lines = normalizeReceiptOcrLines(text);
+  const skipPattern =
+    /\b(struk|receipt|invoice|nota|tanggal|date|jam|time|kasir|cashier|total|subtotal|tax|ppn|service|discount|diskon|payment|metode|change|kembalian|qris|debit|credit)\b/i;
+
+  for (const line of lines) {
+    if (!/[a-z]/i.test(line)) {
+      continue;
+    }
+
+    if (skipPattern.test(line)) {
+      continue;
+    }
+
+    if (line.length < 3) {
+      continue;
+    }
+
+    return line;
+  }
+
+  return preferredType === "income" ? "Pemasukan dari OCR" : "Belanja dari OCR";
+}
+
+function pickReceiptNotesFromText(text) {
+  const lines = normalizeReceiptOcrLines(text);
+  const noteLine = lines.find((line) => /\b(inv|invoice|ref|trx|transaction|order|kasir|payment|metode)\b/i.test(line));
+  return noteLine || "Hasil OCR.space";
+}
+
+function buildReceiptSuggestionFromOcrText(text, preferredType = "") {
+  const type = inferReceiptTypeFromText(text, preferredType);
+  const description = pickReceiptDescriptionFromText(text, type);
+  const amount = extractReceiptAmountFromText(text);
+  const date = extractReceiptDateFromText(text);
+  const notes = pickReceiptNotesFromText(text);
+  const category = inferTransactionCategory(type, `${description} ${notes}`) || (type === "income" ? "Hadiah" : "Belanja");
+
+  return sanitizeReceiptSuggestion(
+    {
+      amount,
+      category,
+      date,
+      description,
+      notes,
+      type
+    },
+    preferredType
+  );
+}
+
+function normalizeOcrSpaceMessage(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeText(item, 200)).filter(Boolean).join(" ");
+  }
+
+  return sanitizeText(value, 200);
+}
+
+function humanizeOpenAIErrorMessage(message) {
+  const raw = String(message || "");
+  if (/quota|billing/i.test(raw)) {
+    return "Kuota OpenAI sedang habis. Isi billing OpenAI atau gunakan OCR.space sebagai alternatif.";
+  }
+
+  return raw || "Gagal menghubungi layanan AI untuk membaca struk.";
+}
+
+async function analyzeReceiptWithOCRSpace(receiptUpload, preferredType = "") {
+  if (!OCR_SPACE_API_KEY) {
+    throw new Error("OCR.space belum aktif. Isi OCR_SPACE_API_KEY terlebih dahulu.");
+  }
+
+  if (receiptUpload.buffer.length > 1024 * 1024) {
+    throw new Error("Ukuran gambar untuk OCR.space free maksimal 1 MB. Kompres struk lalu coba lagi.");
+  }
+
+  const base64Image = `data:${receiptUpload.mimeType};base64,${receiptUpload.buffer.toString("base64")}`;
+  const formData = new FormData();
+  formData.append("base64Image", base64Image);
+  formData.append("language", "eng");
+  formData.append("isOverlayRequired", "false");
+  formData.append("detectOrientation", "true");
+  formData.append("scale", "true");
+
+  const response = await fetch(OCR_SPACE_API_URL, {
+    method: "POST",
+    headers: {
+      apikey: OCR_SPACE_API_KEY
+    },
+    body: formData,
+    signal: AbortSignal.timeout(25_000)
+  });
+
+  const payload = await response.json();
+  const topLevelError = normalizeOcrSpaceMessage(payload?.ErrorMessage) || normalizeOcrSpaceMessage(payload?.ErrorDetails);
+  if (!response.ok) {
+    throw new Error(topLevelError || "Gagal menghubungi OCR.space.");
+  }
+
+  if (payload?.IsErroredOnProcessing) {
+    throw new Error(topLevelError || "OCR.space belum bisa membaca struk ini.");
+  }
+
+  const parsedResults = Array.isArray(payload?.ParsedResults) ? payload.ParsedResults : [];
+  const parsedText = parsedResults
+    .filter((entry) => Number(entry?.FileParseExitCode) === 1 && entry?.ParsedText)
+    .map((entry) => String(entry.ParsedText || "").trim())
+    .filter(Boolean)
+    .join("\n");
+
+  if (!parsedText) {
+    const firstEntry = parsedResults[0] || {};
+    const entryError =
+      normalizeOcrSpaceMessage(firstEntry?.ErrorMessage) || normalizeOcrSpaceMessage(firstEntry?.ErrorDetails);
+    throw new Error(entryError || "Teks pada struk belum berhasil dibaca OCR.space.");
+  }
+
+  return buildReceiptSuggestionFromOcrText(parsedText, preferredType);
+}
+
 async function analyzeReceiptWithOpenAI(receiptUpload, preferredType = "") {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("Fitur baca struk AI belum aktif. Isi OPENAI_API_KEY terlebih dahulu.");
@@ -990,7 +1206,7 @@ async function analyzeReceiptWithOpenAI(receiptUpload, preferredType = "") {
 
   const payload = await response.json();
   if (!response.ok) {
-    throw new Error(payload?.error?.message || "Gagal menghubungi layanan AI untuk membaca struk.");
+    throw new Error(humanizeOpenAIErrorMessage(payload?.error?.message));
   }
 
   const rawText = extractOpenAIText(payload);
@@ -1006,6 +1222,18 @@ async function analyzeReceiptWithOpenAI(receiptUpload, preferredType = "") {
   }
 
   return sanitizeReceiptSuggestion(structured, preferredType);
+}
+
+async function analyzeReceipt(receiptUpload, preferredType = "") {
+  if (OCR_SPACE_API_KEY) {
+    return analyzeReceiptWithOCRSpace(receiptUpload, preferredType);
+  }
+
+  if (process.env.OPENAI_API_KEY) {
+    return analyzeReceiptWithOpenAI(receiptUpload, preferredType);
+  }
+
+  throw new Error("Fitur baca struk belum aktif. Isi OCR_SPACE_API_KEY atau OPENAI_API_KEY terlebih dahulu.");
 }
 
 function generateLocalReply(message, summary) {
@@ -1659,7 +1887,7 @@ async function handleRequest(req, res) {
       const preferredType = payload.preferredType === "income" ? "income" : payload.preferredType === "expense" ? "expense" : "";
       let suggestion;
       try {
-        suggestion = await analyzeReceiptWithOpenAI(receiptUpload, preferredType);
+        suggestion = await analyzeReceipt(receiptUpload, preferredType);
       } catch (error) {
         sendJson(req, res, 400, { error: error.message || "Struk belum bisa dianalisis saat ini." });
         return;
