@@ -808,6 +808,61 @@ th {
   background: rgba(14, 139, 118, 0.18);
 }
 
+.transaction-description {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.transaction-description-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.transaction-description-title {
+  color: var(--text);
+  font-size: 0.98rem;
+  line-height: 1.4;
+}
+
+.transaction-description-notes {
+  color: var(--muted);
+  font-size: 0.83rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.transaction-description-notes.is-muted {
+  color: rgba(89, 98, 116, 0.92);
+}
+
+.receipt-thumb-link {
+  flex: 0 0 auto;
+  display: inline-flex;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(14, 139, 118, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04)),
+    rgba(14, 139, 118, 0.08);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.receipt-thumb-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.receipt-thumb-link:hover {
+  transform: translateY(-1px);
+  border-color: rgba(14, 139, 118, 0.28);
+}
+
 .transaction-form input,
 .transaction-form select,
 .transaction-form textarea,
@@ -1561,6 +1616,15 @@ tbody tr:hover {
     border-top: 1px solid var(--line-soft);
   }
 
+  .transaction-description {
+    align-items: stretch;
+  }
+
+  .receipt-thumb-link {
+    width: 64px;
+    height: 64px;
+  }
+
   .table-wrap td[colspan] {
     margin-top: 0;
   }
@@ -1605,5 +1669,15 @@ tbody tr:hover {
   .quick-prompts {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .transaction-description {
+    gap: 10px;
+  }
+
+  .receipt-thumb-link {
+    width: 58px;
+    height: 58px;
+    border-radius: 12px;
   }
 }

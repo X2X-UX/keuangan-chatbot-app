@@ -1804,12 +1804,36 @@ function renderTransactions() {
   rows.forEach((item) => {
     const row = document.createElement("tr");
     row.className = "transaction-row";
+    const receiptThumb = item.receiptPath
+      ? `
+        <a class="receipt-thumb-link" href="${escapeHTML(getTransactionReceiptUrl(item.id))}" target="_blank" rel="noreferrer" aria-label="Buka struk untuk ${escapeHTML(item.description)}">
+          <img
+            class="receipt-thumb-image"
+            src="${escapeHTML(getTransactionReceiptUrl(item.id))}"
+            alt="Thumbnail struk ${escapeHTML(item.description)}"
+            loading="lazy"
+          />
+        </a>
+      `
+      : "";
     const receiptAction = item.receiptPath
       ? `<a class="receipt-link" href="${escapeHTML(getTransactionReceiptUrl(item.id))}" target="_blank" rel="noreferrer">Struk</a>`
       : "";
     row.innerHTML = `
       <td data-label="Tanggal">${formatDate(item.date)}</td>
-      <td data-label="Deskripsi">${escapeHTML(item.description)}</td>
+      <td data-label="Deskripsi">
+        <div class="transaction-description">
+          ${receiptThumb}
+          <div class="transaction-description-copy">
+            <strong class="transaction-description-title">${escapeHTML(item.description)}</strong>
+            ${
+              item.notes
+                ? `<span class="transaction-description-notes">${escapeHTML(item.notes)}</span>`
+                : `<span class="transaction-description-notes is-muted">Tanpa catatan tambahan</span>`
+            }
+          </div>
+        </div>
+      </td>
       <td data-label="Kategori">${escapeHTML(item.category)}</td>
       <td data-label="Tipe"><span class="type-pill ${item.type}">${item.type === "income" ? "Pemasukan" : "Pengeluaran"}</span></td>
       <td data-label="Nominal" class="amount ${item.type}">${item.type === "income" ? "+" : "-"}${formatCurrency(item.amount)}</td>
