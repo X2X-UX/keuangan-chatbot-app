@@ -14,6 +14,7 @@ const {
   deleteSession,
   deleteTransactionForUser,
   getSessionWithUser,
+  getTransactionByIdForUser,
   getTelegramLinkByChatId,
   getTelegramLinkByUserId,
   initializeDatabase,
@@ -32,6 +33,7 @@ const { parseFlexibleAmount } = require("./transaction-amount");
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
+const RECEIPTS_DIR = path.join(ROOT, "data", "receipts");
 const ENV_FILE = path.join(ROOT, ".env");
 
 loadEnvFile(ENV_FILE);
@@ -58,9 +60,13 @@ const RATE_LIMITS = {
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml"
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webp": "image/webp"
 };
 
 function parseEnvOrigins(value) {
@@ -418,7 +424,7 @@ function readBody(req) {
 
     req.on("data", (chunk) => {
       body += chunk;
-      if (body.length > 1_000_000) {
+      if (body.length > 5_000_000) {
         reject(new Error("Payload terlalu besar."));
         req.destroy();
       }
@@ -493,7 +499,119 @@ function sanitizeTransaction(payload) {
     date,
     description,
     notes,
+    receiptPath: sanitizeText(payload.receiptPath, 260),
     type
+  };
+}
+
+function sanitizeReceiptUpload(payload) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const dataUrl = String(payload.dataUrl || "").trim();
+  const fileName = sanitizeText(payload.fileName, 120);
+  if (!dataUrl) {
+    return null;
+  }
+
+  const match = dataUrl.match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=]+)$/i);
+  if (!match) {
+    throw new Error("Format struk harus gambar PNG, JPG, atau WEBP.");
+  }
+
+  const mimeType = match[1].toLowerCase() === "image/jpg" ? "image/jpeg" : match[1].toLowerCase();
+  const buffer = Buffer.from(match[2], "base64");
+  if (!buffer.length) {
+    throw new Error("File struk tidak valid.");
+  }
+
+  if (buffer.length > 2 * 1024 * 1024) {
+    throw new Error("Ukuran struk maksimal 2 MB.");
+  }
+
+  return {
+    buffer,
+    fileName,
+    mimeType
+  };
+}
+
+function getReceiptExtension(mimeType) {
+  if (mimeType === "image/png") {
+    return ".png";
+  }
+
+  if (mimeType === "image/webp") {
+    return ".webp";
+  }
+
+  return ".jpg";
+}
+
+async function saveReceiptUpload(userId, receiptUpload) {
+  if (!receiptUpload) {
+    return "";
+  }
+
+  const userDir = path.join(RECEIPTS_DIR, userId);
+  await fsp.mkdir(userDir, { recursive: true });
+
+  const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${getReceiptExtension(receiptUpload.mimeType)}`;
+  const absolutePath = path.join(userDir, fileName);
+  await fsp.writeFile(absolutePath, receiptUpload.buffer);
+
+  return path.relative(ROOT, absolutePath).replaceAll("\\", "/");
+}
+
+async function removeReceiptFile(receiptPath) {
+  const safeRelative = String(receiptPath || "").replace(/^([/\\])+/, "");
+  if (!safeRelative) {
+    return;
+  }
+
+  const absolutePath = path.join(ROOT, safeRelative);
+  const relativePath = path.relative(ROOT, absolutePath);
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    return;
+  }
+
+  try {
+    await fsp.unlink(absolutePath);
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
+  }
+}
+
+async function enrichTransactionPayloadWithReceipt(userId, payload, existingReceiptPath = "") {
+  const receiptAction = payload.receiptAction === "remove" ? "remove" : payload.receiptAction === "replace" ? "replace" : "keep";
+  let receiptPath = existingReceiptPath || "";
+
+  if (receiptAction === "remove") {
+    receiptPath = "";
+  }
+
+  const receiptUpload = sanitizeReceiptUpload(payload.receiptUpload);
+  const draft = sanitizeTransaction({
+    ...payload,
+    receiptPath
+  });
+
+  if (receiptUpload) {
+    receiptPath = await saveReceiptUpload(userId, receiptUpload);
+  }
+
+  const sanitized = {
+    ...draft,
+    receiptPath
+  };
+
+  return {
+    receiptAction,
+    receiptPath,
+    sanitized
   };
 }
 
@@ -1354,13 +1472,51 @@ async function handleRequest(req, res) {
       return;
     }
 
+    if (req.method === "GET" && pathname.startsWith("/api/transactions/") && pathname.endsWith("/receipt")) {
+      const transactionId = pathname.split("/")[3];
+      const transaction = getTransactionByIdForUser(session.user.id, transactionId);
+
+      if (!transaction || !transaction.receiptPath) {
+        sendJson(req, res, 404, { error: "Struk tidak ditemukan." });
+        return;
+      }
+
+      const filePath = path.join(ROOT, transaction.receiptPath);
+      const relativePath = path.relative(ROOT, filePath);
+      if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+        sendJson(req, res, 403, { error: "Akses struk ditolak." });
+        return;
+      }
+
+      try {
+        const stat = await fsp.stat(filePath);
+        if (!stat.isFile()) {
+          sendJson(req, res, 404, { error: "Struk tidak ditemukan." });
+          return;
+        }
+
+        const extension = path.extname(filePath).toLowerCase();
+        res.writeHead(200, {
+          ...getSecurityHeaders(req),
+          "Cache-Control": "private, max-age=300",
+          "Content-Type": MIME_TYPES[extension] || "application/octet-stream"
+        });
+        fs.createReadStream(filePath).pipe(res);
+        return;
+      } catch {
+        sendJson(req, res, 404, { error: "Struk tidak ditemukan." });
+        return;
+      }
+    }
+
     if (req.method === "POST" && pathname === "/api/transactions") {
       if (enforceRateLimit(req, res, "transactionWrite", `user:${session.user.id}`)) {
         return;
       }
 
       const payload = await parseJsonBody(req);
-      const transaction = createTransactionForUser(session.user.id, sanitizeTransaction(payload));
+      const { sanitized } = await enrichTransactionPayloadWithReceipt(session.user.id, payload);
+      const transaction = createTransactionForUser(session.user.id, sanitized);
       sendJson(req, res, 201, {
         message: "Transaksi berhasil disimpan.",
         summary: computeSummary(listTransactionsByUser(session.user.id)),
@@ -1444,11 +1600,22 @@ async function handleRequest(req, res) {
 
       const id = pathname.split("/").pop();
       const payload = await parseJsonBody(req);
-      const transaction = updateTransactionForUser(session.user.id, id, sanitizeTransaction(payload));
+      const existing = getTransactionByIdForUser(session.user.id, id);
+      if (!existing) {
+        sendJson(req, res, 404, { error: "Transaksi tidak ditemukan." });
+        return;
+      }
+
+      const { sanitized } = await enrichTransactionPayloadWithReceipt(session.user.id, payload, existing.receiptPath || "");
+      const transaction = updateTransactionForUser(session.user.id, id, sanitized);
 
       if (!transaction) {
         sendJson(req, res, 404, { error: "Transaksi tidak ditemukan." });
         return;
+      }
+
+      if ((transaction.previousReceiptPath || "") && transaction.previousReceiptPath !== (transaction.receiptPath || "")) {
+        await removeReceiptFile(transaction.previousReceiptPath);
       }
 
       sendJson(req, res, 200, {
@@ -1466,6 +1633,10 @@ async function handleRequest(req, res) {
       if (!deleted) {
         sendJson(req, res, 404, { error: "Transaksi tidak ditemukan." });
         return;
+      }
+
+      if (deleted.receiptPath) {
+        await removeReceiptFile(deleted.receiptPath);
       }
 
       sendJson(req, res, 200, {

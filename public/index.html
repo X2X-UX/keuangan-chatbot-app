@@ -252,6 +252,25 @@
                 <span>Catatan</span>
                 <textarea name="notes" rows="3" placeholder="Tambahan informasi jika perlu"></textarea>
               </label>
+              <div class="receipt-field full-span">
+                <label>
+                  <span>Upload struk</span>
+                  <input id="transactionReceiptFile" type="file" accept="image/png,image/jpeg,image/webp" />
+                  <small class="field-hint">
+                    Unggah foto struk PNG, JPG, atau WEBP. Maksimal 2 MB.
+                  </small>
+                </label>
+                <div id="transactionReceiptPanel" class="receipt-panel is-hidden">
+                  <div class="receipt-meta">
+                    <strong id="transactionReceiptStatus">Belum ada struk</strong>
+                    <span id="transactionReceiptHint">Struk akan membantu Anda melacak bukti transaksi.</span>
+                  </div>
+                  <div class="receipt-actions">
+                    <a id="transactionReceiptLink" class="secondary-button is-hidden" href="#" target="_blank" rel="noreferrer">Buka struk</a>
+                    <button id="transactionReceiptRemoveButton" class="secondary-button is-hidden" type="button">Hapus struk</button>
+                  </div>
+                </div>
+              </div>
               <div class="transaction-form-actions full-span">
                 <button id="transactionSubmitButton" class="primary-button" type="submit">Simpan transaksi</button>
                 <button id="transactionCancelButton" class="secondary-button is-hidden" type="button">Batal edit</button>

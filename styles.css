@@ -749,6 +749,65 @@ th {
   color: var(--danger);
 }
 
+.receipt-field {
+  display: grid;
+  gap: 12px;
+}
+
+.receipt-panel {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(12, 74, 135, 0.05);
+  border: 1px solid rgba(12, 74, 135, 0.09);
+}
+
+.receipt-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.receipt-meta strong {
+  color: var(--primary-strong);
+  font-family: var(--font-display);
+}
+
+.receipt-meta span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.receipt-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.receipt-link {
+  text-decoration: none;
+}
+
+.table-actions .receipt-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 11px;
+  border-radius: 11px;
+  background: rgba(14, 139, 118, 0.12);
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.table-actions .receipt-link:hover {
+  background: rgba(14, 139, 118, 0.18);
+}
+
 .transaction-form input,
 .transaction-form select,
 .transaction-form textarea,
@@ -1403,6 +1462,15 @@ tbody tr:hover {
   .chart-head {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .receipt-panel {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .receipt-actions {
+    justify-content: stretch;
   }
 
   .chat-messages {

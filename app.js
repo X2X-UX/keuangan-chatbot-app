@@ -6,6 +6,7 @@ const state = {
   editingTransactionId: null,
   health: null,
   summary: null,
+  transactionReceipt: null,
   telegramCommand: null,
   telegramStatus: null,
   transactions: [],
@@ -131,6 +132,12 @@ const elements = {
   transactionAmount: document.getElementById("transactionAmount"),
   transactionAmountHint: document.getElementById("transactionAmountHint"),
   transactionCancelButton: document.getElementById("transactionCancelButton"),
+  transactionReceiptFile: document.getElementById("transactionReceiptFile"),
+  transactionReceiptHint: document.getElementById("transactionReceiptHint"),
+  transactionReceiptLink: document.getElementById("transactionReceiptLink"),
+  transactionReceiptPanel: document.getElementById("transactionReceiptPanel"),
+  transactionReceiptRemoveButton: document.getElementById("transactionReceiptRemoveButton"),
+  transactionReceiptStatus: document.getElementById("transactionReceiptStatus"),
   transactionTableBody: document.getElementById("transactionTableBody"),
   transactionFormTitle: document.getElementById("transactionFormTitle"),
   transactionSubmitButton: document.getElementById("transactionSubmitButton"),
@@ -427,12 +434,170 @@ function setTransactionFormMode(editing) {
   elements.transactionCancelButton.classList.toggle("is-hidden", !isEditing);
 }
 
+function createTransactionReceiptState() {
+  return {
+    existingUrl: "",
+    hasExisting: false,
+    removeRequested: false,
+    upload: null
+  };
+}
+
+function getTransactionReceiptUrl(transactionId) {
+  return `/api/transactions/${transactionId}/receipt`;
+}
+
+function resetTransactionReceiptState(transaction = null) {
+  state.transactionReceipt = createTransactionReceiptState();
+
+  if (transaction?.id && transaction.receiptPath) {
+    state.transactionReceipt.existingUrl = getTransactionReceiptUrl(transaction.id);
+    state.transactionReceipt.hasExisting = true;
+  }
+
+  if (elements.transactionReceiptFile) {
+    elements.transactionReceiptFile.value = "";
+  }
+
+  renderTransactionReceiptPanel();
+}
+
+function renderTransactionReceiptPanel() {
+  const receiptState = state.transactionReceipt || createTransactionReceiptState();
+  const hasUpload = Boolean(receiptState.upload);
+  const hasExisting = receiptState.hasExisting && !receiptState.removeRequested && !hasUpload;
+  const showPanel = hasUpload || hasExisting || receiptState.removeRequested;
+
+  elements.transactionReceiptPanel.classList.toggle("is-hidden", !showPanel);
+  elements.transactionReceiptLink.classList.add("is-hidden");
+  elements.transactionReceiptRemoveButton.classList.add("is-hidden");
+  elements.transactionReceiptLink.classList.remove("receipt-link");
+  elements.transactionReceiptLink.removeAttribute("href");
+
+  if (!showPanel) {
+    return;
+  }
+
+  if (hasUpload) {
+    elements.transactionReceiptStatus.textContent = receiptState.upload.fileName;
+    elements.transactionReceiptHint.textContent = "Struk baru akan diunggah saat transaksi disimpan.";
+    elements.transactionReceiptLink.href = receiptState.upload.dataUrl;
+    elements.transactionReceiptLink.textContent = "Preview struk";
+    elements.transactionReceiptLink.classList.remove("is-hidden");
+    elements.transactionReceiptLink.classList.add("receipt-link");
+    elements.transactionReceiptRemoveButton.textContent = "Batalkan struk";
+    elements.transactionReceiptRemoveButton.classList.remove("is-hidden");
+    return;
+  }
+
+  if (receiptState.removeRequested) {
+    elements.transactionReceiptStatus.textContent = "Struk akan dihapus";
+    elements.transactionReceiptHint.textContent = "Simpan perubahan transaksi untuk menghapus struk yang tersimpan.";
+    elements.transactionReceiptRemoveButton.textContent = "Batalkan hapus";
+    elements.transactionReceiptRemoveButton.classList.remove("is-hidden");
+    return;
+  }
+
+  elements.transactionReceiptStatus.textContent = "Struk tersimpan";
+  elements.transactionReceiptHint.textContent = "Transaksi ini sudah memiliki bukti struk yang bisa dibuka kapan saja.";
+  elements.transactionReceiptLink.href = receiptState.existingUrl;
+  elements.transactionReceiptLink.textContent = "Buka struk";
+  elements.transactionReceiptLink.classList.remove("is-hidden");
+  elements.transactionReceiptLink.classList.add("receipt-link");
+  elements.transactionReceiptRemoveButton.textContent = "Hapus struk";
+  elements.transactionReceiptRemoveButton.classList.remove("is-hidden");
+}
+
+async function readReceiptFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Gagal membaca file struk."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleTransactionReceiptChange(event) {
+  const file = event.target.files?.[0];
+  if (!file) {
+    if (!state.transactionReceipt?.hasExisting) {
+      resetTransactionReceiptState();
+    } else {
+      renderTransactionReceiptPanel();
+    }
+    return;
+  }
+
+  if (!/^image\/(png|jpeg|webp)$/i.test(file.type)) {
+    window.alert("Format struk harus PNG, JPG, atau WEBP.");
+    event.target.value = "";
+    return;
+  }
+
+  if (file.size > 2 * 1024 * 1024) {
+    window.alert("Ukuran struk maksimal 2 MB.");
+    event.target.value = "";
+    return;
+  }
+
+  const dataUrl = await readReceiptFileAsDataUrl(file);
+  if (!state.transactionReceipt) {
+    state.transactionReceipt = createTransactionReceiptState();
+  }
+
+  state.transactionReceipt.upload = {
+    dataUrl,
+    fileName: file.name
+  };
+  state.transactionReceipt.removeRequested = false;
+  renderTransactionReceiptPanel();
+}
+
+function handleTransactionReceiptRemove() {
+  if (!state.transactionReceipt) {
+    state.transactionReceipt = createTransactionReceiptState();
+  }
+
+  if (state.transactionReceipt.upload) {
+    state.transactionReceipt.upload = null;
+    if (!state.transactionReceipt.hasExisting) {
+      resetTransactionReceiptState();
+      return;
+    }
+  } else if (state.transactionReceipt.hasExisting) {
+    state.transactionReceipt.removeRequested = !state.transactionReceipt.removeRequested;
+  }
+
+  if (elements.transactionReceiptFile) {
+    elements.transactionReceiptFile.value = "";
+  }
+
+  renderTransactionReceiptPanel();
+}
+
+function buildTransactionPayload() {
+  const formData = new FormData(elements.transactionForm);
+  const payload = Object.fromEntries(formData.entries());
+  const receiptState = state.transactionReceipt || createTransactionReceiptState();
+
+  payload.receiptAction = receiptState.removeRequested ? "remove" : receiptState.upload ? "replace" : "keep";
+  if (receiptState.upload) {
+    payload.receiptUpload = {
+      dataUrl: receiptState.upload.dataUrl,
+      fileName: receiptState.upload.fileName
+    };
+  }
+
+  return payload;
+}
+
 function resetTransactionForm() {
   state.editingTransactionId = null;
   elements.transactionForm.reset();
   elements.transactionForm.date.value = todayInputValue();
   syncTransactionCategoryOptions();
   renderTransactionAmountHint();
+  resetTransactionReceiptState();
   setTransactionFormMode(false);
 }
 
@@ -1095,6 +1260,7 @@ function populateTransactionForm(transaction) {
   elements.transactionForm.elements.date.value = transaction.date || todayInputValue();
   elements.transactionForm.elements.notes.value = transaction.notes || "";
   renderTransactionAmountHint();
+  resetTransactionReceiptState(transaction);
   setTransactionFormMode(true);
   elements.transactionForm.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
 }
@@ -1551,6 +1717,9 @@ function renderTransactions() {
   rows.forEach((item) => {
     const row = document.createElement("tr");
     row.className = "transaction-row";
+    const receiptAction = item.receiptPath
+      ? `<a class="receipt-link" href="${escapeHTML(getTransactionReceiptUrl(item.id))}" target="_blank" rel="noreferrer">Struk</a>`
+      : "";
     row.innerHTML = `
       <td data-label="Tanggal">${formatDate(item.date)}</td>
       <td data-label="Deskripsi">${escapeHTML(item.description)}</td>
@@ -1559,6 +1728,7 @@ function renderTransactions() {
       <td data-label="Nominal" class="amount ${item.type}">${item.type === "income" ? "+" : "-"}${formatCurrency(item.amount)}</td>
       <td data-label="Aksi">
         <div class="table-actions">
+          ${receiptAction}
           <button class="edit-button" data-id="${item.id}" type="button">Edit</button>
           <button class="delete-button" data-id="${item.id}" type="button">Hapus</button>
         </div>
@@ -1770,8 +1940,7 @@ async function handleTransactionSubmit(event) {
     return;
   }
 
-  const formData = new FormData(elements.transactionForm);
-  const payload = Object.fromEntries(formData.entries());
+  const payload = buildTransactionPayload();
   const button = elements.transactionSubmitButton;
   const isEditing = Boolean(state.editingTransactionId);
   const requestPath = isEditing ? `/api/transactions/${state.editingTransactionId}` : "/api/transactions";
@@ -1968,6 +2137,12 @@ function bindEvents() {
   elements.telegramUnlinkButton.addEventListener("click", handleTelegramUnlink);
   elements.transactionForm.addEventListener("submit", handleTransactionSubmit);
   elements.transactionCancelButton.addEventListener("click", resetTransactionForm);
+  elements.transactionReceiptFile.addEventListener("change", (event) => {
+    handleTransactionReceiptChange(event).catch((error) => {
+      window.alert(error.message);
+    });
+  });
+  elements.transactionReceiptRemoveButton.addEventListener("click", handleTransactionReceiptRemove);
   elements.transactionAmount.addEventListener("input", renderTransactionAmountHint);
   elements.transactionAmount.addEventListener("focus", handleTransactionAmountFocus);
   elements.transactionAmount.addEventListener("blur", handleTransactionAmountBlur);

@@ -50,6 +50,7 @@ function initializeDatabase() {
       category TEXT NOT NULL,
       date TEXT NOT NULL,
       notes TEXT NOT NULL DEFAULT '',
+      receipt_path TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -77,8 +78,17 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_telegram_link_codes_user_id ON telegram_link_codes(user_id);
   `);
 
+  ensureTransactionReceiptColumn(db);
+
   seedDemoAccount();
   return db;
+}
+
+function ensureTransactionReceiptColumn(database) {
+  const columns = database.prepare("PRAGMA table_info(transactions)").all();
+  if (!columns.some((column) => column.name === "receipt_path")) {
+    database.exec("ALTER TABLE transactions ADD COLUMN receipt_path TEXT NOT NULL DEFAULT '';");
+  }
 }
 
 function getDatabase() {
@@ -307,6 +317,7 @@ function listTransactionsByUser(userId) {
           category,
           date,
           notes,
+          receipt_path AS receiptPath,
           created_at AS createdAt
         FROM transactions
         WHERE user_id = ?
@@ -314,6 +325,28 @@ function listTransactionsByUser(userId) {
       `
     )
     .all(userId);
+}
+
+function getTransactionByIdForUser(userId, transactionId) {
+  const database = getDatabase();
+  return database
+    .prepare(
+      `
+        SELECT
+          id,
+          type,
+          description,
+          amount,
+          category,
+          date,
+          notes,
+          receipt_path AS receiptPath,
+          created_at AS createdAt
+        FROM transactions
+        WHERE user_id = ? AND id = ?
+      `
+    )
+    .get(userId, transactionId);
 }
 
 function createTransactionForUser(userId, transaction) {
@@ -333,9 +366,10 @@ function createTransactionForUser(userId, transaction) {
           category,
           date,
           notes,
+          receipt_path,
           created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
     )
     .run(
@@ -347,6 +381,7 @@ function createTransactionForUser(userId, transaction) {
       transaction.category,
       transaction.date,
       transaction.notes,
+      transaction.receiptPath || "",
       createdAt
     );
 
@@ -362,7 +397,7 @@ function updateTransactionForUser(userId, transactionId, transaction) {
   const existing = database
     .prepare(
       `
-        SELECT id, created_at AS createdAt
+        SELECT id, created_at AS createdAt, receipt_path AS receiptPath
         FROM transactions
         WHERE id = ? AND user_id = ?
       `
@@ -383,7 +418,8 @@ function updateTransactionForUser(userId, transactionId, transaction) {
           amount = ?,
           category = ?,
           date = ?,
-          notes = ?
+          notes = ?,
+          receipt_path = ?
         WHERE id = ? AND user_id = ?
       `
     )
@@ -394,12 +430,14 @@ function updateTransactionForUser(userId, transactionId, transaction) {
       transaction.category,
       transaction.date,
       transaction.notes,
+      transaction.receiptPath || "",
       transactionId,
       userId
     );
 
   return {
     createdAt: existing.createdAt,
+    previousReceiptPath: existing.receiptPath || "",
     ...transaction,
     id: transactionId
   };
@@ -407,8 +445,13 @@ function updateTransactionForUser(userId, transactionId, transaction) {
 
 function deleteTransactionForUser(userId, transactionId) {
   const database = getDatabase();
-  const result = database.prepare("DELETE FROM transactions WHERE id = ? AND user_id = ?").run(transactionId, userId);
-  return result.changes > 0;
+  const existing = getTransactionByIdForUser(userId, transactionId);
+  if (!existing) {
+    return null;
+  }
+
+  database.prepare("DELETE FROM transactions WHERE id = ? AND user_id = ?").run(transactionId, userId);
+  return existing;
 }
 
 function cleanupExpiredTelegramLinkCodes() {
@@ -620,6 +663,7 @@ module.exports = {
   getTelegramLinkByChatId,
   getTelegramLinkByUserId,
   initializeDatabase,
+  getTransactionByIdForUser,
   linkTelegramChatByCode,
   listTransactionsByUser,
   unlinkTelegramByChatId,
