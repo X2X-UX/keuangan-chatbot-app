@@ -135,6 +135,7 @@ const elements = {
   transactionReceiptFile: document.getElementById("transactionReceiptFile"),
   transactionReceiptHint: document.getElementById("transactionReceiptHint"),
   transactionReceiptLink: document.getElementById("transactionReceiptLink"),
+  transactionReceiptAnalyzeButton: document.getElementById("transactionReceiptAnalyzeButton"),
   transactionReceiptPanel: document.getElementById("transactionReceiptPanel"),
   transactionReceiptRemoveButton: document.getElementById("transactionReceiptRemoveButton"),
   transactionReceiptStatus: document.getElementById("transactionReceiptStatus"),
@@ -469,6 +470,7 @@ function renderTransactionReceiptPanel() {
   const showPanel = hasUpload || hasExisting || receiptState.removeRequested;
 
   elements.transactionReceiptPanel.classList.toggle("is-hidden", !showPanel);
+  elements.transactionReceiptAnalyzeButton.classList.add("is-hidden");
   elements.transactionReceiptLink.classList.add("is-hidden");
   elements.transactionReceiptRemoveButton.classList.add("is-hidden");
   elements.transactionReceiptLink.classList.remove("receipt-link");
@@ -481,6 +483,9 @@ function renderTransactionReceiptPanel() {
   if (hasUpload) {
     elements.transactionReceiptStatus.textContent = receiptState.upload.fileName;
     elements.transactionReceiptHint.textContent = "Struk baru akan diunggah saat transaksi disimpan.";
+    elements.transactionReceiptAnalyzeButton.textContent = "Baca struk AI";
+    elements.transactionReceiptAnalyzeButton.disabled = false;
+    elements.transactionReceiptAnalyzeButton.classList.remove("is-hidden");
     elements.transactionReceiptLink.href = receiptState.upload.dataUrl;
     elements.transactionReceiptLink.textContent = "Preview struk";
     elements.transactionReceiptLink.classList.remove("is-hidden");
@@ -589,6 +594,88 @@ function buildTransactionPayload() {
   }
 
   return payload;
+}
+
+function applyReceiptSuggestion(suggestion) {
+  if (!suggestion || typeof suggestion !== "object") {
+    return;
+  }
+
+  if (suggestion.type === "income" || suggestion.type === "expense") {
+    elements.transactionType.value = suggestion.type;
+  }
+
+  syncTransactionCategoryOptions(suggestion.category);
+
+  if (suggestion.category) {
+    const canonicalCategory = findCanonicalTransactionCategory(elements.transactionType.value, suggestion.category);
+    if (canonicalCategory) {
+      elements.transactionCategory.value = canonicalCategory;
+    }
+  }
+
+  if (suggestion.description) {
+    elements.transactionForm.elements.description.value = suggestion.description;
+  }
+
+  if (suggestion.amount) {
+    elements.transactionAmount.value = formatFlexibleCurrency(suggestion.amount);
+  }
+
+  if (suggestion.date) {
+    elements.transactionForm.elements.date.value = suggestion.date;
+  }
+
+  if (suggestion.notes && !elements.transactionForm.elements.notes.value.trim()) {
+    elements.transactionForm.elements.notes.value = suggestion.notes;
+  }
+
+  renderTransactionAmountHint();
+}
+
+async function handleTransactionReceiptAnalyze() {
+  if (!state.user) {
+    showAuthGate("Silakan masuk sebelum memakai pembacaan struk AI.");
+    return;
+  }
+
+  const upload = state.transactionReceipt?.upload;
+  if (!upload) {
+    window.alert("Unggah struk baru terlebih dahulu sebelum menjalankan AI.");
+    return;
+  }
+
+  const button = elements.transactionReceiptAnalyzeButton;
+
+  try {
+    button.disabled = true;
+    button.textContent = "Membaca struk...";
+
+    const payload = await request("/api/transactions/receipt-analyze", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        preferredType: elements.transactionType.value,
+        receiptUpload: {
+          dataUrl: upload.dataUrl,
+          fileName: upload.fileName
+        }
+      })
+    });
+
+    applyReceiptSuggestion(payload.suggestion);
+    elements.transactionReceiptHint.textContent =
+      payload.message || "Form sudah diisi dari struk. Mohon cek kembali sebelum menyimpan transaksi.";
+  } catch (error) {
+    if (!handleUnauthorized(error)) {
+      window.alert(error.message);
+    }
+  } finally {
+    button.disabled = false;
+    button.textContent = "Baca struk AI";
+  }
 }
 
 function resetTransactionForm() {
@@ -2139,6 +2226,11 @@ function bindEvents() {
   elements.transactionCancelButton.addEventListener("click", resetTransactionForm);
   elements.transactionReceiptFile.addEventListener("change", (event) => {
     handleTransactionReceiptChange(event).catch((error) => {
+      window.alert(error.message);
+    });
+  });
+  elements.transactionReceiptAnalyzeButton.addEventListener("click", () => {
+    handleTransactionReceiptAnalyze().catch((error) => {
       window.alert(error.message);
     });
   });

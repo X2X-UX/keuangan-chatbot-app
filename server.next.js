@@ -873,6 +873,141 @@ function extractOpenAIText(payload) {
     .trim();
 }
 
+function extractJsonObject(text) {
+  const raw = String(text || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]+?)```/i);
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1].trim();
+  }
+
+  const startIndex = raw.indexOf("{");
+  const endIndex = raw.lastIndexOf("}");
+  if (startIndex === -1 || endIndex === -1 || endIndex <= startIndex) {
+    return raw;
+  }
+
+  return raw.slice(startIndex, endIndex + 1);
+}
+
+function normalizeReceiptDate(value) {
+  const raw = sanitizeText(value, 24);
+  if (!raw) {
+    return todayDateValue();
+  }
+
+  const directMatch = raw.match(/^(\d{4})[-/](\d{2})[-/](\d{2})$/);
+  if (directMatch) {
+    return `${directMatch[1]}-${directMatch[2]}-${directMatch[3]}`;
+  }
+
+  const localMatch = raw.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+  if (localMatch) {
+    return `${localMatch[3]}-${localMatch[2]}-${localMatch[1]}`;
+  }
+
+  return todayDateValue();
+}
+
+function sanitizeReceiptSuggestion(payload, preferredType = "") {
+  const suggestedType = payload?.type === "income" ? "income" : payload?.type === "expense" ? "expense" : null;
+  const type = suggestedType || (preferredType === "income" || preferredType === "expense" ? preferredType : "expense");
+  const description =
+    sanitizeText(payload?.description || payload?.merchant || payload?.title, 120) ||
+    (type === "income" ? "Pemasukan dari struk" : "Transaksi dari struk");
+  const amount = parseFlexibleAmount(payload?.amount);
+  const rawCategory = sanitizeText(payload?.category, 60);
+  const notes = sanitizeText(payload?.notes, 240);
+  const inferredCategory = inferTransactionCategory(type, `${description} ${rawCategory} ${notes}`) || null;
+  const fallbackCategory = type === "income" ? "Hadiah" : "Belanja";
+  const category = rawCategory ? findCanonicalCategory(type, rawCategory) || inferredCategory : inferredCategory;
+
+  return sanitizeTransaction({
+    amount,
+    category: category || fallbackCategory,
+    date: normalizeReceiptDate(payload?.date),
+    description,
+    notes,
+    type
+  });
+}
+
+async function analyzeReceiptWithOpenAI(receiptUpload, preferredType = "") {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("Fitur baca struk AI belum aktif. Isi OPENAI_API_KEY terlebih dahulu.");
+  }
+
+  const imageDataUrl = `data:${receiptUpload.mimeType};base64,${receiptUpload.buffer.toString("base64")}`;
+  const preferredTypeNote =
+    preferredType === "income" || preferredType === "expense"
+      ? `Jika memungkinkan, selaraskan tipe transaksi dengan pilihan pengguna saat ini: ${preferredType}.`
+      : "Tentukan tipe transaksi paling masuk akal dari gambar.";
+
+  const response = await fetch(`${OPENAI_BASE_URL}/responses`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      instructions: [
+        "Anda membaca struk atau bukti transfer untuk aplikasi pencatatan keuangan pribadi berbahasa Indonesia.",
+        "Balas JSON saja tanpa markdown.",
+        "Gunakan schema: {\"type\":\"income|expense\",\"description\":\"string\",\"amount\":\"number or string\",\"date\":\"YYYY-MM-DD\",\"category\":\"string\",\"notes\":\"string\"}.",
+        "Amount harus nominal utama transaksi dalam Rupiah tanpa simbol mata uang jika memungkinkan.",
+        "Description harus ringkas dan mudah dipahami pengguna.",
+        "Category harus salah satu kategori yang wajar untuk aplikasi keuangan pribadi Indonesia.",
+        preferredTypeNote
+      ].join(" "),
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: "Baca gambar struk ini dan ekstrak data transaksi. Jika ada pajak atau biaya tambahan, pakai total akhir yang harus dibayar atau diterima."
+            },
+            {
+              type: "input_image",
+              image_url: imageDataUrl
+            }
+          ]
+        }
+      ],
+      max_output_tokens: 300,
+      text: {
+        format: {
+          type: "text"
+        }
+      }
+    }),
+    signal: AbortSignal.timeout(25_000)
+  });
+
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "Gagal menghubungi layanan AI untuk membaca struk.");
+  }
+
+  const rawText = extractOpenAIText(payload);
+  if (!rawText) {
+    throw new Error("Respons AI untuk struk kosong.");
+  }
+
+  let structured;
+  try {
+    structured = JSON.parse(extractJsonObject(rawText));
+  } catch {
+    throw new Error("Respons AI untuk struk belum bisa dipahami sebagai JSON.");
+  }
+
+  return sanitizeReceiptSuggestion(structured, preferredType);
+}
+
 function generateLocalReply(message, summary) {
   const lower = String(message || "").toLowerCase();
   const topCategory = summary.topExpenseCategory;
@@ -1507,6 +1642,34 @@ async function handleRequest(req, res) {
         sendJson(req, res, 404, { error: "Struk tidak ditemukan." });
         return;
       }
+    }
+
+    if (req.method === "POST" && pathname === "/api/transactions/receipt-analyze") {
+      if (enforceRateLimit(req, res, "transactionWrite", `user:${session.user.id}`)) {
+        return;
+      }
+
+      const payload = await parseJsonBody(req);
+      const receiptUpload = sanitizeReceiptUpload(payload.receiptUpload);
+      if (!receiptUpload) {
+        sendJson(req, res, 400, { error: "Unggah struk terlebih dahulu sebelum menjalankan analisis AI." });
+        return;
+      }
+
+      const preferredType = payload.preferredType === "income" ? "income" : payload.preferredType === "expense" ? "expense" : "";
+      let suggestion;
+      try {
+        suggestion = await analyzeReceiptWithOpenAI(receiptUpload, preferredType);
+      } catch (error) {
+        sendJson(req, res, 400, { error: error.message || "Struk belum bisa dianalisis saat ini." });
+        return;
+      }
+
+      sendJson(req, res, 200, {
+        message: "Struk berhasil dibaca. Silakan cek kembali hasil isian sebelum menyimpan transaksi.",
+        suggestion
+      });
+      return;
     }
 
     if (req.method === "POST" && pathname === "/api/transactions") {
