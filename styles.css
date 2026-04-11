@@ -1195,11 +1195,20 @@ tbody tr:hover {
   margin: 0;
 }
 
-.telegram-actions,
+.telegram-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .quick-prompts {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.telegram-actions .secondary-button {
+  min-width: 0;
 }
 
 .telegram-code {
@@ -1316,6 +1325,10 @@ tbody tr:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .telegram-actions {
+    grid-template-columns: 1fr;
+  }
+
   .flow-grid {
     grid-template-columns: 1fr;
   }
@@ -1429,7 +1442,6 @@ tbody tr:hover {
   .section-heading,
   .split-heading,
   .session-panel,
-  .telegram-actions,
   .transaction-form-actions {
     flex-direction: column;
     align-items: stretch;
@@ -1449,7 +1461,6 @@ tbody tr:hover {
   }
 
   .quick-prompts button,
-  .telegram-actions .secondary-button,
   .table-actions button,
   .import-form-actions button {
     flex: 1 1 100%;
