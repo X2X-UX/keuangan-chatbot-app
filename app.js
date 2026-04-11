@@ -102,6 +102,7 @@ const elements = {
   importMessage: document.getElementById("importMessage"),
   importMetaText: document.getElementById("importMetaText"),
   importNotesColumn: document.getElementById("importNotesColumn"),
+  importPresetSelect: document.getElementById("importPresetSelect"),
   importPreviewButton: document.getElementById("importPreviewButton"),
   importPreviewList: document.getElementById("importPreviewList"),
   importPreviewSection: document.getElementById("importPreviewSection"),
@@ -157,6 +158,65 @@ const IMPORT_FIELD_KEYWORDS = {
   description: ["description", "deskripsi", "keterangan", "uraian", "remark", "narasi", "transaksi"],
   notes: ["notes", "catatan", "memo", "info", "detail"],
   type: ["type", "tipe", "jenis transaksi", "dc", "status"]
+};
+const IMPORT_PRESETS = {
+  generic: {
+    fieldAliases: {
+      amount: ["amount", "nominal", "jumlah", "nilai", "mutasi", "trx amount"],
+      category: ["category", "kategori", "jenis"],
+      credit: ["credit", "kredit", "cr", "masuk"],
+      date: ["date", "tanggal", "tgl", "posting date", "transaction date"],
+      debit: ["debit", "db", "keluar"],
+      description: ["description", "deskripsi", "keterangan", "uraian", "remark", "narasi", "transaksi"],
+      notes: ["notes", "catatan", "memo", "info", "detail"],
+      type: ["type", "tipe", "jenis transaksi", "dc", "status"]
+    },
+    label: "Generic CSV"
+  },
+  bca: {
+    fieldAliases: {
+      amount: ["mutasi", "nominal", "amount"],
+      date: ["tanggal", "tgl", "date"],
+      description: ["keterangan", "uraian", "description"],
+      notes: ["cabang", "branch", "remark"],
+      type: ["db/cr", "db cr", "dc", "type"]
+    },
+    fileHints: ["bca", "klikbca", "rekening bca"],
+    label: "Bank BCA"
+  },
+  bni: {
+    fieldAliases: {
+      credit: ["kredit", "credit"],
+      date: ["tanggal transaksi", "tanggal", "tgl", "date"],
+      debit: ["debit"],
+      description: ["uraian transaksi", "uraian", "keterangan", "description"],
+      notes: ["terminal", "detail", "remark"]
+    },
+    fileHints: ["bni"],
+    label: "Bank BNI"
+  },
+  mandiri: {
+    fieldAliases: {
+      credit: ["credit", "kredit"],
+      date: ["posting date", "transaction date", "tanggal", "tgl"],
+      debit: ["debit"],
+      description: ["description", "remarks", "uraian", "keterangan"],
+      notes: ["reference", "no ref", "branch", "catatan"]
+    },
+    fileHints: ["mandiri", "livin"],
+    label: "Bank Mandiri"
+  },
+  seabank: {
+    fieldAliases: {
+      amount: ["amount", "nominal"],
+      date: ["date", "tanggal", "time"],
+      description: ["transaction details", "description", "detail transaksi", "keterangan"],
+      notes: ["status", "channel", "remark"],
+      type: ["transaction type", "type", "jenis"]
+    },
+    fileHints: ["seabank", "sea bank"],
+    label: "SeaBank / Digital Bank"
+  }
 };
 
 function formatCurrency(value) {
@@ -387,6 +447,10 @@ function resetImportState(options = {}) {
   elements.importMetaText.textContent = "Unggah file untuk melihat mapping kolom.";
   elements.importPreviewButton.disabled = true;
   elements.importSubmitButton.disabled = true;
+  if (elements.importPresetSelect) {
+    elements.importPresetSelect.innerHTML = "";
+    elements.importPresetSelect.disabled = true;
+  }
 
   for (const element of Object.values(IMPORT_MAPPING_ELEMENTS)) {
     if (element) {
@@ -505,8 +569,79 @@ function guessImportColumnIndex(headers, field) {
   });
 }
 
-function renderImportColumnOptions(headers) {
-  for (const [field, element] of Object.entries(IMPORT_MAPPING_ELEMENTS)) {
+function findImportColumnIndexByAliases(headers, aliases) {
+  if (!Array.isArray(aliases) || aliases.length === 0) {
+    return -1;
+  }
+
+  return headers.findIndex((header) => {
+    const normalized = normalizeImportHeaderToken(header);
+    return aliases.some((alias) => normalized.includes(normalizeImportHeaderToken(alias)));
+  });
+}
+
+function buildImportPresetMappings(headers, presetId) {
+  const preset = IMPORT_PRESETS[presetId] || IMPORT_PRESETS.generic;
+  const mappings = {};
+
+  for (const field of IMPORT_COLUMN_FIELDS) {
+    const aliases = preset.fieldAliases?.[field] || [];
+    const presetMatch = findImportColumnIndexByAliases(headers, aliases);
+    const genericMatch = guessImportColumnIndex(headers, field);
+    mappings[field] = presetMatch >= 0 ? presetMatch : genericMatch >= 0 ? genericMatch : null;
+  }
+
+  return mappings;
+}
+
+function scoreImportPreset(headers, fileName, presetId) {
+  const preset = IMPORT_PRESETS[presetId];
+  if (!preset || presetId === "generic") {
+    return 0;
+  }
+
+  let score = 0;
+  const loweredFileName = String(fileName || "").toLowerCase();
+
+  for (const hint of preset.fileHints || []) {
+    if (loweredFileName.includes(String(hint).toLowerCase())) {
+      score += 3;
+    }
+  }
+
+  for (const aliases of Object.values(preset.fieldAliases || {})) {
+    if (findImportColumnIndexByAliases(headers, aliases) >= 0) {
+      score += 2;
+    }
+  }
+
+  return score;
+}
+
+function detectImportPreset(headers, fileName) {
+  let bestPresetId = "generic";
+  let bestScore = 0;
+
+  for (const presetId of Object.keys(IMPORT_PRESETS)) {
+    if (presetId === "generic") {
+      continue;
+    }
+
+    const score = scoreImportPreset(headers, fileName, presetId);
+    if (score > bestScore) {
+      bestScore = score;
+      bestPresetId = presetId;
+    }
+  }
+
+  return {
+    confidence: bestScore,
+    presetId: bestPresetId
+  };
+}
+
+function renderImportColumnOptions(headers, preferredPresetId = "generic") {
+  for (const element of Object.values(IMPORT_MAPPING_ELEMENTS)) {
     if (!element) {
       continue;
     }
@@ -516,11 +651,49 @@ function renderImportColumnOptions(headers) {
       ...headers.map((header, index) => `<option value="${index}">${escapeHTML(header)}</option>`)
     ].join("");
 
-    const guessedIndex = guessImportColumnIndex(headers, field);
-    if (guessedIndex >= 0) {
-      element.value = String(guessedIndex);
-    }
   }
+
+  applyImportPreset(preferredPresetId);
+}
+
+function renderImportPresetOptions(selectedValue = "auto") {
+  if (!elements.importPresetSelect) {
+    return;
+  }
+
+  elements.importPresetSelect.innerHTML = [
+    '<option value="auto">Otomatis</option>',
+    ...Object.entries(IMPORT_PRESETS).map(
+      ([presetId, preset]) => `<option value="${presetId}">${escapeHTML(preset.label)}</option>`
+    )
+  ].join("");
+  elements.importPresetSelect.value = selectedValue;
+  elements.importPresetSelect.disabled = false;
+}
+
+function applyImportPreset(requestedPresetId) {
+  if (!state.csvImport) {
+    return;
+  }
+
+  const presetId =
+    requestedPresetId === "auto"
+      ? state.csvImport.detectedPresetId || "generic"
+      : IMPORT_PRESETS[requestedPresetId]
+        ? requestedPresetId
+        : "generic";
+  const mappings = buildImportPresetMappings(state.csvImport.headers, presetId);
+
+  for (const [field, element] of Object.entries(IMPORT_MAPPING_ELEMENTS)) {
+    if (!element) {
+      continue;
+    }
+
+    const columnIndex = mappings[field];
+    element.value = columnIndex === null || columnIndex === undefined ? "" : String(columnIndex);
+  }
+
+  state.csvImport.activePresetId = presetId;
 }
 
 function getImportMappings() {
@@ -836,17 +1009,28 @@ async function handleImportFileChange(event) {
     }
 
     state.csvImport = {
+      activePresetId: "generic",
+      detectedPresetId: "generic",
       fileName: file.name,
       headers: records.headers,
       preview: null,
       rows: records.rows
     };
 
-    renderImportColumnOptions(records.headers);
+    const detectedPreset = detectImportPreset(records.headers, file.name);
+    state.csvImport.detectedPresetId = detectedPreset.presetId;
+    state.csvImport.activePresetId = detectedPreset.presetId;
+
+    renderImportPresetOptions(detectedPreset.confidence > 0 ? "auto" : "generic");
+    renderImportColumnOptions(records.headers, detectedPreset.presetId);
     elements.importMappingSection.classList.remove("is-hidden");
     elements.importPreviewButton.disabled = false;
     elements.importFileName.textContent = file.name;
-    elements.importMetaText.textContent = `${records.rows.length} baris transaksi terdeteksi. Silakan cek mapping kolom lalu preview.`;
+    const presetLabel = IMPORT_PRESETS[detectedPreset.presetId]?.label || "Generic CSV";
+    elements.importMetaText.textContent =
+      detectedPreset.confidence > 0
+        ? `${records.rows.length} baris transaksi terdeteksi. Preset ${presetLabel} dipilih otomatis, silakan cek lalu preview.`
+        : `${records.rows.length} baris transaksi terdeteksi. Tidak ada preset spesifik yang cocok, gunakan Generic CSV lalu cek mapping.`;
     setImportMessage("File CSV berhasil dibaca. Lanjutkan ke preview untuk mengecek hasil normalisasi.", "success");
   } catch (error) {
     resetImportState();
@@ -873,10 +1057,29 @@ function handleImportMappingChange() {
   }
 
   state.csvImport.preview = null;
+  if (elements.importPresetSelect && elements.importPresetSelect.value !== "auto") {
+    state.csvImport.activePresetId = elements.importPresetSelect.value;
+  }
   elements.importSubmitButton.disabled = true;
   if (!elements.importPreviewSection.classList.contains("is-hidden")) {
     setImportMessage("Mapping kolom berubah. Jalankan preview lagi sebelum import.", "");
   }
+}
+
+function handleImportPresetChange() {
+  if (!state.csvImport) {
+    return;
+  }
+
+  applyImportPreset(elements.importPresetSelect.value);
+  state.csvImport.preview = null;
+  elements.importSubmitButton.disabled = true;
+  const activePresetId =
+    elements.importPresetSelect.value === "auto"
+      ? state.csvImport.detectedPresetId || "generic"
+      : elements.importPresetSelect.value;
+  const presetLabel = IMPORT_PRESETS[activePresetId]?.label || "Generic CSV";
+  setImportMessage(`Preset ${presetLabel} diterapkan. Jalankan preview untuk memeriksa hasilnya.`, "success");
 }
 
 function populateTransactionForm(transaction) {
@@ -1754,6 +1957,7 @@ function bindEvents() {
   elements.registerTabButton.addEventListener("click", () => setAuthMode("register"));
   elements.authForm.addEventListener("submit", handleAuthSubmit);
   elements.importFileInput.addEventListener("change", handleImportFileChange);
+  elements.importPresetSelect.addEventListener("change", handleImportPresetChange);
   elements.importPreviewButton.addEventListener("click", handleImportPreview);
   elements.importForm.addEventListener("submit", handleImportSubmit);
   Object.values(IMPORT_MAPPING_ELEMENTS).forEach((element) => {
