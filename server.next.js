@@ -1166,6 +1166,38 @@ function extractReceiptStoreName(text) {
   return lines.find((line) => /\b(indomaret|alfamart|alfamidi|superindo|hypermart|minimarket|bca|dana|gopay|ovo|tokopedia)\b/i.test(line)) || "";
 }
 
+function isRetailOrderReceipt(text) {
+  const raw = String(text || "");
+  return /\balfamart\b/i.test(raw) && /\bstatus order\b/i.test(raw);
+}
+
+function isThermalRetailReceipt(text) {
+  const raw = String(text || "");
+  return /\b(indomaret|indomaret fresh|alfamart|alfamidi)\b/i.test(raw) && /\b(total|tunai|kembali|harga jual)\b/i.test(raw);
+}
+
+function extractReceiptReference(text) {
+  const labeledReference =
+    extractReceiptValueByLabels(text, ["No. Referensi", "No Referensi", "Referensi", "Reference", "Ref", "Ref."]) ||
+    extractReceiptValueAfterStandaloneLabels(text, ["Reference", "Referensi"]);
+
+  if (labeledReference) {
+    return labeledReference;
+  }
+
+  const directMatch = extractReceiptLineMatching(text, /^ref\.?\s+(.+)$/i);
+  if (directMatch) {
+    return sanitizeText(directMatch.replace(/^ref\.?\s+/i, ""), 120);
+  }
+
+  const thermalTxnMatch = extractReceiptLineMatching(text, /^\d{2}[./-]\d{2}[./-]\d{2,4}-\d{2}:\d{2}\/.+$/i);
+  if (thermalTxnMatch) {
+    return sanitizeText(thermalTxnMatch, 120);
+  }
+
+  return "";
+}
+
 function extractReceiptBranchName(text) {
   const lines = normalizeReceiptOcrLines(text);
   const skipPattern =
@@ -1186,7 +1218,85 @@ function extractReceiptBranchName(text) {
   );
 }
 
+function buildIsoDate(year, month, day) {
+  const yearValue = Number(year);
+  const monthValue = Number(month);
+  const dayValue = Number(day);
+
+  if (
+    !Number.isInteger(yearValue) ||
+    !Number.isInteger(monthValue) ||
+    !Number.isInteger(dayValue) ||
+    monthValue < 1 ||
+    monthValue > 12 ||
+    dayValue < 1 ||
+    dayValue > 31
+  ) {
+    return "";
+  }
+
+  return `${String(yearValue).padStart(4, "0")}-${String(monthValue).padStart(2, "0")}-${String(dayValue).padStart(2, "0")}`;
+}
+
+function parseReceiptReferenceDate(reference) {
+  const raw = String(reference || "");
+  const match = raw.match(/\b(\d{2})(\d{2})(\d{2})\b/);
+  if (!match) {
+    return "";
+  }
+
+  const year = Number(`20${match[1]}`);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  return buildIsoDate(year, month, day);
+}
+
+function parseReceiptTglDate(text) {
+  const raw = String(text || "");
+  const match = raw.match(/\btgl\.?\s*(\d{2})[/-](\d{2})[/-](\d{4})\b/i);
+  if (!match) {
+    return "";
+  }
+
+  return buildIsoDate(match[3], match[2], match[1]);
+}
+
+function parseThermalReceiptHeaderDate(text) {
+  const raw = String(text || "");
+  const match = raw.match(/\b(\d{2})[./-](\d{2})[./-](\d{2,4})-\d{2}:\d{2}\b/);
+  if (!match) {
+    return "";
+  }
+
+  const year = match[3].length === 2 ? `20${match[3]}` : match[3];
+  return buildIsoDate(year, match[2], match[1]);
+}
+
 function extractReceiptDateFromText(text) {
+  const referenceDate = parseReceiptReferenceDate(extractReceiptReference(text));
+  const tglDate = parseReceiptTglDate(text);
+  const thermalDate = parseThermalReceiptHeaderDate(text);
+
+  if (isRetailOrderReceipt(text)) {
+    return referenceDate || tglDate || todayDateValue();
+  }
+
+  if (isThermalRetailReceipt(text)) {
+    return thermalDate || referenceDate || tglDate || todayDateValue();
+  }
+
+  if (tglDate) {
+    return tglDate;
+  }
+
+  if (thermalDate) {
+    return thermalDate;
+  }
+
+  if (referenceDate) {
+    return referenceDate;
+  }
+
   const raw = String(text || "");
   const patterns = [
     /\b(\d{4}[/-]\d{2}[/-]\d{2})\b/,
@@ -1331,6 +1441,22 @@ function extractBcaTransferRecipient(text) {
 
 function pickReceiptDescriptionFromText(text, preferredType = "") {
   const raw = String(text || "");
+  const storeName = extractReceiptStoreName(text);
+  const branchName = extractReceiptBranchName(text);
+
+  if (isRetailOrderReceipt(text) && /\balfamart\b/i.test(storeName || raw)) {
+    return sanitizeText(`Belanja Alfamart${branchName ? ` ${branchName}` : ""}`, 120);
+  }
+
+  if (isThermalRetailReceipt(text)) {
+    if (/\bindomaret\b/i.test(storeName || raw)) {
+      return sanitizeText(`Belanja ${storeName || "Indomaret"}${branchName ? ` ${branchName}` : ""}`, 120);
+    }
+
+    if (/\balfamart|alfamidi\b/i.test(storeName || raw)) {
+      return sanitizeText(`Belanja ${storeName || "Retail"}${branchName ? ` ${branchName}` : ""}`, 120);
+    }
+  }
 
   if (/\bpembayaran qris berhasil\b/i.test(raw)) {
     const qrisMerchant =
@@ -1396,7 +1522,7 @@ function pickReceiptDescriptionFromText(text, preferredType = "") {
 function pickReceiptNotesFromText(text) {
   const merchantBiller = extractReceiptValueByLabels(text, ["Merchant/Biller", "Merchant", "Biller"]);
   const customerName = extractReceiptValueByLabels(text, ["Nama Pelanggan", "Pelanggan", "Customer"]);
-  const reference = extractReceiptValueByLabels(text, ["No. Referensi", "No Referensi", "Referensi", "Reference", "Ref"]);
+  const reference = extractReceiptReference(text);
   const paymentCode = extractReceiptValueByLabels(text, ["Kode Pembayaran", "Payment Code"]);
   const danaAccount =
     extractReceiptValueByLabels(text, ["Akun DANA"]) || extractReceiptValueAfterStandaloneLabels(text, ["Akun DANA"]);
@@ -1406,6 +1532,8 @@ function pickReceiptNotesFromText(text) {
     extractReceiptValueByLabels(text, ["Pembayaran ke"]) || extractReceiptValueAfterStandaloneLabels(text, ["Pembayaran ke"]);
   const qrisAcquirer =
     extractReceiptValueByLabels(text, ["Pengakuisisi"]) || extractReceiptValueAfterStandaloneLabels(text, ["Pengakuisisi"]);
+  const orderStatus = extractReceiptValueByLabels(text, ["Status Order", "Status"]);
+  const thermalTxnCode = extractReceiptLineMatching(text, /^\d{2}[./-]\d{2}[./-]\d{2,4}-\d{2}:\d{2}\/.+$/i);
   const transferDestination = extractReceiptLineMatching(text, /^ke\s+\d+/i);
   const danaDnid = extractReceiptLineMatching(text, /^dnid\b/i);
   const storeName = extractReceiptStoreName(text);
@@ -1422,6 +1550,14 @@ function pickReceiptNotesFromText(text) {
 
   if (reference) {
     parts.push(`Ref ${reference}`);
+  }
+
+  if (orderStatus) {
+    parts.push(`Status ${orderStatus}`);
+  }
+
+  if (thermalTxnCode) {
+    parts.push(`Trx ${thermalTxnCode}`);
   }
 
   if (paymentCode) {
