@@ -1005,6 +1005,17 @@ const FINAL_RECEIPT_AMOUNT_LABEL_SPECS = [
   { label: "Paid Amount", score: 12 }
 ];
 
+const STRICT_RETAIL_FINAL_AMOUNT_LABEL_SPECS = [
+  { label: "Total Amount", score: 18 },
+  { label: "Total Belanja", score: 18 },
+  { label: "Grand Total", score: 18 },
+  { label: "Total Bayar", score: 17 },
+  { label: "Jumlah", score: 17 },
+  { label: "Net Total", score: 17 },
+  { label: "Amount Due", score: 17 },
+  { label: "Total", score: 16 }
+];
+
 const SECONDARY_RECEIPT_AMOUNT_LABEL_SPECS = [
   { label: "Amount", score: 8 },
   { label: "Nominal", score: 8 }
@@ -1359,7 +1370,9 @@ function scoreReceiptAmountLine(line, lineIndex = 0, totalLines = 1) {
 }
 
 function extractReceiptAmountFromText(text) {
+  const isRetailReceipt = isRetailOrderReceipt(text) || isThermalRetailReceipt(text);
   const labeledAmount =
+    (isRetailReceipt ? extractReceiptAmountByLabels(text, STRICT_RETAIL_FINAL_AMOUNT_LABEL_SPECS) : null) ||
     extractReceiptAmountByLabels(text, FINAL_RECEIPT_AMOUNT_LABEL_SPECS) ||
     extractReceiptAmountByLabels(text, SECONDARY_RECEIPT_AMOUNT_LABEL_SPECS);
 
