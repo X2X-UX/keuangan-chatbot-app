@@ -47,6 +47,7 @@ function buildAllowedOrigins({ appBaseUrl, envAllowedOrigins, port, URLClass = U
 
 function createHttpService({
   allowedOrigins,
+  getRequestId,
   rateLimits,
   rateLimitStore,
   sendJsonFallback,
@@ -197,6 +198,7 @@ function createHttpService({
       ...getCorsHeaders(req),
       "Cache-Control": "no-store",
       "Content-Type": "application/json; charset=utf-8",
+      ...(req ? { "X-Request-Id": getRequestId ? getRequestId(req) : "" } : {}),
       ...extraHeaders
     });
     res.end(JSON.stringify(payload));
@@ -213,7 +215,8 @@ function createHttpService({
       ...getSecurityHeaders(req),
       ...getCorsHeaders(req),
       "Cache-Control": "no-store",
-      "Content-Type": "text/plain; charset=utf-8"
+      "Content-Type": "text/plain; charset=utf-8",
+      ...(req ? { "X-Request-Id": getRequestId ? getRequestId(req) : "" } : {})
     });
     res.end(text);
   }

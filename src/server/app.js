@@ -32,6 +32,7 @@ const {
 const { parseFlexibleAmount } = require("../../transaction-amount");
 const { createSessionAuth } = require("./auth/session");
 const { buildAllowedOrigins, createHttpService } = require("./http");
+const { createLogger, getRequestId } = require("./observability/logger");
 const { createAuthRoutes } = require("./routes/auth");
 const { createChatRoutes } = require("./routes/chat");
 const { createSystemRoutes } = require("./routes/system");
@@ -69,6 +70,10 @@ const ALLOWED_ORIGINS = buildAllowedOrigins({
 });
 const RATE_LIMIT_STORE = new Map();
 const TELEGRAM_RECEIPT_DRAFTS = new Map();
+const LOGGER = createLogger({
+  nodeEnv: process.env.NODE_ENV,
+  serviceName: "arunika-finance"
+});
 const RATE_LIMITS = {
   api: { max: 240, windowMs: 60_000 },
   auth: { max: 20, windowMs: 10 * 60_000 },
@@ -101,6 +106,7 @@ const {
   sendUnauthorized
 } = createHttpService({
   allowedOrigins: ALLOWED_ORIGINS,
+  getRequestId,
   nodeEnv: process.env.NODE_ENV,
   rateLimits: RATE_LIMITS,
   rateLimitStore: RATE_LIMIT_STORE
@@ -134,8 +140,8 @@ const { handleSystemRoute, serveStatic } = createSystemRoutes({
   fsp,
   getCorsHeaders,
   getSecurityHeaders,
-  hasTelegramWebhookConfig,
-  isTelegramConfigured,
+  hasTelegramWebhookConfig: () => hasTelegramWebhookConfig(),
+  isTelegramConfigured: () => isTelegramConfigured(),
   mimeTypes: MIME_TYPES,
   model: OPENAI_MODEL,
   path,
@@ -801,6 +807,8 @@ async function handleRequest(req, res) {
     return;
   }
 
+  let pathname = "";
+
   if (req.method === "OPTIONS") {
     const corsHeaders = getCorsHeaders(req);
     const hasOrigin = Boolean(String(req.headers.origin || "").trim());
@@ -820,7 +828,7 @@ async function handleRequest(req, res) {
   }
 
   const url = new URL(req.url, "http://localhost");
-  const { pathname } = url;
+  pathname = url.pathname;
 
   try {
     const isApiPath = pathname.startsWith("/api/");
@@ -871,11 +879,17 @@ async function handleRequest(req, res) {
 
     await serveStatic(req, res, pathname);
   } catch (error) {
+    const requestId = getRequestId(req);
     const statusCode = /wajib|harus|valid|password|email|telegram|kategori|nominal|tanggal|transaksi/i.test(error.message)
       ? 400
       : 500;
     if (statusCode >= 500) {
-      console.error("Unhandled server error:", error);
+      LOGGER.error("unhandled-server-error", {
+        errorMessage: error?.message || "Unknown error",
+        method: req.method,
+        pathname,
+        requestId
+      });
       sendJson(req, res, 500, { error: "Terjadi kesalahan pada server. Silakan coba kembali." });
       return;
     }
@@ -886,33 +900,102 @@ async function handleRequest(req, res) {
 
 function createAppServer() {
   return http.createServer((req, res) => {
-    handleRequest(req, res);
+    const requestId = getRequestId(req);
+    const startedAt = Date.now();
+
+    res.setHeader("X-Request-Id", requestId);
+    res.on("finish", () => {
+      const durationMs = Date.now() - startedAt;
+      const pathname = req.url ? new URL(req.url, "http://localhost").pathname : "";
+      if (!pathname.startsWith("/api/")) {
+        return;
+      }
+
+      if (res.statusCode >= 500) {
+        LOGGER.error("api-request-failed", {
+          durationMs,
+          method: req.method,
+          pathname,
+          requestId,
+          statusCode: res.statusCode
+        });
+        return;
+      }
+
+      if (res.statusCode >= 400) {
+        LOGGER.warn("api-request-warning", {
+          durationMs,
+          method: req.method,
+          pathname,
+          requestId,
+          statusCode: res.statusCode
+        });
+        return;
+      }
+
+      if (durationMs >= 1_000) {
+        LOGGER.info("api-request-slow", {
+          durationMs,
+          method: req.method,
+          pathname,
+          requestId,
+          statusCode: res.statusCode
+        });
+      }
+    });
+
+    Promise.resolve(handleRequest(req, res)).catch((error) => {
+      LOGGER.error("request-dispatch-failed", {
+        errorMessage: error?.message || "Unknown error",
+        method: req.method,
+        pathname: req.url || "",
+        requestId
+      });
+      if (!res.headersSent) {
+        sendJson(req, res, 500, { error: "Terjadi kesalahan pada server. Silakan coba kembali." });
+      } else {
+        res.end();
+      }
+    });
   });
 }
 
 async function startServer(port = PORT) {
   initializeDatabase();
+  LOGGER.info("server-starting", {
+    port
+  });
 
   if (TELEGRAM_AUTO_SET_WEBHOOK && hasTelegramWebhookConfig()) {
     try {
       await ensureTelegramWebhook();
     } catch (error) {
-      console.error("Gagal memasang webhook Telegram:", error.message);
+      LOGGER.warn("telegram-webhook-setup-failed", {
+        errorMessage: error?.message || "Unknown error"
+      });
     }
   }
 
   const server = createAppServer();
   await new Promise((resolve) => server.listen(port, "0.0.0.0", resolve));
+  LOGGER.info("server-ready", {
+    port
+  });
   return server;
 }
 
 if (require.main === module) {
   startServer()
     .then(() => {
-      console.log(`Arunika Finance berjalan di http://localhost:${PORT}`);
+      LOGGER.info("server-announced", {
+        port: PORT,
+        url: `http://localhost:${PORT}`
+      });
     })
     .catch((error) => {
-      console.error("Gagal menjalankan server:", error);
+      LOGGER.error("server-start-failed", {
+        errorMessage: error?.message || "Unknown error"
+      });
       process.exitCode = 1;
     });
 }

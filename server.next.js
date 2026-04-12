@@ -1,3 +1,4 @@
+// Compatibility entrypoint. Prefer `src/server/index.js`.
 const server = require("./src/server/index");
 
 if (require.main === module) {

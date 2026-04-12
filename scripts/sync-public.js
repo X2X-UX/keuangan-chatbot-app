@@ -23,23 +23,20 @@ for (const fileName of STATIC_FILES) {
   }
 }
 
-const appModuleFiles = fs
-  .readdirSync(APP_SOURCE_DIR)
-  .filter((fileName) => fileName.endsWith(".js"))
-  .sort((left, right) => left.localeCompare(right));
+const appModuleFiles = listJavaScriptFiles(APP_SOURCE_DIR).sort(compareAppModulePaths);
 
 if (appModuleFiles.length === 0) {
   throw new Error(`Modul frontend tidak ditemukan di ${APP_SOURCE_DIR}`);
 }
 
 const appBundle = appModuleFiles
-  .map((fileName) => {
-    const source = path.join(APP_SOURCE_DIR, fileName);
+  .map((relativePath) => {
+    const source = path.join(APP_SOURCE_DIR, relativePath);
     if (!fs.existsSync(source)) {
       throw new Error(`Source file tidak ditemukan: ${source}`);
     }
 
-    return `// ${fileName}\n${fs.readFileSync(source, "utf8").trim()}\n`;
+    return `// ${relativePath.replace(/\\/g, "/")}\n${fs.readFileSync(source, "utf8").trim()}\n`;
   })
   .join("\n");
 
@@ -48,3 +45,54 @@ for (const destination of [path.join(ROOT, APP_OUTPUT_NAME), path.join(PUBLIC_DI
 }
 
 console.log("Public assets synced:", [...STATIC_FILES, APP_OUTPUT_NAME].join(", "));
+
+function listJavaScriptFiles(directory, relativePrefix = "") {
+  const entries = fs.readdirSync(directory, { withFileTypes: true });
+  const files = [];
+
+  for (const entry of entries) {
+    const nextRelativePath = path.join(relativePrefix, entry.name);
+    const fullPath = path.join(directory, entry.name);
+
+    if (entry.isDirectory()) {
+      files.push(...listJavaScriptFiles(fullPath, nextRelativePath));
+      continue;
+    }
+
+    if (entry.isFile() && entry.name.endsWith(".js")) {
+      files.push(nextRelativePath);
+    }
+  }
+
+  return files;
+}
+
+function compareAppModulePaths(left, right) {
+  return getAppModulePriority(left) - getAppModulePriority(right) || left.localeCompare(right);
+}
+
+function getAppModulePriority(relativePath) {
+  const normalized = relativePath.replace(/\\/g, "/");
+
+  if (normalized.startsWith("core/")) {
+    return 10;
+  }
+
+  if (normalized.startsWith("render/")) {
+    return 20;
+  }
+
+  if (normalized.startsWith("transactions/")) {
+    return 30;
+  }
+
+  if (normalized.startsWith("actions/")) {
+    return 40;
+  }
+
+  if (normalized === "bootstrap.js" || normalized.startsWith("bootstrap/")) {
+    return 90;
+  }
+
+  return 50;
+}

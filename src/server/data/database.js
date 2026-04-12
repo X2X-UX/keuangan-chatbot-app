@@ -4,8 +4,10 @@ const { DatabaseSync } = require("node:sqlite");
 const { pbkdf2Sync, randomBytes, randomUUID, timingSafeEqual } = require("crypto");
 
 const ROOT = __dirname;
-const DATA_DIR = path.join(ROOT, "data");
-const DB_FILE = path.join(DATA_DIR, "arunika.sqlite");
+const CONFIGURED_DATA_DIR = String(process.env.ARUNIKA_DATA_DIR || "").trim();
+const CONFIGURED_DB_FILE = String(process.env.ARUNIKA_DB_FILE || "").trim();
+const DATA_DIR = CONFIGURED_DATA_DIR ? path.resolve(CONFIGURED_DATA_DIR) : path.join(ROOT, "data");
+const DB_FILE = CONFIGURED_DB_FILE ? path.resolve(CONFIGURED_DB_FILE) : path.join(DATA_DIR, "arunika.sqlite");
 const LEGACY_SEED_FILE = path.join(DATA_DIR, "transactions.json");
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 const TELEGRAM_LINK_CODE_TTL_SECONDS = 60 * 10;
@@ -93,6 +95,15 @@ function ensureTransactionReceiptColumn(database) {
 
 function getDatabase() {
   return initializeDatabase();
+}
+
+function closeDatabase() {
+  if (!db) {
+    return;
+  }
+
+  db.close();
+  db = undefined;
 }
 
 function normalizeEmail(email) {
@@ -650,9 +661,12 @@ function loadLegacySeedTransactions() {
 }
 
 module.exports = {
+  DATA_DIR,
+  DB_FILE,
   SESSION_MAX_AGE_SECONDS,
   TELEGRAM_LINK_CODE_TTL_SECONDS,
   authenticateUser,
+  closeDatabase,
   createSession,
   createTelegramLinkCode: generateTelegramLinkCode,
   createTransactionForUser,

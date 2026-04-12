@@ -39,7 +39,7 @@ Catatan:
 npm.cmd run verify
 ```
 
-Perintah ini akan menyinkronkan aset frontend, menjalankan test modul ringan, lalu mengecek sintaks file JavaScript utama.
+Perintah ini akan menyinkronkan aset frontend, menjalankan test modul ringan, smoke test route penting, lalu mengecek sintaks file JavaScript utama.
 
 ## Struktur proyek
 
@@ -53,11 +53,11 @@ src/
     transaction-categories.js
     transaction-amount.js
     app/
-      00-core.js
-      10-receipts.js
-      20-import.js
-      30-ui.js
-      40-main.js
+      core/
+      render/
+      transactions/
+      actions/
+      bootstrap.js
   server/
     app.js
     index.js
@@ -85,6 +85,27 @@ Saat ini test ringan mencakup:
 - parsing nominal fleksibel
 - parser OCR receipt
 - helper transaksi dasar
+
+Smoke test route penting:
+
+```powershell
+npm.cmd run test:routes
+```
+
+Cakupannya:
+- `GET /api/health`
+- register + session auth
+- proteksi endpoint transaksi
+- buat transaksi + hitung summary
+
+## Environment test
+
+Untuk isolasi data saat test atau eksperimen lokal, backend mendukung:
+
+- `ARUNIKA_DATA_DIR`
+- `ARUNIKA_DB_FILE`
+
+Kalau env ini diisi, SQLite akan memakai lokasi data yang ditentukan tanpa mengganggu data utama aplikasi.
 
 ## Instal sebagai aplikasi HP (PWA)
 

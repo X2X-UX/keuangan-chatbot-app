@@ -1,4 +1,14 @@
-// 00-core.js
+// core/escape-html.js
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+// core/runtime.js
 const state = {
   authMode: "login",
   chatHistory: [],
@@ -468,7 +478,1210 @@ function syncTransactionCategoryOptions(preferredValue) {
   elements.transactionCategory.value = nextValue;
 }
 
-// 10-receipts.js
+// render/app-shell.js
+async function request(path, options = {}) {
+  const response = await fetch(path, {
+    credentials: "same-origin",
+    ...options,
+    headers: {
+      ...(options.headers || {})
+    }
+  });
+
+  const raw = await response.text();
+  const payload = raw ? JSON.parse(raw) : {};
+
+  if (!response.ok) {
+    const error = new Error(payload.error || payload.message || "Terjadi kesalahan saat memproses permintaan.");
+    error.status = response.status;
+    throw error;
+  }
+
+  return payload;
+}
+
+function showAuthGate(message = "") {
+  elements.authGate.classList.remove("is-hidden");
+  elements.appShell.classList.add("is-locked");
+  elements.authMessage.textContent = message;
+}
+
+function hideAuthGate() {
+  elements.authGate.classList.add("is-hidden");
+  elements.appShell.classList.remove("is-locked");
+  elements.authMessage.textContent = "";
+}
+
+function setAuthMode(mode) {
+  state.authMode = mode;
+  const isRegister = mode === "register";
+
+  elements.loginTabButton.classList.toggle("is-active", !isRegister);
+  elements.registerTabButton.classList.toggle("is-active", isRegister);
+  elements.nameField.classList.toggle("is-hidden", !isRegister);
+  elements.authName.required = isRegister;
+  elements.authTitle.textContent = isRegister ? "Buat akun Arunika Finance" : "Masuk ke Arunika Finance";
+  elements.authSubtitle.textContent = isRegister
+    ? "Daftarkan akun baru untuk menyimpan transaksi Anda secara terpisah."
+    : "Masuk untuk mengakses dashboard keuangan pribadi. Data transaksi setiap akun dipisahkan otomatis di sistem.";
+  elements.authSubmitButton.textContent = isRegister ? "Daftar Akun" : "Masuk";
+  elements.authMessage.textContent = "";
+}
+
+function renderSession() {
+  if (state.user) {
+    elements.sessionName.textContent = state.user.name;
+    elements.sessionEmail.textContent = state.user.email;
+    elements.logoutButton.classList.remove("is-hidden");
+    return;
+  }
+
+  elements.sessionName.textContent = "Belum masuk";
+  elements.sessionEmail.textContent = "Gunakan akun demo atau daftar akun baru.";
+  elements.logoutButton.classList.add("is-hidden");
+}
+
+function renderHealth() {
+  if (!state.health) {
+    return;
+  }
+
+  const labels = {
+    local: "Chatbot lokal aktif",
+    "local-fallback": "Mode fallback lokal",
+    openai: `AI aktif - ${state.health.model}`
+  };
+
+  elements.chatModeChip.textContent = labels[state.health.chatMode] || "Mode chatbot aktif";
+}
+
+function renderTelegramStatus() {
+  if (!state.user) {
+    elements.telegramStatusText.textContent = "Masuk untuk melihat status koneksi Telegram.";
+    elements.telegramLinkButton.disabled = true;
+    elements.telegramUnlinkButton.classList.add("is-hidden");
+    elements.telegramCodeBox.classList.add("is-hidden");
+    return;
+  }
+
+  if (!state.telegramStatus) {
+    elements.telegramStatusText.textContent = "Memuat status Telegram...";
+    elements.telegramLinkButton.disabled = true;
+    elements.telegramUnlinkButton.classList.add("is-hidden");
+    elements.telegramCodeBox.classList.add("is-hidden");
+    return;
+  }
+
+  const status = state.telegramStatus;
+  elements.telegramLinkButton.disabled = !status.configured;
+  elements.telegramUnlinkButton.classList.toggle("is-hidden", !status.linked);
+
+  if (!status.configured) {
+    elements.telegramStatusText.textContent =
+      "Telegram belum dikonfigurasi di server. Isi TELEGRAM_BOT_TOKEN setelah aplikasi dihosting.";
+    elements.telegramCodeBox.classList.add("is-hidden");
+    return;
+  }
+
+  if (!status.webhookReady) {
+    elements.telegramStatusText.textContent =
+      "Bot siap, tapi APP_BASE_URL belum diisi. Webhook Telegram belum bisa didaftarkan.";
+  } else if (status.linked && status.link) {
+    const handle = status.link.username ? `@${status.link.username}` : `chat ${status.link.chatId}`;
+    elements.telegramStatusText.textContent = `Telegram sudah terhubung ke ${handle}.`;
+  } else {
+    const botHint = status.botUrl ? ` Buka bot: ${status.botUrl}` : "";
+    elements.telegramStatusText.textContent = `Bot siap dihubungkan. Tempel kode tautan dari dashboard ke chat bot.${botHint}`;
+  }
+
+  if (state.telegramCommand) {
+    elements.telegramCodeText.textContent = state.telegramCommand;
+    elements.telegramCodeMeta.textContent = "Kirim kode ini apa adanya ke bot Telegram. Bot akan memprosesnya lewat parsing teks. Kode berlaku 10 menit.";
+    elements.telegramCodeBox.classList.remove("is-hidden");
+  } else {
+    elements.telegramCodeBox.classList.add("is-hidden");
+  }
+}
+
+function clearDashboard() {
+  state.editingTransactionId = null;
+  state.summary = null;
+  state.telegramCommand = null;
+  state.telegramStatus = null;
+  state.transactions = [];
+  elements.balanceValue.textContent = "Rp0";
+  elements.incomeValue.textContent = "Rp0";
+  elements.expenseValue.textContent = "Rp0";
+  elements.savingsValue.textContent = "0%";
+  elements.balanceFoot.textContent = "Menunggu data transaksi";
+  elements.incomeFoot.textContent = "0 kategori income";
+  elements.expenseFoot.textContent = "0 kategori expense";
+  elements.savingsFoot.textContent = "Belum cukup data";
+  elements.heroSummaryText.textContent = state.user
+    ? "Memuat ringkasan keuangan terbaru."
+    : "Masuk ke akun untuk memuat ringkasan keuangan terbaru.";
+  elements.flowIncomeValue.textContent = "Rp0";
+  elements.flowExpenseValue.textContent = "Rp0";
+  elements.flowNetValue.textContent = "Rp0";
+  elements.flowIncomeMeta.textContent = "Menunggu data pemasukan";
+  elements.flowExpenseMeta.textContent = "Menunggu data pengeluaran";
+  elements.flowNetMeta.textContent = "Menunggu data neraca";
+  elements.flowIncomeBar.style.width = "0%";
+  elements.flowExpenseBar.style.width = "0%";
+  elements.flowNetBar.style.width = "0%";
+  elements.flowNetBar.classList.remove("is-negative");
+  setAnimatedValue("balance", 0);
+  setAnimatedValue("income", 0);
+  setAnimatedValue("expense", 0);
+  setAnimatedValue("savingsRate", 0);
+  setAnimatedValue("flowIncome", 0);
+  setAnimatedValue("flowExpense", 0);
+  setAnimatedValue("flowNet", 0);
+  elements.flowTimeline.innerHTML = '<div class="empty-state">Flow bulanan akan tampil setelah data transaksi tersedia.</div>';
+  elements.cashflowChart.innerHTML = '<div class="empty-state">Masuk untuk melihat arus kas bulanan.</div>';
+  elements.categoryChart.innerHTML = '<div class="empty-state">Masuk untuk melihat komposisi pengeluaran.</div>';
+  elements.insightList.innerHTML = '<div class="empty-state">Insight akan tampil setelah data akun berhasil dimuat.</div>';
+  elements.transactionTableBody.innerHTML = `
+    <tr>
+      <td colspan="6">
+        <div class="empty-state">Belum ada transaksi untuk ditampilkan.</div>
+      </td>
+    </tr>
+  `;
+  renderTelegramStatus();
+}
+
+// render/chat.js
+function appendChatMessage(role, content) {
+  const fragment = elements.chatTemplate.content.cloneNode(true);
+  const bubble = fragment.querySelector(".chat-bubble");
+  const roleLabel = fragment.querySelector(".chat-role");
+  const text = fragment.querySelector(".chat-text");
+
+  bubble.classList.add(role);
+  roleLabel.textContent = role === "assistant" ? "Asisten" : "Anda";
+  text.textContent = content;
+  elements.chatMessages.appendChild(fragment);
+  elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+}
+
+function resetChat() {
+  elements.chatMessages.innerHTML = "";
+  state.chatHistory = [];
+
+  const intro = state.user
+    ? `Halo ${state.user.name}, saya siap membantu menganalisis kondisi keuangan akun Anda.`
+    : "Silakan masuk terlebih dahulu agar saya dapat membaca data keuangan akun Anda.";
+
+  appendChatMessage("assistant", intro);
+  state.chatHistory.push({ role: "assistant", content: intro });
+}
+
+// render/dashboard.js
+function computeInsights(summary) {
+  if (!summary) {
+    return [];
+  }
+
+  const insights = [];
+
+  if (summary.topExpenseCategory) {
+    insights.push({
+      title: "Kategori terberat",
+      text: `${summary.topExpenseCategory.category} menyerap ${formatPercent(summary.topExpenseCategory.share)} dari total pengeluaran.`
+    });
+  }
+
+  if (summary.savingsRate < 20) {
+    insights.push({
+      title: "Rasio tabungan rendah",
+      text: `Rasio tabungan baru ${formatPercent(summary.savingsRate)}. Perlu batas mingguan untuk belanja fleksibel.`
+    });
+  } else {
+    insights.push({
+      title: "Arus kas sehat",
+      text: `Rasio tabungan ${formatPercent(summary.savingsRate)} menandakan ruang tabung masih cukup aman.`
+    });
+  }
+
+  if (summary.biggestExpense) {
+    insights.push({
+      title: "Transaksi terbesar",
+      text: `${summary.biggestExpense.description} bernilai ${formatCurrency(summary.biggestExpense.amount)} pada ${formatDate(summary.biggestExpense.date)}.`
+    });
+  }
+
+  const latestMonth = summary.monthlyCashflow[summary.monthlyCashflow.length - 1];
+  if (latestMonth) {
+    insights.push({
+      title: "Bulan terakhir",
+      text: `${formatMonth(latestMonth.month)} mencatat net ${formatCurrency(latestMonth.net)} dari pemasukan ${formatCurrency(latestMonth.income)}.`
+    });
+  }
+
+  return insights.slice(0, 4);
+}
+
+function renderSummary() {
+  const summary = state.summary;
+  if (!summary) {
+    clearDashboard();
+    return;
+  }
+
+  const previousBalance = getAnimatedValue("balance");
+  const previousIncome = getAnimatedValue("income");
+  const previousExpense = getAnimatedValue("expense");
+  const previousSavings = getAnimatedValue("savingsRate");
+
+  animateValue("balance", summary.balance, (value) => {
+    elements.balanceValue.textContent = formatCurrency(value);
+  });
+  animateValue("income", summary.totalIncome, (value) => {
+    elements.incomeValue.textContent = formatCurrency(value);
+  });
+  animateValue("expense", summary.totalExpense, (value) => {
+    elements.expenseValue.textContent = formatCurrency(value);
+  });
+  animateValue("savingsRate", summary.savingsRate, (value) => {
+    elements.savingsValue.textContent = formatPercent(value);
+  });
+
+  if (previousBalance !== null && Number(summary.balance) !== previousBalance) {
+    pulseElement(elements.balanceValue.closest(".metric"), Number(summary.balance) > previousBalance ? "up" : "down");
+  }
+
+  if (previousIncome !== null && Number(summary.totalIncome) !== previousIncome) {
+    pulseElement(
+      elements.incomeValue.closest(".metric"),
+      Number(summary.totalIncome) > previousIncome ? "up" : "down"
+    );
+  }
+
+  if (previousExpense !== null && Number(summary.totalExpense) !== previousExpense) {
+    pulseElement(
+      elements.expenseValue.closest(".metric"),
+      Number(summary.totalExpense) > previousExpense ? "up" : "down"
+    );
+  }
+
+  if (previousSavings !== null && Number(summary.savingsRate) !== previousSavings) {
+    pulseElement(
+      elements.savingsValue.closest(".metric"),
+      Number(summary.savingsRate) > previousSavings ? "up" : "down"
+    );
+  }
+
+  elements.balanceFoot.textContent = `${summary.transactionCount} transaksi tercatat`;
+  elements.incomeFoot.textContent = `${summary.incomeCategories.length} kategori income`;
+  elements.expenseFoot.textContent = `${summary.expenseCategories.length} kategori expense`;
+  elements.savingsFoot.textContent = summary.savingsRate >= 20 ? "Tabungan relatif sehat" : "Masih bisa dioptimalkan";
+
+  elements.heroSummaryText.textContent = summary.topExpenseCategory
+    ? `Saldo saat ini ${formatCurrency(summary.balance)}. Pengeluaran terbesar ada di ${summary.topExpenseCategory.category}.`
+    : `Saldo saat ini ${formatCurrency(summary.balance)}. Tambahkan transaksi untuk memperkaya analisis.`;
+
+  renderFlowStats(summary);
+}
+
+function renderFlowStats(summary) {
+  if (!summary) {
+    return;
+  }
+
+  const income = Number(summary.totalIncome) || 0;
+  const expense = Number(summary.totalExpense) || 0;
+  const balance = Number(summary.balance) || 0;
+  const previousFlowIncome = getAnimatedValue("flowIncome");
+  const previousFlowExpense = getAnimatedValue("flowExpense");
+  const previousFlowNet = getAnimatedValue("flowNet");
+  const throughput = Math.max(income + expense, 1);
+  const balanceMagnitude = Math.max(Math.abs(balance), 1);
+
+  const incomeShare = (income / throughput) * 100;
+  const expenseShare = (expense / throughput) * 100;
+  const balanceShare = Math.min((balanceMagnitude / throughput) * 100, 100);
+
+  animateValue("flowIncome", income, (value) => {
+    elements.flowIncomeValue.textContent = formatCurrency(value);
+  });
+  animateValue("flowExpense", expense, (value) => {
+    elements.flowExpenseValue.textContent = formatCurrency(value);
+  });
+  animateValue("flowNet", balance, (value) => {
+    elements.flowNetValue.textContent = formatSignedCurrency(value);
+  });
+
+  if (previousFlowIncome !== null && income !== previousFlowIncome) {
+    pulseElement(
+      elements.flowIncomeValue.closest(".flow-step"),
+      income > previousFlowIncome ? "up" : "down"
+    );
+  }
+
+  if (previousFlowExpense !== null && expense !== previousFlowExpense) {
+    pulseElement(
+      elements.flowExpenseValue.closest(".flow-step"),
+      expense > previousFlowExpense ? "up" : "down"
+    );
+  }
+
+  if (previousFlowNet !== null && balance !== previousFlowNet) {
+    pulseElement(
+      elements.flowNetValue.closest(".flow-step"),
+      balance > previousFlowNet ? "up" : "down"
+    );
+  }
+  elements.flowIncomeMeta.textContent = `${formatPercent(incomeShare)} dari total arus kas`;
+  elements.flowExpenseMeta.textContent = `${formatPercent(expenseShare)} dari total arus kas`;
+  elements.flowNetMeta.textContent =
+    balance >= 0
+      ? `Surplus ${formatCurrency(balance)} pada periode berjalan`
+      : `Defisit ${formatCurrency(Math.abs(balance))} pada periode berjalan`;
+
+  elements.flowIncomeBar.style.width = `${Math.max(incomeShare, income > 0 ? 8 : 0)}%`;
+  elements.flowExpenseBar.style.width = `${Math.max(expenseShare, expense > 0 ? 8 : 0)}%`;
+  elements.flowNetBar.style.width = `${Math.max(balanceShare, balance !== 0 ? 8 : 0)}%`;
+  elements.flowNetBar.classList.toggle("is-negative", balance < 0);
+
+  elements.flowTimeline.innerHTML = "";
+  const monthly = (summary.monthlyCashflow || []).slice(-6);
+  if (monthly.length === 0) {
+    elements.flowTimeline.innerHTML = '<div class="empty-state">Flow bulanan akan tampil setelah data transaksi tersedia.</div>';
+    return;
+  }
+
+  monthly.forEach((entry) => {
+    const node = document.createElement("article");
+    const net = Number(entry.net) || 0;
+    const trendClass = net >= 0 ? "up" : "down";
+    const trendLabel = net >= 0 ? "Surplus" : "Defisit";
+    node.className = `flow-node ${trendClass}`;
+    node.innerHTML = `
+      <span class="flow-node-month">${formatMonth(entry.month)}</span>
+      <strong class="flow-node-net">${formatSignedCurrency(net)}</strong>
+      <small class="flow-node-detail">${trendLabel} dari ${formatCurrency(entry.income)} vs ${formatCurrency(entry.expense)}</small>
+    `;
+    elements.flowTimeline.appendChild(node);
+  });
+}
+
+function renderCashflowChart() {
+  const data = state.summary?.monthlyCashflow || [];
+  elements.cashflowChart.innerHTML = "";
+
+  if (data.length === 0) {
+    elements.cashflowChart.innerHTML = '<div class="empty-state">Belum ada arus kas bulanan untuk ditampilkan.</div>';
+    return;
+  }
+
+  const maxValue = Math.max(...data.map((entry) => Math.max(Math.abs(entry.net), entry.income, entry.expense)), 1);
+
+  data.forEach((entry) => {
+    const row = document.createElement("div");
+    row.className = "chart-row";
+    row.innerHTML = `
+      <div class="chart-head">
+        <strong>${formatMonth(entry.month)}</strong>
+        <span>Net ${formatCurrency(entry.net)}</span>
+      </div>
+      <div class="chart-track">
+        <div class="chart-fill cashflow-fill" style="width:${Math.max((Math.abs(entry.net) / maxValue) * 100, 6)}%"></div>
+      </div>
+      <small>Pemasukan ${formatCurrency(entry.income)} - Pengeluaran ${formatCurrency(entry.expense)}</small>
+    `;
+    elements.cashflowChart.appendChild(row);
+  });
+}
+
+function renderCategoryChart() {
+  const data = state.summary?.expenseCategories || [];
+  elements.categoryChart.innerHTML = "";
+
+  if (data.length === 0) {
+    elements.categoryChart.innerHTML = '<div class="empty-state">Belum ada kategori pengeluaran untuk ditampilkan.</div>';
+    return;
+  }
+
+  const maxValue = Math.max(...data.map((entry) => entry.amount), 1);
+
+  data.slice(0, 6).forEach((entry) => {
+    const row = document.createElement("div");
+    row.className = "chart-row";
+    row.innerHTML = `
+      <div class="chart-head">
+        <strong>${escapeHTML(entry.category)}</strong>
+        <span>${formatCurrency(entry.amount)} - ${formatPercent(entry.share)}</span>
+      </div>
+      <div class="chart-track">
+        <div class="chart-fill" style="width:${Math.max((entry.amount / maxValue) * 100, 10)}%"></div>
+      </div>
+    `;
+    elements.categoryChart.appendChild(row);
+  });
+}
+
+function getFilteredTransactions() {
+  const query = elements.searchInput.value.trim().toLowerCase();
+  const type = elements.typeFilter.value;
+
+  return state.transactions.filter((item) => {
+    const haystack = `${item.description} ${item.category} ${item.notes || ""}`.toLowerCase();
+    return (type === "all" || item.type === type) && (!query || haystack.includes(query));
+  });
+}
+
+function renderTransactions() {
+  const rows = getFilteredTransactions();
+  elements.transactionTableBody.innerHTML = "";
+
+  if (rows.length === 0) {
+    elements.transactionTableBody.innerHTML = `
+      <tr>
+        <td colspan="6">
+          <div class="empty-state">Belum ada transaksi yang cocok dengan filter saat ini.</div>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  rows.forEach((item) => {
+    const row = document.createElement("tr");
+    row.className = "transaction-row";
+    const receiptThumb = item.receiptPath
+      ? `
+        <a class="receipt-thumb-link" href="${escapeHTML(getTransactionReceiptUrl(item.id))}" target="_blank" rel="noreferrer" aria-label="Buka struk untuk ${escapeHTML(item.description)}">
+          <img
+            class="receipt-thumb-image"
+            src="${escapeHTML(getTransactionReceiptUrl(item.id))}"
+            alt="Thumbnail struk ${escapeHTML(item.description)}"
+            loading="lazy"
+          />
+        </a>
+      `
+      : "";
+    const receiptAction = item.receiptPath
+      ? `<a class="receipt-link" href="${escapeHTML(getTransactionReceiptUrl(item.id))}" target="_blank" rel="noreferrer">Struk</a>`
+      : "";
+    row.innerHTML = `
+      <td data-label="Tanggal">${formatDate(item.date)}</td>
+      <td data-label="Deskripsi">
+        <div class="transaction-description">
+          ${receiptThumb}
+          <div class="transaction-description-copy">
+            <strong class="transaction-description-title">${escapeHTML(item.description)}</strong>
+            ${
+              item.notes
+                ? `<span class="transaction-description-notes">${escapeHTML(item.notes)}</span>`
+                : `<span class="transaction-description-notes is-muted">Tanpa catatan tambahan</span>`
+            }
+          </div>
+        </div>
+      </td>
+      <td data-label="Kategori">${escapeHTML(item.category)}</td>
+      <td data-label="Tipe"><span class="type-pill ${item.type}">${item.type === "income" ? "Pemasukan" : "Pengeluaran"}</span></td>
+      <td data-label="Nominal" class="amount ${item.type}">${item.type === "income" ? "+" : "-"}${formatCurrency(item.amount)}</td>
+      <td data-label="Aksi">
+        <div class="table-actions">
+          ${receiptAction}
+          <button class="edit-button" data-id="${item.id}" type="button">Edit</button>
+          <button class="delete-button" data-id="${item.id}" type="button">Hapus</button>
+        </div>
+      </td>
+    `;
+    elements.transactionTableBody.appendChild(row);
+  });
+}
+
+function renderInsights() {
+  const items = computeInsights(state.summary);
+  elements.insightList.innerHTML = "";
+
+  if (items.length === 0) {
+    elements.insightList.innerHTML = '<div class="empty-state">Insight akan muncul setelah ada transaksi.</div>';
+    return;
+  }
+
+  items.forEach((item) => {
+    const card = document.createElement("article");
+    card.className = "insight-item";
+    card.innerHTML = `<strong>${escapeHTML(item.title)}</strong><span>${escapeHTML(item.text)}</span>`;
+    elements.insightList.appendChild(card);
+  });
+}
+
+// transactions/form.js
+function populateTransactionForm(transaction) {
+  if (!transaction) {
+    return;
+  }
+
+  state.editingTransactionId = transaction.id;
+  state.transactionEntryMethod = transaction.receiptPath ? "scan" : "manual";
+  state.transactionEntryStep = "review";
+  state.transactionReviewVisited = true;
+  elements.transactionType.value = transaction.type;
+  syncTransactionCategoryOptions(transaction.category);
+  elements.transactionForm.elements.description.value = transaction.description || "";
+  elements.transactionAmount.value = formatFlexibleCurrency(transaction.amount);
+  elements.transactionForm.elements.date.value = transaction.date || todayInputValue();
+  elements.transactionForm.elements.notes.value = transaction.notes || "";
+  renderTransactionAmountHint();
+  resetTransactionReceiptState(transaction);
+  setTransactionFormMode(true);
+  elements.transactionForm.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
+}
+
+// transactions/import-state.js
+function resetImportState(options = {}) {
+  const preserveMessage = options.preserveMessage === true;
+  state.csvImport = null;
+  elements.importMappingSection.classList.add("is-hidden");
+  elements.importPreviewSection.classList.add("is-hidden");
+  elements.importPreviewList.innerHTML = "";
+  elements.importPreviewSummary.textContent = "Belum ada data yang dipreview.";
+  elements.importFileName.textContent = "Belum ada file";
+  elements.importMetaText.textContent = "Unggah file untuk melihat mapping kolom.";
+  elements.importPreviewButton.disabled = true;
+  elements.importSubmitButton.disabled = true;
+  if (elements.importPresetSelect) {
+    elements.importPresetSelect.innerHTML = "";
+    elements.importPresetSelect.disabled = true;
+  }
+
+  for (const element of Object.values(IMPORT_MAPPING_ELEMENTS)) {
+    if (element) {
+      element.innerHTML = "";
+    }
+  }
+
+  if (!preserveMessage) {
+    setImportMessage("");
+  }
+}
+
+function setImportMessage(message, tone = "") {
+  elements.importMessage.textContent = message;
+  elements.importMessage.classList.toggle("is-error", tone === "error");
+  elements.importMessage.classList.toggle("is-success", tone === "success");
+}
+
+function normalizeImportHeader(value, index) {
+  const trimmed = String(value || "").trim();
+  return trimmed || `Kolom ${index + 1}`;
+}
+
+function normalizeImportHeaderToken(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function detectCsvDelimiter(text) {
+  const sample = String(text || "").split(/\r?\n/, 1)[0] || "";
+  const commaCount = (sample.match(/,/g) || []).length;
+  const semicolonCount = (sample.match(/;/g) || []).length;
+  return semicolonCount > commaCount ? ";" : ",";
+}
+
+// transactions/import.js
+function parseCsvText(text) {
+  const rows = [];
+  let current = "";
+  let row = [];
+  let inQuotes = false;
+  const delimiter = detectCsvDelimiter(text);
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (char === "\"") {
+      if (inQuotes && next === "\"") {
+        current += "\"";
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === delimiter && !inQuotes) {
+      row.push(current);
+      current = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") {
+        index += 1;
+      }
+      row.push(current);
+      if (row.some((cell) => String(cell || "").trim())) {
+        rows.push(row);
+      }
+      row = [];
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  row.push(current);
+  if (row.some((cell) => String(cell || "").trim())) {
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function buildImportRecords(parsedRows) {
+  if (!Array.isArray(parsedRows) || parsedRows.length < 2) {
+    return null;
+  }
+
+  const headers = parsedRows[0].map((header, index) => normalizeImportHeader(header, index));
+  const rows = parsedRows
+    .slice(1)
+    .map((values, index) => ({
+      index,
+      values: headers.map((_, headerIndex) => String(values[headerIndex] || "").trim())
+    }))
+    .filter((entry) => entry.values.some((value) => value));
+
+  if (!rows.length) {
+    return null;
+  }
+
+  return { headers, rows };
+}
+
+function guessImportColumnIndex(headers, field) {
+  const keywords = IMPORT_FIELD_KEYWORDS[field] || [];
+  return headers.findIndex((header) => {
+    const normalized = normalizeImportHeaderToken(header);
+    return keywords.some((keyword) => normalized.includes(keyword));
+  });
+}
+
+function findImportColumnIndexByAliases(headers, aliases) {
+  if (!Array.isArray(aliases) || aliases.length === 0) {
+    return -1;
+  }
+
+  return headers.findIndex((header) => {
+    const normalized = normalizeImportHeaderToken(header);
+    return aliases.some((alias) => normalized.includes(normalizeImportHeaderToken(alias)));
+  });
+}
+
+function buildImportPresetMappings(headers, presetId) {
+  const preset = IMPORT_PRESETS[presetId] || IMPORT_PRESETS.generic;
+  const mappings = {};
+
+  for (const field of IMPORT_COLUMN_FIELDS) {
+    const aliases = preset.fieldAliases?.[field] || [];
+    const presetMatch = findImportColumnIndexByAliases(headers, aliases);
+    const genericMatch = guessImportColumnIndex(headers, field);
+    mappings[field] = presetMatch >= 0 ? presetMatch : genericMatch >= 0 ? genericMatch : null;
+  }
+
+  return mappings;
+}
+
+function scoreImportPreset(headers, fileName, presetId) {
+  const preset = IMPORT_PRESETS[presetId];
+  if (!preset || presetId === "generic") {
+    return 0;
+  }
+
+  let score = 0;
+  const loweredFileName = String(fileName || "").toLowerCase();
+
+  for (const hint of preset.fileHints || []) {
+    if (loweredFileName.includes(String(hint).toLowerCase())) {
+      score += 3;
+    }
+  }
+
+  for (const aliases of Object.values(preset.fieldAliases || {})) {
+    if (findImportColumnIndexByAliases(headers, aliases) >= 0) {
+      score += 2;
+    }
+  }
+
+  return score;
+}
+
+function detectImportPreset(headers, fileName) {
+  let bestPresetId = "generic";
+  let bestScore = 0;
+
+  for (const presetId of Object.keys(IMPORT_PRESETS)) {
+    if (presetId === "generic") {
+      continue;
+    }
+
+    const score = scoreImportPreset(headers, fileName, presetId);
+    if (score > bestScore) {
+      bestScore = score;
+      bestPresetId = presetId;
+    }
+  }
+
+  return {
+    confidence: bestScore,
+    presetId: bestPresetId
+  };
+}
+
+function renderImportColumnOptions(headers, preferredPresetId = "generic") {
+  for (const element of Object.values(IMPORT_MAPPING_ELEMENTS)) {
+    if (!element) {
+      continue;
+    }
+
+    element.innerHTML = [
+      '<option value="">Tidak dipakai</option>',
+      ...headers.map((header, index) => `<option value="${index}">${escapeHTML(header)}</option>`)
+    ].join("");
+
+  }
+
+  applyImportPreset(preferredPresetId);
+}
+
+function renderImportPresetOptions(selectedValue = "auto") {
+  if (!elements.importPresetSelect) {
+    return;
+  }
+
+  elements.importPresetSelect.innerHTML = [
+    '<option value="auto">Otomatis</option>',
+    ...Object.entries(IMPORT_PRESETS).map(
+      ([presetId, preset]) => `<option value="${presetId}">${escapeHTML(preset.label)}</option>`
+    )
+  ].join("");
+  elements.importPresetSelect.value = selectedValue;
+  elements.importPresetSelect.disabled = false;
+}
+
+function applyImportPreset(requestedPresetId) {
+  if (!state.csvImport) {
+    return;
+  }
+
+  const presetId =
+    requestedPresetId === "auto"
+      ? state.csvImport.detectedPresetId || "generic"
+      : IMPORT_PRESETS[requestedPresetId]
+        ? requestedPresetId
+        : "generic";
+  const mappings = buildImportPresetMappings(state.csvImport.headers, presetId);
+
+  for (const [field, element] of Object.entries(IMPORT_MAPPING_ELEMENTS)) {
+    if (!element) {
+      continue;
+    }
+
+    const columnIndex = mappings[field];
+    element.value = columnIndex === null || columnIndex === undefined ? "" : String(columnIndex);
+  }
+
+  state.csvImport.activePresetId = presetId;
+}
+
+function getImportMappings() {
+  return Object.fromEntries(
+    Object.entries(IMPORT_MAPPING_ELEMENTS).map(([field, element]) => {
+      const value = element ? element.value : "";
+      return [field, value === "" ? null : Number(value)];
+    })
+  );
+}
+
+function getImportCellValue(record, columnIndex) {
+  if (!record || columnIndex === null || columnIndex === undefined || columnIndex < 0) {
+    return "";
+  }
+
+  return String(record.values[columnIndex] || "").trim();
+}
+
+function parseImportTypeToken(value) {
+  const normalized = normalizeImportHeaderToken(value);
+  if (!normalized) {
+    return null;
+  }
+
+  if (/\b(?:income|pemasukan|kredit|credit|cr|masuk)\b/.test(normalized)) {
+    return "income";
+  }
+
+  if (/\b(?:expense|pengeluaran|debit|db|keluar)\b/.test(normalized)) {
+    return "expense";
+  }
+
+  return null;
+}
+
+function parseImportMoneyValue(value) {
+  const raw = String(value || "")
+    .replace(/[^\d,.\-+()]/g, "")
+    .trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  const unsigned = raw.replace(/[()+-]/g, "");
+  const lastComma = unsigned.lastIndexOf(",");
+  const lastDot = unsigned.lastIndexOf(".");
+  const decimalIndex = Math.max(lastComma, lastDot);
+
+  if (decimalIndex === -1) {
+    const digits = unsigned.replace(/[^\d]/g, "");
+    return digits ? Number.parseInt(digits, 10) : null;
+  }
+
+  const integerPart = unsigned.slice(0, decimalIndex).replace(/[^\d]/g, "");
+  const decimalPart = unsigned.slice(decimalIndex + 1).replace(/[^\d]/g, "");
+
+  if (!integerPart && !decimalPart) {
+    return null;
+  }
+
+  if (decimalPart.length > 2) {
+    return Number.parseInt(`${integerPart}${decimalPart}`, 10);
+  }
+
+  const normalized = Number(`${integerPart || "0"}.${decimalPart || "0"}`);
+  return Number.isFinite(normalized) ? Math.round(normalized) : null;
+}
+
+function parseSignedImportAmount(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return { amount: null, sign: 0 };
+  }
+
+  const amount = parseImportMoneyValue(raw);
+  if (!amount) {
+    return { amount: null, sign: 0 };
+  }
+
+  if (/\(.*\)/.test(raw) || /-\s*\d/.test(raw)) {
+    return { amount, sign: -1 };
+  }
+
+  if (/^\+/.test(raw)) {
+    return { amount, sign: 1 };
+  }
+
+  return { amount, sign: 0 };
+}
+
+function formatDateParts(year, month, day) {
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function parseImportDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw;
+  }
+
+  const normalized = raw.replace(/\./g, "/").replace(/-/g, "/");
+  let match = normalized.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  if (match) {
+    return formatDateParts(match[1], match[2], match[3]);
+  }
+
+  match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (match) {
+    const day = Number(match[1]);
+    const month = Number(match[2]);
+    const year = Number(match[3].length === 2 ? `20${match[3]}` : match[3]);
+    return formatDateParts(year, month, day);
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  const offsetMs = parsed.getTimezoneOffset() * 60_000;
+  return new Date(parsed.getTime() - offsetMs).toISOString().slice(0, 10);
+}
+
+function inferImportCategory(type, rawCategory, description) {
+  const preferred = rawCategory ? findCanonicalTransactionCategory(type, rawCategory) : null;
+  if (preferred) {
+    return preferred;
+  }
+
+  const inferred = findCanonicalTransactionCategory(type, description) || null;
+  if (inferred) {
+    return inferred;
+  }
+
+  return type === "expense" ? "Belanja" : "Hadiah";
+}
+
+function buildImportPreviewData() {
+  if (!state.csvImport) {
+    return null;
+  }
+
+  const mappings = getImportMappings();
+  const previewRows = state.csvImport.rows.map((record) => {
+    const rawDate = getImportCellValue(record, mappings.date);
+    const rawDescription = getImportCellValue(record, mappings.description);
+    const rawAmount = getImportCellValue(record, mappings.amount);
+    const rawDebit = getImportCellValue(record, mappings.debit);
+    const rawCredit = getImportCellValue(record, mappings.credit);
+    const rawType = getImportCellValue(record, mappings.type);
+    const rawCategory = getImportCellValue(record, mappings.category);
+    const rawNotes = getImportCellValue(record, mappings.notes);
+
+    const debit = parseSignedImportAmount(rawDebit);
+    const credit = parseSignedImportAmount(rawCredit);
+    const amount = parseSignedImportAmount(rawAmount);
+
+    let type = parseImportTypeToken(rawType);
+    let normalizedAmount = null;
+
+    if (!type && debit.amount) {
+      type = "expense";
+      normalizedAmount = debit.amount;
+    }
+
+    if (!type && credit.amount) {
+      type = "income";
+      normalizedAmount = credit.amount;
+    }
+
+    if (!type && amount.sign === -1) {
+      type = "expense";
+      normalizedAmount = amount.amount;
+    }
+
+    if (!type && amount.sign === 1) {
+      type = "income";
+      normalizedAmount = amount.amount;
+    }
+
+    if (type && !normalizedAmount) {
+      normalizedAmount = type === "expense" ? debit.amount || amount.amount : credit.amount || amount.amount;
+    }
+
+    const normalizedDate = parseImportDate(rawDate);
+    const description = rawDescription || "Transaksi mutasi";
+    const category = type ? inferImportCategory(type, rawCategory, `${description} ${rawNotes}`) : "";
+    const notes = [rawNotes, `Import CSV: ${state.csvImport.fileName}`].filter(Boolean).join(" | ");
+
+    if (!normalizedDate) {
+      return { error: "Tanggal belum terbaca. Pilih kolom tanggal yang benar atau rapikan format tanggal di CSV.", ok: false, rowNumber: record.index + 2 };
+    }
+
+    if (!description.trim()) {
+      return { error: "Deskripsi transaksi belum terbaca.", ok: false, rowNumber: record.index + 2 };
+    }
+
+    if (!type) {
+      return {
+        error: "Tipe transaksi belum bisa ditebak. Gunakan kolom debit/kredit, kolom tipe, atau nominal bertanda plus/minus.",
+        ok: false,
+        rowNumber: record.index + 2
+      };
+    }
+
+    if (!normalizedAmount) {
+      return { error: "Nominal belum bisa dibaca dari kolom yang dipilih.", ok: false, rowNumber: record.index + 2 };
+    }
+
+    return {
+      ok: true,
+      rowNumber: record.index + 2,
+      transaction: {
+        amount: String(normalizedAmount),
+        category,
+        date: normalizedDate,
+        description,
+        notes,
+        type
+      }
+    };
+  });
+
+  const validRows = previewRows.filter((entry) => entry.ok).map((entry) => entry.transaction);
+  const invalidCount = previewRows.length - validRows.length;
+
+  return {
+    invalidCount,
+    previewRows: previewRows.slice(0, 12),
+    totalRows: previewRows.length,
+    validRows
+  };
+}
+
+function renderImportPreview() {
+  const preview = buildImportPreviewData();
+  if (!preview) {
+    return;
+  }
+
+  state.csvImport.preview = preview;
+  elements.importPreviewSection.classList.remove("is-hidden");
+  elements.importPreviewList.innerHTML = "";
+
+  elements.importPreviewSummary.textContent = `${preview.validRows.length} valid, ${preview.invalidCount} perlu perhatian, dari ${preview.totalRows} baris.`;
+
+  preview.previewRows.forEach((entry) => {
+    const item = document.createElement("article");
+    item.className = `import-preview-item ${entry.ok ? "valid" : "invalid"}`;
+
+    if (entry.ok) {
+      item.innerHTML = `
+        <div class="import-preview-row">
+          <div class="import-preview-title">
+            <strong>${escapeHTML(entry.transaction.description)}</strong>
+            <span>Baris CSV ${entry.rowNumber} • ${escapeHTML(formatDate(entry.transaction.date))}</span>
+          </div>
+          <span class="import-status valid">Siap impor</span>
+        </div>
+        <div class="import-preview-meta">
+          <span class="import-chip">${entry.transaction.type === "income" ? "Pemasukan" : "Pengeluaran"}</span>
+          <span class="import-chip">${escapeHTML(entry.transaction.category)}</span>
+          <span class="import-chip">${escapeHTML(formatCurrency(entry.transaction.amount))}</span>
+        </div>
+      `;
+    } else {
+      item.innerHTML = `
+        <div class="import-preview-row">
+          <div class="import-preview-title">
+            <strong>Baris CSV ${entry.rowNumber}</strong>
+            <span>Baris ini belum bisa diimpor.</span>
+          </div>
+          <span class="import-status invalid">Perlu cek</span>
+        </div>
+        <div class="import-preview-error">${escapeHTML(entry.error)}</div>
+      `;
+    }
+
+    elements.importPreviewList.appendChild(item);
+  });
+
+  if (preview.totalRows > preview.previewRows.length) {
+    const tail = document.createElement("div");
+    tail.className = "empty-state";
+    tail.textContent = `Preview menampilkan ${preview.previewRows.length} baris pertama dari ${preview.totalRows} baris CSV.`;
+    elements.importPreviewList.appendChild(tail);
+  }
+
+  elements.importSubmitButton.disabled = preview.validRows.length === 0;
+}
+
+async function handleImportFileChange(event) {
+  const file = event.target.files?.[0];
+  resetImportState({ preserveMessage: true });
+
+  if (!file) {
+    setImportMessage("");
+    return;
+  }
+
+  try {
+    const text = await file.text();
+    const records = buildImportRecords(parseCsvText(text.replace(/^\uFEFF/, "")));
+
+    if (!records) {
+      throw new Error("File CSV belum berisi header dan baris transaksi yang bisa diproses.");
+    }
+
+    state.csvImport = {
+      activePresetId: "generic",
+      detectedPresetId: "generic",
+      fileName: file.name,
+      headers: records.headers,
+      preview: null,
+      rows: records.rows
+    };
+
+    const detectedPreset = detectImportPreset(records.headers, file.name);
+    state.csvImport.detectedPresetId = detectedPreset.presetId;
+    state.csvImport.activePresetId = detectedPreset.presetId;
+
+    renderImportPresetOptions(detectedPreset.confidence > 0 ? "auto" : "generic");
+    renderImportColumnOptions(records.headers, detectedPreset.presetId);
+    elements.importMappingSection.classList.remove("is-hidden");
+    elements.importPreviewButton.disabled = false;
+    elements.importFileName.textContent = file.name;
+    const presetLabel = IMPORT_PRESETS[detectedPreset.presetId]?.label || "Generic CSV";
+    elements.importMetaText.textContent =
+      detectedPreset.confidence > 0
+        ? `${records.rows.length} baris transaksi terdeteksi. Preset ${presetLabel} dipilih otomatis, silakan cek lalu preview.`
+        : `${records.rows.length} baris transaksi terdeteksi. Tidak ada preset spesifik yang cocok, gunakan Generic CSV lalu cek mapping.`;
+    setImportMessage("File CSV berhasil dibaca. Lanjutkan ke preview untuk mengecek hasil normalisasi.", "success");
+  } catch (error) {
+    resetImportState();
+    if (elements.importFileInput) {
+      elements.importFileInput.value = "";
+    }
+    setImportMessage(error.message, "error");
+  }
+}
+
+function handleImportPreview() {
+  if (!state.csvImport) {
+    setImportMessage("Unggah file CSV terlebih dahulu sebelum melihat preview.", "error");
+    return;
+  }
+
+  renderImportPreview();
+  setImportMessage("Preview import berhasil diperbarui.", "success");
+}
+
+function handleImportMappingChange() {
+  if (!state.csvImport) {
+    return;
+  }
+
+  state.csvImport.preview = null;
+  if (elements.importPresetSelect && elements.importPresetSelect.value !== "auto") {
+    state.csvImport.activePresetId = elements.importPresetSelect.value;
+  }
+  elements.importSubmitButton.disabled = true;
+  if (!elements.importPreviewSection.classList.contains("is-hidden")) {
+    setImportMessage("Mapping kolom berubah. Jalankan preview lagi sebelum import.", "");
+  }
+}
+
+function handleImportPresetChange() {
+  if (!state.csvImport) {
+    return;
+  }
+
+  applyImportPreset(elements.importPresetSelect.value);
+  state.csvImport.preview = null;
+  elements.importSubmitButton.disabled = true;
+  const activePresetId =
+    elements.importPresetSelect.value === "auto"
+      ? state.csvImport.detectedPresetId || "generic"
+      : elements.importPresetSelect.value;
+  const presetLabel = IMPORT_PRESETS[activePresetId]?.label || "Generic CSV";
+  setImportMessage(`Preset ${presetLabel} diterapkan. Jalankan preview untuk memeriksa hasilnya.`, "success");
+}
+
+// transactions/receipt-flow.js
 function renderTransactionAmountHint() {
   const rawValue = elements.transactionAmount.value.trim();
   if (!rawValue) {
@@ -1204,1215 +2417,7 @@ function resetTransactionForm() {
   setTransactionFormMode(false);
 }
 
-function resetImportState(options = {}) {
-  const preserveMessage = options.preserveMessage === true;
-  state.csvImport = null;
-  elements.importMappingSection.classList.add("is-hidden");
-  elements.importPreviewSection.classList.add("is-hidden");
-  elements.importPreviewList.innerHTML = "";
-  elements.importPreviewSummary.textContent = "Belum ada data yang dipreview.";
-  elements.importFileName.textContent = "Belum ada file";
-  elements.importMetaText.textContent = "Unggah file untuk melihat mapping kolom.";
-  elements.importPreviewButton.disabled = true;
-  elements.importSubmitButton.disabled = true;
-  if (elements.importPresetSelect) {
-    elements.importPresetSelect.innerHTML = "";
-    elements.importPresetSelect.disabled = true;
-  }
-
-  for (const element of Object.values(IMPORT_MAPPING_ELEMENTS)) {
-    if (element) {
-      element.innerHTML = "";
-    }
-  }
-
-  if (!preserveMessage) {
-    setImportMessage("");
-  }
-}
-
-function setImportMessage(message, tone = "") {
-  elements.importMessage.textContent = message;
-  elements.importMessage.classList.toggle("is-error", tone === "error");
-  elements.importMessage.classList.toggle("is-success", tone === "success");
-}
-
-function normalizeImportHeader(value, index) {
-  const trimmed = String(value || "").trim();
-  return trimmed || `Kolom ${index + 1}`;
-}
-
-function normalizeImportHeaderToken(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function detectCsvDelimiter(text) {
-  const sample = String(text || "").split(/\r?\n/, 1)[0] || "";
-  const commaCount = (sample.match(/,/g) || []).length;
-  const semicolonCount = (sample.match(/;/g) || []).length;
-  return semicolonCount > commaCount ? ";" : ",";
-}
-
-// 20-import.js
-function parseCsvText(text) {
-  const rows = [];
-  let current = "";
-  let row = [];
-  let inQuotes = false;
-  const delimiter = detectCsvDelimiter(text);
-
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    const next = text[index + 1];
-
-    if (char === "\"") {
-      if (inQuotes && next === "\"") {
-        current += "\"";
-        index += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-
-    if (char === delimiter && !inQuotes) {
-      row.push(current);
-      current = "";
-      continue;
-    }
-
-    if ((char === "\n" || char === "\r") && !inQuotes) {
-      if (char === "\r" && next === "\n") {
-        index += 1;
-      }
-      row.push(current);
-      if (row.some((cell) => String(cell || "").trim())) {
-        rows.push(row);
-      }
-      row = [];
-      current = "";
-      continue;
-    }
-
-    current += char;
-  }
-
-  row.push(current);
-  if (row.some((cell) => String(cell || "").trim())) {
-    rows.push(row);
-  }
-
-  return rows;
-}
-
-function buildImportRecords(parsedRows) {
-  if (!Array.isArray(parsedRows) || parsedRows.length < 2) {
-    return null;
-  }
-
-  const headers = parsedRows[0].map((header, index) => normalizeImportHeader(header, index));
-  const rows = parsedRows
-    .slice(1)
-    .map((values, index) => ({
-      index,
-      values: headers.map((_, headerIndex) => String(values[headerIndex] || "").trim())
-    }))
-    .filter((entry) => entry.values.some((value) => value));
-
-  if (!rows.length) {
-    return null;
-  }
-
-  return { headers, rows };
-}
-
-function guessImportColumnIndex(headers, field) {
-  const keywords = IMPORT_FIELD_KEYWORDS[field] || [];
-  return headers.findIndex((header) => {
-    const normalized = normalizeImportHeaderToken(header);
-    return keywords.some((keyword) => normalized.includes(keyword));
-  });
-}
-
-function findImportColumnIndexByAliases(headers, aliases) {
-  if (!Array.isArray(aliases) || aliases.length === 0) {
-    return -1;
-  }
-
-  return headers.findIndex((header) => {
-    const normalized = normalizeImportHeaderToken(header);
-    return aliases.some((alias) => normalized.includes(normalizeImportHeaderToken(alias)));
-  });
-}
-
-function buildImportPresetMappings(headers, presetId) {
-  const preset = IMPORT_PRESETS[presetId] || IMPORT_PRESETS.generic;
-  const mappings = {};
-
-  for (const field of IMPORT_COLUMN_FIELDS) {
-    const aliases = preset.fieldAliases?.[field] || [];
-    const presetMatch = findImportColumnIndexByAliases(headers, aliases);
-    const genericMatch = guessImportColumnIndex(headers, field);
-    mappings[field] = presetMatch >= 0 ? presetMatch : genericMatch >= 0 ? genericMatch : null;
-  }
-
-  return mappings;
-}
-
-function scoreImportPreset(headers, fileName, presetId) {
-  const preset = IMPORT_PRESETS[presetId];
-  if (!preset || presetId === "generic") {
-    return 0;
-  }
-
-  let score = 0;
-  const loweredFileName = String(fileName || "").toLowerCase();
-
-  for (const hint of preset.fileHints || []) {
-    if (loweredFileName.includes(String(hint).toLowerCase())) {
-      score += 3;
-    }
-  }
-
-  for (const aliases of Object.values(preset.fieldAliases || {})) {
-    if (findImportColumnIndexByAliases(headers, aliases) >= 0) {
-      score += 2;
-    }
-  }
-
-  return score;
-}
-
-function detectImportPreset(headers, fileName) {
-  let bestPresetId = "generic";
-  let bestScore = 0;
-
-  for (const presetId of Object.keys(IMPORT_PRESETS)) {
-    if (presetId === "generic") {
-      continue;
-    }
-
-    const score = scoreImportPreset(headers, fileName, presetId);
-    if (score > bestScore) {
-      bestScore = score;
-      bestPresetId = presetId;
-    }
-  }
-
-  return {
-    confidence: bestScore,
-    presetId: bestPresetId
-  };
-}
-
-function renderImportColumnOptions(headers, preferredPresetId = "generic") {
-  for (const element of Object.values(IMPORT_MAPPING_ELEMENTS)) {
-    if (!element) {
-      continue;
-    }
-
-    element.innerHTML = [
-      '<option value="">Tidak dipakai</option>',
-      ...headers.map((header, index) => `<option value="${index}">${escapeHTML(header)}</option>`)
-    ].join("");
-
-  }
-
-  applyImportPreset(preferredPresetId);
-}
-
-function renderImportPresetOptions(selectedValue = "auto") {
-  if (!elements.importPresetSelect) {
-    return;
-  }
-
-  elements.importPresetSelect.innerHTML = [
-    '<option value="auto">Otomatis</option>',
-    ...Object.entries(IMPORT_PRESETS).map(
-      ([presetId, preset]) => `<option value="${presetId}">${escapeHTML(preset.label)}</option>`
-    )
-  ].join("");
-  elements.importPresetSelect.value = selectedValue;
-  elements.importPresetSelect.disabled = false;
-}
-
-function applyImportPreset(requestedPresetId) {
-  if (!state.csvImport) {
-    return;
-  }
-
-  const presetId =
-    requestedPresetId === "auto"
-      ? state.csvImport.detectedPresetId || "generic"
-      : IMPORT_PRESETS[requestedPresetId]
-        ? requestedPresetId
-        : "generic";
-  const mappings = buildImportPresetMappings(state.csvImport.headers, presetId);
-
-  for (const [field, element] of Object.entries(IMPORT_MAPPING_ELEMENTS)) {
-    if (!element) {
-      continue;
-    }
-
-    const columnIndex = mappings[field];
-    element.value = columnIndex === null || columnIndex === undefined ? "" : String(columnIndex);
-  }
-
-  state.csvImport.activePresetId = presetId;
-}
-
-function getImportMappings() {
-  return Object.fromEntries(
-    Object.entries(IMPORT_MAPPING_ELEMENTS).map(([field, element]) => {
-      const value = element ? element.value : "";
-      return [field, value === "" ? null : Number(value)];
-    })
-  );
-}
-
-function getImportCellValue(record, columnIndex) {
-  if (!record || columnIndex === null || columnIndex === undefined || columnIndex < 0) {
-    return "";
-  }
-
-  return String(record.values[columnIndex] || "").trim();
-}
-
-function parseImportTypeToken(value) {
-  const normalized = normalizeImportHeaderToken(value);
-  if (!normalized) {
-    return null;
-  }
-
-  if (/\b(?:income|pemasukan|kredit|credit|cr|masuk)\b/.test(normalized)) {
-    return "income";
-  }
-
-  if (/\b(?:expense|pengeluaran|debit|db|keluar)\b/.test(normalized)) {
-    return "expense";
-  }
-
-  return null;
-}
-
-function parseImportMoneyValue(value) {
-  const raw = String(value || "")
-    .replace(/[^\d,.\-+()]/g, "")
-    .trim();
-
-  if (!raw) {
-    return null;
-  }
-
-  const unsigned = raw.replace(/[()+-]/g, "");
-  const lastComma = unsigned.lastIndexOf(",");
-  const lastDot = unsigned.lastIndexOf(".");
-  const decimalIndex = Math.max(lastComma, lastDot);
-
-  if (decimalIndex === -1) {
-    const digits = unsigned.replace(/[^\d]/g, "");
-    return digits ? Number.parseInt(digits, 10) : null;
-  }
-
-  const integerPart = unsigned.slice(0, decimalIndex).replace(/[^\d]/g, "");
-  const decimalPart = unsigned.slice(decimalIndex + 1).replace(/[^\d]/g, "");
-
-  if (!integerPart && !decimalPart) {
-    return null;
-  }
-
-  if (decimalPart.length > 2) {
-    return Number.parseInt(`${integerPart}${decimalPart}`, 10);
-  }
-
-  const normalized = Number(`${integerPart || "0"}.${decimalPart || "0"}`);
-  return Number.isFinite(normalized) ? Math.round(normalized) : null;
-}
-
-function parseSignedImportAmount(value) {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return { amount: null, sign: 0 };
-  }
-
-  const amount = parseImportMoneyValue(raw);
-  if (!amount) {
-    return { amount: null, sign: 0 };
-  }
-
-  if (/\(.*\)/.test(raw) || /-\s*\d/.test(raw)) {
-    return { amount, sign: -1 };
-  }
-
-  if (/^\+/.test(raw)) {
-    return { amount, sign: 1 };
-  }
-
-  return { amount, sign: 0 };
-}
-
-function formatDateParts(year, month, day) {
-  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-function parseImportDate(value) {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "";
-  }
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    return raw;
-  }
-
-  const normalized = raw.replace(/\./g, "/").replace(/-/g, "/");
-  let match = normalized.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
-  if (match) {
-    return formatDateParts(match[1], match[2], match[3]);
-  }
-
-  match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (match) {
-    const day = Number(match[1]);
-    const month = Number(match[2]);
-    const year = Number(match[3].length === 2 ? `20${match[3]}` : match[3]);
-    return formatDateParts(year, month, day);
-  }
-
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) {
-    return "";
-  }
-
-  const offsetMs = parsed.getTimezoneOffset() * 60_000;
-  return new Date(parsed.getTime() - offsetMs).toISOString().slice(0, 10);
-}
-
-function inferImportCategory(type, rawCategory, description) {
-  const preferred = rawCategory ? findCanonicalTransactionCategory(type, rawCategory) : null;
-  if (preferred) {
-    return preferred;
-  }
-
-  const inferred = findCanonicalTransactionCategory(type, description) || null;
-  if (inferred) {
-    return inferred;
-  }
-
-  return type === "expense" ? "Belanja" : "Hadiah";
-}
-
-function buildImportPreviewData() {
-  if (!state.csvImport) {
-    return null;
-  }
-
-  const mappings = getImportMappings();
-  const previewRows = state.csvImport.rows.map((record) => {
-    const rawDate = getImportCellValue(record, mappings.date);
-    const rawDescription = getImportCellValue(record, mappings.description);
-    const rawAmount = getImportCellValue(record, mappings.amount);
-    const rawDebit = getImportCellValue(record, mappings.debit);
-    const rawCredit = getImportCellValue(record, mappings.credit);
-    const rawType = getImportCellValue(record, mappings.type);
-    const rawCategory = getImportCellValue(record, mappings.category);
-    const rawNotes = getImportCellValue(record, mappings.notes);
-
-    const debit = parseSignedImportAmount(rawDebit);
-    const credit = parseSignedImportAmount(rawCredit);
-    const amount = parseSignedImportAmount(rawAmount);
-
-    let type = parseImportTypeToken(rawType);
-    let normalizedAmount = null;
-
-    if (!type && debit.amount) {
-      type = "expense";
-      normalizedAmount = debit.amount;
-    }
-
-    if (!type && credit.amount) {
-      type = "income";
-      normalizedAmount = credit.amount;
-    }
-
-    if (!type && amount.sign === -1) {
-      type = "expense";
-      normalizedAmount = amount.amount;
-    }
-
-    if (!type && amount.sign === 1) {
-      type = "income";
-      normalizedAmount = amount.amount;
-    }
-
-    if (type && !normalizedAmount) {
-      normalizedAmount = type === "expense" ? debit.amount || amount.amount : credit.amount || amount.amount;
-    }
-
-    const normalizedDate = parseImportDate(rawDate);
-    const description = rawDescription || "Transaksi mutasi";
-    const category = type ? inferImportCategory(type, rawCategory, `${description} ${rawNotes}`) : "";
-    const notes = [rawNotes, `Import CSV: ${state.csvImport.fileName}`].filter(Boolean).join(" | ");
-
-    if (!normalizedDate) {
-      return { error: "Tanggal belum terbaca. Pilih kolom tanggal yang benar atau rapikan format tanggal di CSV.", ok: false, rowNumber: record.index + 2 };
-    }
-
-    if (!description.trim()) {
-      return { error: "Deskripsi transaksi belum terbaca.", ok: false, rowNumber: record.index + 2 };
-    }
-
-    if (!type) {
-      return {
-        error: "Tipe transaksi belum bisa ditebak. Gunakan kolom debit/kredit, kolom tipe, atau nominal bertanda plus/minus.",
-        ok: false,
-        rowNumber: record.index + 2
-      };
-    }
-
-    if (!normalizedAmount) {
-      return { error: "Nominal belum bisa dibaca dari kolom yang dipilih.", ok: false, rowNumber: record.index + 2 };
-    }
-
-    return {
-      ok: true,
-      rowNumber: record.index + 2,
-      transaction: {
-        amount: String(normalizedAmount),
-        category,
-        date: normalizedDate,
-        description,
-        notes,
-        type
-      }
-    };
-  });
-
-  const validRows = previewRows.filter((entry) => entry.ok).map((entry) => entry.transaction);
-  const invalidCount = previewRows.length - validRows.length;
-
-  return {
-    invalidCount,
-    previewRows: previewRows.slice(0, 12),
-    totalRows: previewRows.length,
-    validRows
-  };
-}
-
-function renderImportPreview() {
-  const preview = buildImportPreviewData();
-  if (!preview) {
-    return;
-  }
-
-  state.csvImport.preview = preview;
-  elements.importPreviewSection.classList.remove("is-hidden");
-  elements.importPreviewList.innerHTML = "";
-
-  elements.importPreviewSummary.textContent = `${preview.validRows.length} valid, ${preview.invalidCount} perlu perhatian, dari ${preview.totalRows} baris.`;
-
-  preview.previewRows.forEach((entry) => {
-    const item = document.createElement("article");
-    item.className = `import-preview-item ${entry.ok ? "valid" : "invalid"}`;
-
-    if (entry.ok) {
-      item.innerHTML = `
-        <div class="import-preview-row">
-          <div class="import-preview-title">
-            <strong>${escapeHTML(entry.transaction.description)}</strong>
-            <span>Baris CSV ${entry.rowNumber} • ${escapeHTML(formatDate(entry.transaction.date))}</span>
-          </div>
-          <span class="import-status valid">Siap impor</span>
-        </div>
-        <div class="import-preview-meta">
-          <span class="import-chip">${entry.transaction.type === "income" ? "Pemasukan" : "Pengeluaran"}</span>
-          <span class="import-chip">${escapeHTML(entry.transaction.category)}</span>
-          <span class="import-chip">${escapeHTML(formatCurrency(entry.transaction.amount))}</span>
-        </div>
-      `;
-    } else {
-      item.innerHTML = `
-        <div class="import-preview-row">
-          <div class="import-preview-title">
-            <strong>Baris CSV ${entry.rowNumber}</strong>
-            <span>Baris ini belum bisa diimpor.</span>
-          </div>
-          <span class="import-status invalid">Perlu cek</span>
-        </div>
-        <div class="import-preview-error">${escapeHTML(entry.error)}</div>
-      `;
-    }
-
-    elements.importPreviewList.appendChild(item);
-  });
-
-  if (preview.totalRows > preview.previewRows.length) {
-    const tail = document.createElement("div");
-    tail.className = "empty-state";
-    tail.textContent = `Preview menampilkan ${preview.previewRows.length} baris pertama dari ${preview.totalRows} baris CSV.`;
-    elements.importPreviewList.appendChild(tail);
-  }
-
-  elements.importSubmitButton.disabled = preview.validRows.length === 0;
-}
-
-async function handleImportFileChange(event) {
-  const file = event.target.files?.[0];
-  resetImportState({ preserveMessage: true });
-
-  if (!file) {
-    setImportMessage("");
-    return;
-  }
-
-  try {
-    const text = await file.text();
-    const records = buildImportRecords(parseCsvText(text.replace(/^\uFEFF/, "")));
-
-    if (!records) {
-      throw new Error("File CSV belum berisi header dan baris transaksi yang bisa diproses.");
-    }
-
-    state.csvImport = {
-      activePresetId: "generic",
-      detectedPresetId: "generic",
-      fileName: file.name,
-      headers: records.headers,
-      preview: null,
-      rows: records.rows
-    };
-
-    const detectedPreset = detectImportPreset(records.headers, file.name);
-    state.csvImport.detectedPresetId = detectedPreset.presetId;
-    state.csvImport.activePresetId = detectedPreset.presetId;
-
-    renderImportPresetOptions(detectedPreset.confidence > 0 ? "auto" : "generic");
-    renderImportColumnOptions(records.headers, detectedPreset.presetId);
-    elements.importMappingSection.classList.remove("is-hidden");
-    elements.importPreviewButton.disabled = false;
-    elements.importFileName.textContent = file.name;
-    const presetLabel = IMPORT_PRESETS[detectedPreset.presetId]?.label || "Generic CSV";
-    elements.importMetaText.textContent =
-      detectedPreset.confidence > 0
-        ? `${records.rows.length} baris transaksi terdeteksi. Preset ${presetLabel} dipilih otomatis, silakan cek lalu preview.`
-        : `${records.rows.length} baris transaksi terdeteksi. Tidak ada preset spesifik yang cocok, gunakan Generic CSV lalu cek mapping.`;
-    setImportMessage("File CSV berhasil dibaca. Lanjutkan ke preview untuk mengecek hasil normalisasi.", "success");
-  } catch (error) {
-    resetImportState();
-    if (elements.importFileInput) {
-      elements.importFileInput.value = "";
-    }
-    setImportMessage(error.message, "error");
-  }
-}
-
-function handleImportPreview() {
-  if (!state.csvImport) {
-    setImportMessage("Unggah file CSV terlebih dahulu sebelum melihat preview.", "error");
-    return;
-  }
-
-  renderImportPreview();
-  setImportMessage("Preview import berhasil diperbarui.", "success");
-}
-
-function handleImportMappingChange() {
-  if (!state.csvImport) {
-    return;
-  }
-
-  state.csvImport.preview = null;
-  if (elements.importPresetSelect && elements.importPresetSelect.value !== "auto") {
-    state.csvImport.activePresetId = elements.importPresetSelect.value;
-  }
-  elements.importSubmitButton.disabled = true;
-  if (!elements.importPreviewSection.classList.contains("is-hidden")) {
-    setImportMessage("Mapping kolom berubah. Jalankan preview lagi sebelum import.", "");
-  }
-}
-
-function handleImportPresetChange() {
-  if (!state.csvImport) {
-    return;
-  }
-
-  applyImportPreset(elements.importPresetSelect.value);
-  state.csvImport.preview = null;
-  elements.importSubmitButton.disabled = true;
-  const activePresetId =
-    elements.importPresetSelect.value === "auto"
-      ? state.csvImport.detectedPresetId || "generic"
-      : elements.importPresetSelect.value;
-  const presetLabel = IMPORT_PRESETS[activePresetId]?.label || "Generic CSV";
-  setImportMessage(`Preset ${presetLabel} diterapkan. Jalankan preview untuk memeriksa hasilnya.`, "success");
-}
-
-function populateTransactionForm(transaction) {
-  if (!transaction) {
-    return;
-  }
-
-  state.editingTransactionId = transaction.id;
-  state.transactionEntryMethod = transaction.receiptPath ? "scan" : "manual";
-  state.transactionEntryStep = "review";
-  state.transactionReviewVisited = true;
-  elements.transactionType.value = transaction.type;
-  syncTransactionCategoryOptions(transaction.category);
-  elements.transactionForm.elements.description.value = transaction.description || "";
-  elements.transactionAmount.value = formatFlexibleCurrency(transaction.amount);
-  elements.transactionForm.elements.date.value = transaction.date || todayInputValue();
-  elements.transactionForm.elements.notes.value = transaction.notes || "";
-  renderTransactionAmountHint();
-  resetTransactionReceiptState(transaction);
-  setTransactionFormMode(true);
-  elements.transactionForm.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
-}
-
-function escapeHTML(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll("\"", "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-// 30-ui.js
-async function request(path, options = {}) {
-  const response = await fetch(path, {
-    credentials: "same-origin",
-    ...options,
-    headers: {
-      ...(options.headers || {})
-    }
-  });
-
-  const raw = await response.text();
-  const payload = raw ? JSON.parse(raw) : {};
-
-  if (!response.ok) {
-    const error = new Error(payload.error || payload.message || "Terjadi kesalahan saat memproses permintaan.");
-    error.status = response.status;
-    throw error;
-  }
-
-  return payload;
-}
-
-function showAuthGate(message = "") {
-  elements.authGate.classList.remove("is-hidden");
-  elements.appShell.classList.add("is-locked");
-  elements.authMessage.textContent = message;
-}
-
-function hideAuthGate() {
-  elements.authGate.classList.add("is-hidden");
-  elements.appShell.classList.remove("is-locked");
-  elements.authMessage.textContent = "";
-}
-
-function setAuthMode(mode) {
-  state.authMode = mode;
-  const isRegister = mode === "register";
-
-  elements.loginTabButton.classList.toggle("is-active", !isRegister);
-  elements.registerTabButton.classList.toggle("is-active", isRegister);
-  elements.nameField.classList.toggle("is-hidden", !isRegister);
-  elements.authName.required = isRegister;
-  elements.authTitle.textContent = isRegister ? "Buat akun Arunika Finance" : "Masuk ke Arunika Finance";
-  elements.authSubtitle.textContent = isRegister
-    ? "Daftarkan akun baru untuk menyimpan transaksi Anda secara terpisah."
-    : "Masuk untuk mengakses dashboard keuangan pribadi. Data transaksi setiap akun dipisahkan otomatis di sistem.";
-  elements.authSubmitButton.textContent = isRegister ? "Daftar Akun" : "Masuk";
-  elements.authMessage.textContent = "";
-}
-
-function renderSession() {
-  if (state.user) {
-    elements.sessionName.textContent = state.user.name;
-    elements.sessionEmail.textContent = state.user.email;
-    elements.logoutButton.classList.remove("is-hidden");
-    return;
-  }
-
-  elements.sessionName.textContent = "Belum masuk";
-  elements.sessionEmail.textContent = "Gunakan akun demo atau daftar akun baru.";
-  elements.logoutButton.classList.add("is-hidden");
-}
-
-function renderHealth() {
-  if (!state.health) {
-    return;
-  }
-
-  const labels = {
-    local: "Chatbot lokal aktif",
-    "local-fallback": "Mode fallback lokal",
-    openai: `AI aktif - ${state.health.model}`
-  };
-
-  elements.chatModeChip.textContent = labels[state.health.chatMode] || "Mode chatbot aktif";
-}
-
-function renderTelegramStatus() {
-  if (!state.user) {
-    elements.telegramStatusText.textContent = "Masuk untuk melihat status koneksi Telegram.";
-    elements.telegramLinkButton.disabled = true;
-    elements.telegramUnlinkButton.classList.add("is-hidden");
-    elements.telegramCodeBox.classList.add("is-hidden");
-    return;
-  }
-
-  if (!state.telegramStatus) {
-    elements.telegramStatusText.textContent = "Memuat status Telegram...";
-    elements.telegramLinkButton.disabled = true;
-    elements.telegramUnlinkButton.classList.add("is-hidden");
-    elements.telegramCodeBox.classList.add("is-hidden");
-    return;
-  }
-
-  const status = state.telegramStatus;
-  elements.telegramLinkButton.disabled = !status.configured;
-  elements.telegramUnlinkButton.classList.toggle("is-hidden", !status.linked);
-
-  if (!status.configured) {
-    elements.telegramStatusText.textContent =
-      "Telegram belum dikonfigurasi di server. Isi TELEGRAM_BOT_TOKEN setelah aplikasi dihosting.";
-    elements.telegramCodeBox.classList.add("is-hidden");
-    return;
-  }
-
-  if (!status.webhookReady) {
-    elements.telegramStatusText.textContent =
-      "Bot siap, tapi APP_BASE_URL belum diisi. Webhook Telegram belum bisa didaftarkan.";
-  } else if (status.linked && status.link) {
-    const handle = status.link.username ? `@${status.link.username}` : `chat ${status.link.chatId}`;
-    elements.telegramStatusText.textContent = `Telegram sudah terhubung ke ${handle}.`;
-  } else {
-    const botHint = status.botUrl ? ` Buka bot: ${status.botUrl}` : "";
-    elements.telegramStatusText.textContent = `Bot siap dihubungkan. Tempel kode tautan dari dashboard ke chat bot.${botHint}`;
-  }
-
-  if (state.telegramCommand) {
-    elements.telegramCodeText.textContent = state.telegramCommand;
-    elements.telegramCodeMeta.textContent = "Kirim kode ini apa adanya ke bot Telegram. Bot akan memprosesnya lewat parsing teks. Kode berlaku 10 menit.";
-    elements.telegramCodeBox.classList.remove("is-hidden");
-  } else {
-    elements.telegramCodeBox.classList.add("is-hidden");
-  }
-}
-
-function clearDashboard() {
-  state.editingTransactionId = null;
-  state.summary = null;
-  state.telegramCommand = null;
-  state.telegramStatus = null;
-  state.transactions = [];
-  elements.balanceValue.textContent = "Rp0";
-  elements.incomeValue.textContent = "Rp0";
-  elements.expenseValue.textContent = "Rp0";
-  elements.savingsValue.textContent = "0%";
-  elements.balanceFoot.textContent = "Menunggu data transaksi";
-  elements.incomeFoot.textContent = "0 kategori income";
-  elements.expenseFoot.textContent = "0 kategori expense";
-  elements.savingsFoot.textContent = "Belum cukup data";
-  elements.heroSummaryText.textContent = state.user
-    ? "Memuat ringkasan keuangan terbaru."
-    : "Masuk ke akun untuk memuat ringkasan keuangan terbaru.";
-  elements.flowIncomeValue.textContent = "Rp0";
-  elements.flowExpenseValue.textContent = "Rp0";
-  elements.flowNetValue.textContent = "Rp0";
-  elements.flowIncomeMeta.textContent = "Menunggu data pemasukan";
-  elements.flowExpenseMeta.textContent = "Menunggu data pengeluaran";
-  elements.flowNetMeta.textContent = "Menunggu data neraca";
-  elements.flowIncomeBar.style.width = "0%";
-  elements.flowExpenseBar.style.width = "0%";
-  elements.flowNetBar.style.width = "0%";
-  elements.flowNetBar.classList.remove("is-negative");
-  setAnimatedValue("balance", 0);
-  setAnimatedValue("income", 0);
-  setAnimatedValue("expense", 0);
-  setAnimatedValue("savingsRate", 0);
-  setAnimatedValue("flowIncome", 0);
-  setAnimatedValue("flowExpense", 0);
-  setAnimatedValue("flowNet", 0);
-  elements.flowTimeline.innerHTML = '<div class="empty-state">Flow bulanan akan tampil setelah data transaksi tersedia.</div>';
-  elements.cashflowChart.innerHTML = '<div class="empty-state">Masuk untuk melihat arus kas bulanan.</div>';
-  elements.categoryChart.innerHTML = '<div class="empty-state">Masuk untuk melihat komposisi pengeluaran.</div>';
-  elements.insightList.innerHTML = '<div class="empty-state">Insight akan tampil setelah data akun berhasil dimuat.</div>';
-  elements.transactionTableBody.innerHTML = `
-    <tr>
-      <td colspan="6">
-        <div class="empty-state">Belum ada transaksi untuk ditampilkan.</div>
-      </td>
-    </tr>
-  `;
-  renderTelegramStatus();
-}
-
-function computeInsights(summary) {
-  if (!summary) {
-    return [];
-  }
-
-  const insights = [];
-
-  if (summary.topExpenseCategory) {
-    insights.push({
-      title: "Kategori terberat",
-      text: `${summary.topExpenseCategory.category} menyerap ${formatPercent(summary.topExpenseCategory.share)} dari total pengeluaran.`
-    });
-  }
-
-  if (summary.savingsRate < 20) {
-    insights.push({
-      title: "Rasio tabungan rendah",
-      text: `Rasio tabungan baru ${formatPercent(summary.savingsRate)}. Perlu batas mingguan untuk belanja fleksibel.`
-    });
-  } else {
-    insights.push({
-      title: "Arus kas sehat",
-      text: `Rasio tabungan ${formatPercent(summary.savingsRate)} menandakan ruang tabung masih cukup aman.`
-    });
-  }
-
-  if (summary.biggestExpense) {
-    insights.push({
-      title: "Transaksi terbesar",
-      text: `${summary.biggestExpense.description} bernilai ${formatCurrency(summary.biggestExpense.amount)} pada ${formatDate(summary.biggestExpense.date)}.`
-    });
-  }
-
-  const latestMonth = summary.monthlyCashflow[summary.monthlyCashflow.length - 1];
-  if (latestMonth) {
-    insights.push({
-      title: "Bulan terakhir",
-      text: `${formatMonth(latestMonth.month)} mencatat net ${formatCurrency(latestMonth.net)} dari pemasukan ${formatCurrency(latestMonth.income)}.`
-    });
-  }
-
-  return insights.slice(0, 4);
-}
-
-function renderSummary() {
-  const summary = state.summary;
-  if (!summary) {
-    clearDashboard();
-    return;
-  }
-
-  const previousBalance = getAnimatedValue("balance");
-  const previousIncome = getAnimatedValue("income");
-  const previousExpense = getAnimatedValue("expense");
-  const previousSavings = getAnimatedValue("savingsRate");
-
-  animateValue("balance", summary.balance, (value) => {
-    elements.balanceValue.textContent = formatCurrency(value);
-  });
-  animateValue("income", summary.totalIncome, (value) => {
-    elements.incomeValue.textContent = formatCurrency(value);
-  });
-  animateValue("expense", summary.totalExpense, (value) => {
-    elements.expenseValue.textContent = formatCurrency(value);
-  });
-  animateValue("savingsRate", summary.savingsRate, (value) => {
-    elements.savingsValue.textContent = formatPercent(value);
-  });
-
-  if (previousBalance !== null && Number(summary.balance) !== previousBalance) {
-    pulseElement(elements.balanceValue.closest(".metric"), Number(summary.balance) > previousBalance ? "up" : "down");
-  }
-
-  if (previousIncome !== null && Number(summary.totalIncome) !== previousIncome) {
-    pulseElement(
-      elements.incomeValue.closest(".metric"),
-      Number(summary.totalIncome) > previousIncome ? "up" : "down"
-    );
-  }
-
-  if (previousExpense !== null && Number(summary.totalExpense) !== previousExpense) {
-    pulseElement(
-      elements.expenseValue.closest(".metric"),
-      Number(summary.totalExpense) > previousExpense ? "up" : "down"
-    );
-  }
-
-  if (previousSavings !== null && Number(summary.savingsRate) !== previousSavings) {
-    pulseElement(
-      elements.savingsValue.closest(".metric"),
-      Number(summary.savingsRate) > previousSavings ? "up" : "down"
-    );
-  }
-
-  elements.balanceFoot.textContent = `${summary.transactionCount} transaksi tercatat`;
-  elements.incomeFoot.textContent = `${summary.incomeCategories.length} kategori income`;
-  elements.expenseFoot.textContent = `${summary.expenseCategories.length} kategori expense`;
-  elements.savingsFoot.textContent = summary.savingsRate >= 20 ? "Tabungan relatif sehat" : "Masih bisa dioptimalkan";
-
-  elements.heroSummaryText.textContent = summary.topExpenseCategory
-    ? `Saldo saat ini ${formatCurrency(summary.balance)}. Pengeluaran terbesar ada di ${summary.topExpenseCategory.category}.`
-    : `Saldo saat ini ${formatCurrency(summary.balance)}. Tambahkan transaksi untuk memperkaya analisis.`;
-
-  renderFlowStats(summary);
-}
-
-function renderFlowStats(summary) {
-  if (!summary) {
-    return;
-  }
-
-  const income = Number(summary.totalIncome) || 0;
-  const expense = Number(summary.totalExpense) || 0;
-  const balance = Number(summary.balance) || 0;
-  const previousFlowIncome = getAnimatedValue("flowIncome");
-  const previousFlowExpense = getAnimatedValue("flowExpense");
-  const previousFlowNet = getAnimatedValue("flowNet");
-  const throughput = Math.max(income + expense, 1);
-  const balanceMagnitude = Math.max(Math.abs(balance), 1);
-
-  const incomeShare = (income / throughput) * 100;
-  const expenseShare = (expense / throughput) * 100;
-  const balanceShare = Math.min((balanceMagnitude / throughput) * 100, 100);
-
-  animateValue("flowIncome", income, (value) => {
-    elements.flowIncomeValue.textContent = formatCurrency(value);
-  });
-  animateValue("flowExpense", expense, (value) => {
-    elements.flowExpenseValue.textContent = formatCurrency(value);
-  });
-  animateValue("flowNet", balance, (value) => {
-    elements.flowNetValue.textContent = formatSignedCurrency(value);
-  });
-
-  if (previousFlowIncome !== null && income !== previousFlowIncome) {
-    pulseElement(
-      elements.flowIncomeValue.closest(".flow-step"),
-      income > previousFlowIncome ? "up" : "down"
-    );
-  }
-
-  if (previousFlowExpense !== null && expense !== previousFlowExpense) {
-    pulseElement(
-      elements.flowExpenseValue.closest(".flow-step"),
-      expense > previousFlowExpense ? "up" : "down"
-    );
-  }
-
-  if (previousFlowNet !== null && balance !== previousFlowNet) {
-    pulseElement(
-      elements.flowNetValue.closest(".flow-step"),
-      balance > previousFlowNet ? "up" : "down"
-    );
-  }
-  elements.flowIncomeMeta.textContent = `${formatPercent(incomeShare)} dari total arus kas`;
-  elements.flowExpenseMeta.textContent = `${formatPercent(expenseShare)} dari total arus kas`;
-  elements.flowNetMeta.textContent =
-    balance >= 0
-      ? `Surplus ${formatCurrency(balance)} pada periode berjalan`
-      : `Defisit ${formatCurrency(Math.abs(balance))} pada periode berjalan`;
-
-  elements.flowIncomeBar.style.width = `${Math.max(incomeShare, income > 0 ? 8 : 0)}%`;
-  elements.flowExpenseBar.style.width = `${Math.max(expenseShare, expense > 0 ? 8 : 0)}%`;
-  elements.flowNetBar.style.width = `${Math.max(balanceShare, balance !== 0 ? 8 : 0)}%`;
-  elements.flowNetBar.classList.toggle("is-negative", balance < 0);
-
-  elements.flowTimeline.innerHTML = "";
-  const monthly = (summary.monthlyCashflow || []).slice(-6);
-  if (monthly.length === 0) {
-    elements.flowTimeline.innerHTML = '<div class="empty-state">Flow bulanan akan tampil setelah data transaksi tersedia.</div>';
-    return;
-  }
-
-  monthly.forEach((entry) => {
-    const node = document.createElement("article");
-    const net = Number(entry.net) || 0;
-    const trendClass = net >= 0 ? "up" : "down";
-    const trendLabel = net >= 0 ? "Surplus" : "Defisit";
-    node.className = `flow-node ${trendClass}`;
-    node.innerHTML = `
-      <span class="flow-node-month">${formatMonth(entry.month)}</span>
-      <strong class="flow-node-net">${formatSignedCurrency(net)}</strong>
-      <small class="flow-node-detail">${trendLabel} dari ${formatCurrency(entry.income)} vs ${formatCurrency(entry.expense)}</small>
-    `;
-    elements.flowTimeline.appendChild(node);
-  });
-}
-
-function renderCashflowChart() {
-  const data = state.summary?.monthlyCashflow || [];
-  elements.cashflowChart.innerHTML = "";
-
-  if (data.length === 0) {
-    elements.cashflowChart.innerHTML = '<div class="empty-state">Belum ada arus kas bulanan untuk ditampilkan.</div>';
-    return;
-  }
-
-  const maxValue = Math.max(...data.map((entry) => Math.max(Math.abs(entry.net), entry.income, entry.expense)), 1);
-
-  data.forEach((entry) => {
-    const row = document.createElement("div");
-    row.className = "chart-row";
-    row.innerHTML = `
-      <div class="chart-head">
-        <strong>${formatMonth(entry.month)}</strong>
-        <span>Net ${formatCurrency(entry.net)}</span>
-      </div>
-      <div class="chart-track">
-        <div class="chart-fill cashflow-fill" style="width:${Math.max((Math.abs(entry.net) / maxValue) * 100, 6)}%"></div>
-      </div>
-      <small>Pemasukan ${formatCurrency(entry.income)} - Pengeluaran ${formatCurrency(entry.expense)}</small>
-    `;
-    elements.cashflowChart.appendChild(row);
-  });
-}
-
-function renderCategoryChart() {
-  const data = state.summary?.expenseCategories || [];
-  elements.categoryChart.innerHTML = "";
-
-  if (data.length === 0) {
-    elements.categoryChart.innerHTML = '<div class="empty-state">Belum ada kategori pengeluaran untuk ditampilkan.</div>';
-    return;
-  }
-
-  const maxValue = Math.max(...data.map((entry) => entry.amount), 1);
-
-  data.slice(0, 6).forEach((entry) => {
-    const row = document.createElement("div");
-    row.className = "chart-row";
-    row.innerHTML = `
-      <div class="chart-head">
-        <strong>${escapeHTML(entry.category)}</strong>
-        <span>${formatCurrency(entry.amount)} - ${formatPercent(entry.share)}</span>
-      </div>
-      <div class="chart-track">
-        <div class="chart-fill" style="width:${Math.max((entry.amount / maxValue) * 100, 10)}%"></div>
-      </div>
-    `;
-    elements.categoryChart.appendChild(row);
-  });
-}
-
-function getFilteredTransactions() {
-  const query = elements.searchInput.value.trim().toLowerCase();
-  const type = elements.typeFilter.value;
-
-  return state.transactions.filter((item) => {
-    const haystack = `${item.description} ${item.category} ${item.notes || ""}`.toLowerCase();
-    return (type === "all" || item.type === type) && (!query || haystack.includes(query));
-  });
-}
-
-function renderTransactions() {
-  const rows = getFilteredTransactions();
-  elements.transactionTableBody.innerHTML = "";
-
-  if (rows.length === 0) {
-    elements.transactionTableBody.innerHTML = `
-      <tr>
-        <td colspan="6">
-          <div class="empty-state">Belum ada transaksi yang cocok dengan filter saat ini.</div>
-        </td>
-      </tr>
-    `;
-    return;
-  }
-
-  rows.forEach((item) => {
-    const row = document.createElement("tr");
-    row.className = "transaction-row";
-    const receiptThumb = item.receiptPath
-      ? `
-        <a class="receipt-thumb-link" href="${escapeHTML(getTransactionReceiptUrl(item.id))}" target="_blank" rel="noreferrer" aria-label="Buka struk untuk ${escapeHTML(item.description)}">
-          <img
-            class="receipt-thumb-image"
-            src="${escapeHTML(getTransactionReceiptUrl(item.id))}"
-            alt="Thumbnail struk ${escapeHTML(item.description)}"
-            loading="lazy"
-          />
-        </a>
-      `
-      : "";
-    const receiptAction = item.receiptPath
-      ? `<a class="receipt-link" href="${escapeHTML(getTransactionReceiptUrl(item.id))}" target="_blank" rel="noreferrer">Struk</a>`
-      : "";
-    row.innerHTML = `
-      <td data-label="Tanggal">${formatDate(item.date)}</td>
-      <td data-label="Deskripsi">
-        <div class="transaction-description">
-          ${receiptThumb}
-          <div class="transaction-description-copy">
-            <strong class="transaction-description-title">${escapeHTML(item.description)}</strong>
-            ${
-              item.notes
-                ? `<span class="transaction-description-notes">${escapeHTML(item.notes)}</span>`
-                : `<span class="transaction-description-notes is-muted">Tanpa catatan tambahan</span>`
-            }
-          </div>
-        </div>
-      </td>
-      <td data-label="Kategori">${escapeHTML(item.category)}</td>
-      <td data-label="Tipe"><span class="type-pill ${item.type}">${item.type === "income" ? "Pemasukan" : "Pengeluaran"}</span></td>
-      <td data-label="Nominal" class="amount ${item.type}">${item.type === "income" ? "+" : "-"}${formatCurrency(item.amount)}</td>
-      <td data-label="Aksi">
-        <div class="table-actions">
-          ${receiptAction}
-          <button class="edit-button" data-id="${item.id}" type="button">Edit</button>
-          <button class="delete-button" data-id="${item.id}" type="button">Hapus</button>
-        </div>
-      </td>
-    `;
-    elements.transactionTableBody.appendChild(row);
-  });
-}
-
-function renderInsights() {
-  const items = computeInsights(state.summary);
-  elements.insightList.innerHTML = "";
-
-  if (items.length === 0) {
-    elements.insightList.innerHTML = '<div class="empty-state">Insight akan muncul setelah ada transaksi.</div>';
-    return;
-  }
-
-  items.forEach((item) => {
-    const card = document.createElement("article");
-    card.className = "insight-item";
-    card.innerHTML = `<strong>${escapeHTML(item.title)}</strong><span>${escapeHTML(item.text)}</span>`;
-    elements.insightList.appendChild(card);
-  });
-}
-
-function appendChatMessage(role, content) {
-  const fragment = elements.chatTemplate.content.cloneNode(true);
-  const bubble = fragment.querySelector(".chat-bubble");
-  const roleLabel = fragment.querySelector(".chat-role");
-  const text = fragment.querySelector(".chat-text");
-
-  bubble.classList.add(role);
-  roleLabel.textContent = role === "assistant" ? "Asisten" : "Anda";
-  text.textContent = content;
-  elements.chatMessages.appendChild(fragment);
-  elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
-}
-
-function resetChat() {
-  elements.chatMessages.innerHTML = "";
-  state.chatHistory = [];
-
-  const intro = state.user
-    ? `Halo ${state.user.name}, saya siap membantu menganalisis kondisi keuangan akun Anda.`
-    : "Silakan masuk terlebih dahulu agar saya dapat membaca data keuangan akun Anda.";
-
-  appendChatMessage("assistant", intro);
-  state.chatHistory.push({ role: "assistant", content: intro });
-}
-
-// 40-main.js
+// actions/auth.js
 function handleUnauthorized(error) {
   if (error?.status !== 401) {
     return false;
@@ -2528,6 +2533,71 @@ async function handleLogout() {
   }
 }
 
+// actions/chat.js
+async function sendChatMessage(message) {
+  if (!state.user) {
+    showAuthGate("Silakan masuk sebelum menggunakan chatbot.");
+    return;
+  }
+
+  appendChatMessage("user", message);
+  state.chatHistory.push({ role: "user", content: message });
+
+  const button = elements.chatForm.querySelector("button[type='submit']");
+
+  try {
+    button.disabled = true;
+    button.textContent = "Mengirim...";
+
+    const payload = await request("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        history: state.chatHistory.slice(-8),
+        message
+      })
+    });
+
+    if (state.health) {
+      state.health.chatMode =
+        payload.mode === "openai" ? "openai" : payload.mode === "local" ? "local" : "local-fallback";
+      renderHealth();
+    }
+
+    appendChatMessage("assistant", payload.reply);
+    state.chatHistory.push({ role: "assistant", content: payload.reply });
+
+    if (payload.action === "transaction-created") {
+      await reloadDashboard();
+    }
+  } catch (error) {
+    if (handleUnauthorized(error)) {
+      return;
+    }
+
+    const fallback = `Maaf, saya belum dapat memproses pesan Anda. ${error.message}`;
+    appendChatMessage("assistant", fallback);
+    state.chatHistory.push({ role: "assistant", content: fallback });
+  } finally {
+    button.disabled = false;
+    button.textContent = "Kirim";
+  }
+}
+
+async function handleChatSubmit(event) {
+  event.preventDefault();
+  const message = elements.chatInput.value.trim();
+  if (!message) {
+    return;
+  }
+
+  elements.chatInput.value = "";
+  await sendChatMessage(message);
+}
+
+// actions/telegram.js
 async function handleGenerateTelegramLinkCode() {
   if (!state.user) {
     showAuthGate("Silakan masuk sebelum menghubungkan Telegram.");
@@ -2568,6 +2638,7 @@ async function handleTelegramUnlink() {
   }
 }
 
+// actions/transactions.js
 async function handleTransactionSubmit(event) {
   event.preventDefault();
   if (!state.user) {
@@ -2693,69 +2764,7 @@ async function handleDelete(event) {
   }
 }
 
-async function sendChatMessage(message) {
-  if (!state.user) {
-    showAuthGate("Silakan masuk sebelum menggunakan chatbot.");
-    return;
-  }
-
-  appendChatMessage("user", message);
-  state.chatHistory.push({ role: "user", content: message });
-
-  const button = elements.chatForm.querySelector("button[type='submit']");
-
-  try {
-    button.disabled = true;
-    button.textContent = "Mengirim...";
-
-    const payload = await request("/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        history: state.chatHistory.slice(-8),
-        message
-      })
-    });
-
-    if (state.health) {
-      state.health.chatMode =
-        payload.mode === "openai" ? "openai" : payload.mode === "local" ? "local" : "local-fallback";
-      renderHealth();
-    }
-
-    appendChatMessage("assistant", payload.reply);
-    state.chatHistory.push({ role: "assistant", content: payload.reply });
-
-    if (payload.action === "transaction-created") {
-      await reloadDashboard();
-    }
-  } catch (error) {
-    if (handleUnauthorized(error)) {
-      return;
-    }
-
-    const fallback = `Maaf, saya belum dapat memproses pesan Anda. ${error.message}`;
-    appendChatMessage("assistant", fallback);
-    state.chatHistory.push({ role: "assistant", content: fallback });
-  } finally {
-    button.disabled = false;
-    button.textContent = "Kirim";
-  }
-}
-
-async function handleChatSubmit(event) {
-  event.preventDefault();
-  const message = elements.chatInput.value.trim();
-  if (!message) {
-    return;
-  }
-
-  elements.chatInput.value = "";
-  await sendChatMessage(message);
-}
-
+// bootstrap.js
 function bindEvents() {
   elements.loginTabButton.addEventListener("click", () => setAuthMode("login"));
   elements.registerTabButton.addEventListener("click", () => setAuthMode("register"));

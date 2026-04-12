@@ -12,17 +12,28 @@ const FILES_TO_CHECK = [
   "transaction-categories.js",
   "register-telegram-webhook.js",
   "scripts/test-modules.js",
+  "scripts/test-routes.js",
   "src/server/auth/session.js",
   "src/server/app.js",
   "src/server/http.js",
   "src/server/data/database.js",
+  "src/server/observability/logger.js",
   "src/client/transaction-amount.js",
   "src/client/transaction-categories.js",
-  "src/client/app/00-core.js",
-  "src/client/app/10-receipts.js",
-  "src/client/app/20-import.js",
-  "src/client/app/30-ui.js",
-  "src/client/app/40-main.js",
+  "src/client/app/core/runtime.js",
+  "src/client/app/core/escape-html.js",
+  "src/client/app/render/app-shell.js",
+  "src/client/app/render/dashboard.js",
+  "src/client/app/render/chat.js",
+  "src/client/app/transactions/receipt-flow.js",
+  "src/client/app/transactions/import-state.js",
+  "src/client/app/transactions/import.js",
+  "src/client/app/transactions/form.js",
+  "src/client/app/actions/auth.js",
+  "src/client/app/actions/telegram.js",
+  "src/client/app/actions/transactions.js",
+  "src/client/app/actions/chat.js",
+  "src/client/app/bootstrap.js",
   "src/server/routes/auth.js",
   "src/server/routes/chat.js",
   "src/server/index.js",
@@ -37,6 +48,7 @@ const FILES_TO_CHECK = [
 
 runNodeScript(path.join(ROOT, "scripts", "sync-public.js"));
 runNodeScript(path.join(ROOT, "scripts", "test-modules.js"));
+runNodeScript(path.join(ROOT, "scripts", "test-routes.js"));
 
 for (const relativePath of FILES_TO_CHECK) {
   runNodeCommand(["--check", path.join(ROOT, relativePath)]);

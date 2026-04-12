@@ -49,6 +49,26 @@ function runReceiptParserTests() {
   assert.strictEqual(retailSuggestion.type, "expense");
   assert.ok(/alfamart/i.test(retailSuggestion.description));
 
+  const noisyRetailSuggestion = parser.buildReceiptSuggestionFromOcrText(
+    [
+      "JATINANGOR KM.20 SUMEDA",
+      "14.09.16-06:46 2.0.31 914115/ALIA MU/01",
+      "S/ROTI KRIM KEJU 72G 4 4500 18,000",
+      "CMORY MIX BERRY 225 1 8500 8,500",
+      "HARGA JUAL : 35,200",
+      "TOTAL : 33,900",
+      "TUNAI : 40,000",
+      "KEMBALI : 6,100",
+      "LAYANAN KONSUMEN INDOMARET",
+      "CALL 1500580"
+    ].join("\n"),
+    "expense"
+  );
+
+  assert.strictEqual(noisyRetailSuggestion.amount, 33900);
+  assert.ok(/indomaret/i.test(noisyRetailSuggestion.description));
+  assert.ok(!/layanan konsumen/i.test(noisyRetailSuggestion.description));
+
   const atmSuggestion = parser.buildReceiptSuggestionFromOcrText(
     [
       "ATM BCA",
@@ -65,6 +85,22 @@ function runReceiptParserTests() {
   assert.strictEqual(atmSuggestion.type, "income");
   assert.strictEqual(atmSuggestion.amount, 1500000);
   assert.ok(/setoran tunai/i.test(atmSuggestion.description));
+
+  const transferSuggestion = parser.buildReceiptSuggestionFromOcrText(
+    [
+      "m-Transfer:",
+      "BERHASIL",
+      "09/04/2026 19:21:07",
+      "Ke 7580639181",
+      "DADI SOBANA",
+      "Rp 200.000,00"
+    ].join("\n"),
+    ""
+  );
+
+  assert.strictEqual(transferSuggestion.amount, 200000);
+  assert.strictEqual(transferSuggestion.type, "expense");
+  assert.ok(/transfer/i.test(transferSuggestion.description));
 }
 
 function runTransactionServiceTests() {
