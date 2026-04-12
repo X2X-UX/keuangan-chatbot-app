@@ -1091,6 +1091,7 @@ function looksLikeReceiptItemPriceLine(line) {
 
 function scoreReceiptAmountValue(rawAmount, amount, line = "") {
   const digitsLength = String(rawAmount || "").replace(/[^\d]/g, "").length;
+  const normalizedLine = String(line || "").toLowerCase();
   let score = 0;
 
   if (/\brp\b/i.test(rawAmount)) {
@@ -1127,11 +1128,24 @@ function scoreReceiptAmountValue(rawAmount, amount, line = "") {
     score -= 4;
   }
 
+  if (/\d{2}[./-]\d{2}[./-]\d{2,4}/.test(normalizedLine) || /\d{2}:\d{2}/.test(normalizedLine)) {
+    score -= 6;
+  }
+
+  if ((normalizedLine.match(/\//g) || []).length >= 2) {
+    score -= 8;
+  }
+
+  if (/\b[a-z]{2,}\d{2,}|\d{4,}\/[a-z]/i.test(line)) {
+    score -= 6;
+  }
+
   return score;
 }
 
 function extractReceiptAmountByLabels(text, labels = []) {
   const lines = normalizeReceiptOcrLines(text);
+  const hasStrongFinalLine = hasReceiptStrongFinalAmountLine(text);
   let bestCandidate = null;
 
   for (const labelSpec of labels) {
@@ -1144,13 +1158,21 @@ function extractReceiptAmountByLabels(text, labels = []) {
     const pattern = new RegExp(`^${escapeReceiptRegex(label)}\\s*[:=]?\\s*(.+)$`, "i");
     const standalonePattern = new RegExp(`^${escapeReceiptRegex(label)}\\s*[:=]?$`, "i");
 
-    for (const line of lines) {
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (hasStrongFinalLine && (isReceiptSubtotalLine(line) || isReceiptNonFinalSummaryLine(line))) {
+        continue;
+      }
+
       const match = line.match(pattern);
       if (match?.[1]) {
         for (const candidate of extractReceiptAmountCandidatesFromLine(match[1])) {
           const scoredCandidate = {
             amount: candidate.amount,
-            score: labelScore + scoreReceiptAmountValue(candidate.raw, candidate.amount, line),
+            score:
+              labelScore +
+              scoreReceiptAmountLine(line, index, lines.length) +
+              scoreReceiptAmountValue(candidate.raw, candidate.amount, line),
             line
           };
 
@@ -1170,10 +1192,18 @@ function extractReceiptAmountByLabels(text, labels = []) {
         continue;
       }
 
+      if (hasStrongFinalLine && (isReceiptSubtotalLine(lines[index]) || isReceiptNonFinalSummaryLine(lines[index]))) {
+        continue;
+      }
+
       for (const candidate of extractReceiptAmountCandidatesFromLine(lines[index + 1] || "")) {
         const scoredCandidate = {
           amount: candidate.amount,
-          score: labelScore + 1 + scoreReceiptAmountValue(candidate.raw, candidate.amount, lines[index + 1] || ""),
+          score:
+            labelScore +
+            1 +
+            scoreReceiptAmountLine(lines[index], index, lines.length) +
+            scoreReceiptAmountValue(candidate.raw, candidate.amount, lines[index + 1] || ""),
           line: lines[index + 1] || ""
         };
 
@@ -1197,7 +1227,17 @@ function extractReceiptAmountByLabels(text, labels = []) {
 
 function extractReceiptStoreName(text) {
   const lines = normalizeReceiptOcrLines(text);
-  return lines.find((line) => /\b(indomaret|alfamart|alfamidi|superindo|hypermart|minimarket|bca|dana|gopay|ovo|tokopedia)\b/i.test(line)) || "";
+  const skipPattern =
+    /\b(layanan konsumen|kontak|email|promo|www\.|website|bantuan|customer service|call|sms)\b/i;
+
+  const exactMerchantLine = lines.find(
+    (line) => !skipPattern.test(line) && /^(indomaret|indomaret fresh|alfamart|alfamidi|superindo|hypermart|bca|dana|gopay|ovo|tokopedia)\b/i.test(line)
+  );
+  if (exactMerchantLine) {
+    return exactMerchantLine;
+  }
+
+  return lines.find((line) => !skipPattern.test(line) && /\b(indomaret|alfamart|alfamidi|superindo|hypermart|minimarket|bca|dana|gopay|ovo|tokopedia)\b/i.test(line)) || "";
 }
 
 function isBcaAtmReceipt(text) {
@@ -1251,7 +1291,7 @@ function extractReceiptBalance(text) {
 function extractReceiptBranchName(text) {
   const lines = normalizeReceiptOcrLines(text);
   const skipPattern =
-    /\b(pt|gedung|npwp|jl\.|jalan|kec\.|kab|kota|jakarta|slip|pembayaran|merchant|biller|deskripsi|amount|total|tunai|referensi|kode pembayaran)\b/i;
+    /\b(pt|gedung|npwp|jl\.|jalan|kec\.|kab|kota|jakarta|slip|pembayaran|merchant|biller|deskripsi|amount|total|tunai|referensi|kode pembayaran|layanan konsumen|call|sms|email|promo|www\.|website|bantuan)\b/i;
 
   return (
     lines.find((line) => {
@@ -1631,7 +1671,9 @@ function pickReceiptNotesFromText(text) {
     extractReceiptValueByLabels(text, ["Pembayaran ke"]) || extractReceiptValueAfterStandaloneLabels(text, ["Pembayaran ke"]);
   const qrisAcquirer =
     extractReceiptValueByLabels(text, ["Pengakuisisi"]) || extractReceiptValueAfterStandaloneLabels(text, ["Pengakuisisi"]);
-  const orderStatus = extractReceiptValueByLabels(text, ["Status Order", "Status"]);
+  const orderStatus =
+    extractReceiptValueByLabels(text, ["Status Order", "Status"]) ||
+    extractReceiptValueAfterStandaloneLabels(text, ["Status Order", "Status"]);
   const thermalTxnCode = extractReceiptLineMatching(text, /^\d{2}[./-]\d{2}[./-]\d{2,4}-\d{2}:\d{2}\/.+$/i);
   const atmSequence = extractReceiptSequence(text);
   const atmBalance = extractReceiptBalance(text);
