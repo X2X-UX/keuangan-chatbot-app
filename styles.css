@@ -1173,6 +1173,20 @@ th {
   line-height: 1.55;
 }
 
+.transaction-review-summary.is-ocr-warning {
+  border-color: rgba(201, 126, 12, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(255, 250, 238, 0.95)),
+    rgba(201, 126, 12, 0.08);
+}
+
+.transaction-review-summary.is-ready {
+  border-color: rgba(14, 139, 118, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(240, 252, 248, 0.95)),
+    rgba(14, 139, 118, 0.08);
+}
+
 .transaction-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1208,6 +1222,12 @@ th {
   background: rgba(255, 247, 245, 0.92);
 }
 
+.transaction-field.is-ai-warning {
+  border-color: rgba(201, 126, 12, 0.2);
+  box-shadow: 0 0 0 4px rgba(201, 126, 12, 0.09);
+  background: rgba(255, 251, 241, 0.95);
+}
+
 .transaction-field-head {
   display: flex;
   align-items: center;
@@ -1226,6 +1246,11 @@ th {
   font-weight: 800;
   letter-spacing: 0.02em;
   white-space: nowrap;
+}
+
+.transaction-review-chip.is-ai-warning {
+  background: rgba(201, 126, 12, 0.14);
+  color: #9f5f00;
 }
 
 .field-hint {

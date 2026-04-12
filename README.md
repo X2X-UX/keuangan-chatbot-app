@@ -106,9 +106,11 @@ npm.cmd run test:telegram
 
 Cakupannya:
 - foto struk Telegram -> OCR draft
-- edit cepat draft (`kategori ...`, `merchant ...`, `catatan ...`)
+- edit cepat draft (`kategori ...`, `merchant ...`, `catatan ...`, `hapus kategori`, `set default kategori`, `hapus catatan`)
 - `lihat draft`
 - `reset draft`
+- callback tombol cepat (`Simpan`, `Batal`, `Lihat Draft`)
+- validasi low-confidence (`cek nominal`, `cek tanggal`, `cek kategori`, `cek semua`) sebelum simpan
 - `simpan`
 - `batal`
 

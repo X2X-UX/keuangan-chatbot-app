@@ -1858,13 +1858,14 @@ function renderTransactionOCRError() {
   elements.transactionOCRErrorManualButton.disabled = isAnalyzing;
 }
 
-function setTransactionReviewChip(element, text = "") {
+function setTransactionReviewChip(element, text = "", options = {}) {
   if (!element) {
     return;
   }
 
   const hasText = Boolean(String(text || "").trim());
   element.textContent = text;
+  element.classList.toggle("is-ai-warning", hasText && options.tone === "ai");
   element.classList.toggle("is-hidden", !hasText);
 }
 
@@ -1873,36 +1874,66 @@ function renderTransactionReviewAssist() {
   const amount = parseFlexibleAmount(elements.transactionAmount.value);
   const category = elements.transactionCategory.value.trim();
   const date = elements.transactionForm.elements.date.value.trim();
+  const receiptState = state.transactionReceipt || createTransactionReceiptState();
+  const requiresManualOcrReview =
+    state.transactionEntryMethod === "scan" &&
+    (receiptState.ocrReviewLevel === "low" || receiptState.ocrReviewLevel === "medium");
+  const aiWarnings = {
+    amount: requiresManualOcrReview && Boolean(amount),
+    category: requiresManualOcrReview && Boolean(category),
+    date: requiresManualOcrReview && Boolean(date),
+    description: false
+  };
   const states = {
-    amount: amount ? "" : "Cek nominal",
-    category: category ? "" : "Pilih kategori",
-    date: date ? "" : "Pilih tanggal",
+    amount: amount ? (aiWarnings.amount ? "Verifikasi AI" : "") : "Cek nominal",
+    category: category ? (aiWarnings.category ? "Verifikasi AI" : "") : "Pilih kategori",
+    date: date ? (aiWarnings.date ? "Verifikasi AI" : "") : "Pilih tanggal",
     description: description ? "" : "Perlu diisi"
   };
-  const issues = Object.entries(states).filter(([, message]) => Boolean(message));
+  const issues = Object.entries(states).filter(([, message]) => Boolean(message) && message !== "Verifikasi AI");
   const isScanFlow = state.transactionEntryMethod === "scan";
+  const reviewAlert = requiresManualOcrReview ? receiptState.ocrReviewAlert : "";
 
-  setTransactionReviewChip(elements.transactionReviewChipAmount, states.amount);
-  setTransactionReviewChip(elements.transactionReviewChipCategory, states.category);
-  setTransactionReviewChip(elements.transactionReviewChipDate, states.date);
+  setTransactionReviewChip(elements.transactionReviewChipAmount, states.amount, {
+    tone: aiWarnings.amount ? "ai" : ""
+  });
+  setTransactionReviewChip(elements.transactionReviewChipCategory, states.category, {
+    tone: aiWarnings.category ? "ai" : ""
+  });
+  setTransactionReviewChip(elements.transactionReviewChipDate, states.date, {
+    tone: aiWarnings.date ? "ai" : ""
+  });
   setTransactionReviewChip(elements.transactionReviewChipDescription, states.description);
 
-  elements.transactionFieldAmount.classList.toggle("is-needs-review", Boolean(states.amount));
-  elements.transactionFieldCategory.classList.toggle("is-needs-review", Boolean(states.category));
-  elements.transactionFieldDate.classList.toggle("is-needs-review", Boolean(states.date));
+  elements.transactionFieldAmount.classList.toggle("is-needs-review", Boolean(states.amount) && !aiWarnings.amount);
+  elements.transactionFieldAmount.classList.toggle("is-ai-warning", aiWarnings.amount);
+  elements.transactionFieldCategory.classList.toggle("is-needs-review", Boolean(states.category) && !aiWarnings.category);
+  elements.transactionFieldCategory.classList.toggle("is-ai-warning", aiWarnings.category);
+  elements.transactionFieldDate.classList.toggle("is-needs-review", Boolean(states.date) && !aiWarnings.date);
+  elements.transactionFieldDate.classList.toggle("is-ai-warning", aiWarnings.date);
   elements.transactionFieldDescription.classList.toggle("is-needs-review", Boolean(states.description));
+  elements.transactionReviewSummary.classList.toggle("is-ocr-warning", requiresManualOcrReview);
+  elements.transactionReviewSummary.classList.toggle("is-ready", !requiresManualOcrReview && issues.length === 0);
 
-  if (issues.length > 0) {
+  if (issues.length > 0 || requiresManualOcrReview) {
+    if (requiresManualOcrReview && issues.length === 0) {
+      elements.transactionReviewSummaryTitle.textContent = "Perlu verifikasi hasil OCR";
+      elements.transactionReviewSummaryText.textContent =
+        "Cek manual nominal, tanggal, dan kategori sebelum simpan. " +
+        (reviewAlert ? `Catatan OCR: ${reviewAlert}` : "Klik field yang diberi label Verifikasi AI.");
+      return;
+    }
+
     elements.transactionReviewSummaryTitle.textContent =
       issues.length === 1 ? "1 field utama perlu dicek" : `${issues.length} field utama perlu dicek`;
-    elements.transactionReviewSummaryText.textContent = `Periksa ${issues
+    elements.transactionReviewSummaryText.textContent = `${requiresManualOcrReview ? "Selain itu, verifikasi AI juga diperlukan. " : ""}Periksa ${issues
       .map(([field]) => {
         if (field === "amount") return "nominal";
         if (field === "category") return "kategori";
         if (field === "date") return "tanggal";
         return "deskripsi";
       })
-      .join(", ")} sebelum transaksi disimpan.`;
+      .join(", ")} sebelum transaksi disimpan.${reviewAlert ? ` Catatan OCR: ${reviewAlert}` : ""}`;
     return;
   }
 
@@ -2038,6 +2069,9 @@ function createTransactionReceiptState() {
     analysisMessage: "",
     existingUrl: "",
     hasExisting: false,
+    ocrReviewAlert: "",
+    ocrReviewFlags: [],
+    ocrReviewLevel: "high",
     removeRequested: false,
     upload: null
   };
@@ -2255,6 +2289,9 @@ async function handleTransactionReceiptChange(event) {
     ocrOptimized: optimizedReceipt.optimized
   };
   state.transactionReceipt.analysisMessage = "";
+  state.transactionReceipt.ocrReviewAlert = "";
+  state.transactionReceipt.ocrReviewFlags = [];
+  state.transactionReceipt.ocrReviewLevel = "high";
   state.transactionReceipt.removeRequested = false;
   renderTransactionReceiptPanel();
 }
@@ -2377,6 +2414,16 @@ async function handleTransactionReceiptAnalyze() {
     });
 
     applyReceiptSuggestion(payload.suggestion);
+    state.transactionReceipt.ocrReviewLevel =
+      payload.suggestion?.reviewLevel === "low"
+        ? "low"
+        : payload.suggestion?.reviewLevel === "medium"
+          ? "medium"
+          : "high";
+    state.transactionReceipt.ocrReviewAlert = String(payload.suggestion?.reviewAlert || "").trim();
+    state.transactionReceipt.ocrReviewFlags = Array.isArray(payload.suggestion?.reviewFlags)
+      ? payload.suggestion.reviewFlags.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 8)
+      : [];
     state.transactionReceipt.analysisMessage =
       payload.message || "Form sudah diisi dari struk. Mohon cek kembali sebelum menyimpan transaksi.";
     setTransactionReceiptError("");

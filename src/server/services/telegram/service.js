@@ -115,13 +115,36 @@ function createTelegramService({
     return chunks.length > 0 ? chunks : ["-"];
   }
 
-  async function sendTelegramMessage(chatId, text) {
-    for (const chunk of chunkTelegramText(text)) {
+  async function sendTelegramMessage(chatId, text, options = {}) {
+    const chunks = chunkTelegramText(text);
+
+    for (let index = 0; index < chunks.length; index += 1) {
+      const chunk = chunks[index];
+      const isLastChunk = index === chunks.length - 1;
       await sendTelegramApiRequest("sendMessage", {
         chat_id: chatId,
-        text: chunk
+        text: chunk,
+        ...(isLastChunk && options.replyMarkup ? { reply_markup: options.replyMarkup } : {})
       });
     }
+  }
+
+  function buildReceiptDraftReplyMarkup(draft) {
+    const inlineKeyboard = [
+      [
+        { text: "Simpan", callback_data: "draft_save" },
+        { text: "Batal", callback_data: "draft_cancel" },
+        { text: "Lihat Draft", callback_data: "draft_preview" }
+      ]
+    ];
+
+    if (draft?.reviewState?.required) {
+      inlineKeyboard.push([{ text: "Cek Semua", callback_data: "draft_check_all" }]);
+    }
+
+    return {
+      inline_keyboard: inlineKeyboard
+    };
   }
 
   function getMimeTypeFromTelegramFilePath(filePath) {
@@ -169,25 +192,41 @@ function createTelegramService({
     drafts.delete(String(chatId));
   }
 
-  function formatTelegramReceiptDraftReply(suggestion) {
-    return [
+  function formatTelegramReceiptDraftReply(draft) {
+    const suggestion = draft?.suggestion || {};
+    const lines = [
       formatReceiptSuggestionForTelegram(suggestion),
       "",
       "Balas `simpan` untuk mencatat transaksi ini.",
       "Balas `batal` untuk membuang hasil OCR.",
       "Balas `lihat draft` untuk melihat draft saat ini.",
       "Balas `reset draft` untuk kembali ke hasil OCR awal.",
+      "Balas `cek nominal`, `cek tanggal`, `cek kategori`, atau `cek semua` untuk konfirmasi cek manual.",
       "Edit cepat juga didukung:",
       "- `tipe pemasukan`",
       "- `tipe pengeluaran`",
       "- `kategori Makanan`",
+      "- `hapus kategori`",
+      "- `set default kategori`",
       "- `deskripsi Topup GoPay`",
       "- `merchant Alfamart`",
       "- `toko Indomaret Fresh`",
       "- `catatan dibayar tunai`",
+      "- `hapus catatan`",
       "- `nominal 800000`",
       "- `tanggal 2026-04-12`"
-    ].join("\n");
+    ];
+
+    const reviewState = draft?.reviewState || null;
+    if (reviewState?.required) {
+      lines.push("");
+      lines.push("Checklist verifikasi (wajib karena confidence OCR belum tinggi):");
+      lines.push(`- Nominal: ${reviewState.checks.amount ? "Sudah dicek" : "Perlu dicek"}`);
+      lines.push(`- Tanggal: ${reviewState.checks.date ? "Sudah dicek" : "Perlu dicek"}`);
+      lines.push(`- Kategori: ${reviewState.checks.category ? "Sudah dicek" : "Perlu dicek"}`);
+    }
+
+    return lines.join("\n");
   }
 
   function extractTelegramLinkCode(text) {
@@ -232,6 +271,14 @@ function createTelegramService({
       return { action: "reset" };
     }
 
+    const checkMatch = command.match(/^cek\s+(nominal|tanggal|kategori|semua)$/i);
+    if (checkMatch?.[1]) {
+      return {
+        action: "confirm",
+        field: checkMatch[1].toLowerCase()
+      };
+    }
+
     const typeMatch = command.match(/^tipe\s+(pemasukan|pengeluaran|income|expense)$/i);
     if (typeMatch?.[1]) {
       return {
@@ -250,6 +297,10 @@ function createTelegramService({
           category: sanitizeText(categoryMatch[1], 60)
         }
       };
+    }
+
+    if (/^hapus\s+kategori$/i.test(command) || /^set\s+default\s+kategori$/i.test(command) || /^default\s+kategori$/i.test(command)) {
+      return { action: "default-category" };
     }
 
     const merchantMatch = command.match(/^(?:merchant|toko)\s+(.+)$/i);
@@ -278,6 +329,15 @@ function createTelegramService({
         action: "patch",
         patch: {
           notes: sanitizeText(notesMatch[1], 240)
+        }
+      };
+    }
+
+    if (/^hapus\s+catatan$/i.test(command)) {
+      return {
+        action: "patch",
+        patch: {
+          notes: ""
         }
       };
     }
@@ -323,9 +383,30 @@ function createTelegramService({
     }
 
     const nextSuggestion = sanitizeTransaction(nextPayload);
+    const nextReviewChecks = {
+      amount: Boolean(draft?.reviewState?.checks?.amount),
+      category: Boolean(draft?.reviewState?.checks?.category),
+      date: Boolean(draft?.reviewState?.checks?.date)
+    };
+
+    if (Object.prototype.hasOwnProperty.call(patch, "amount")) {
+      nextReviewChecks.amount = true;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, "date")) {
+      nextReviewChecks.date = true;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, "category")) {
+      nextReviewChecks.category = true;
+    }
 
     return {
       ...draft,
+      reviewState: {
+        checks: nextReviewChecks,
+        required: Boolean(draft?.reviewState?.required)
+      },
       suggestion: {
         ...nextSuggestion,
         reviewAlert: draft.suggestion.reviewAlert || "",
@@ -339,10 +420,87 @@ function createTelegramService({
   function resetTelegramReceiptDraft(draft) {
     return {
       ...draft,
+      reviewState: createReceiptDraftReviewState(draft.originalSuggestion),
       suggestion: {
         ...draft.originalSuggestion
       },
       expiresAt: Date.now() + draftTtlMs
+    };
+  }
+
+  function resolveDefaultDraftCategory(draft) {
+    const type = draft?.suggestion?.type === "income" ? "income" : "expense";
+    return (
+      inferTransactionCategory(type, `${draft?.suggestion?.description || ""} ${draft?.suggestion?.notes || ""}`) ||
+      (type === "income" ? "Hadiah" : "Belanja")
+    );
+  }
+
+  function createReceiptDraftReviewState(suggestion) {
+    const reviewLevel = suggestion?.reviewLevel === "low" ? "low" : suggestion?.reviewLevel === "medium" ? "medium" : "high";
+    const required = reviewLevel !== "high";
+    return {
+      checks: {
+        amount: !required,
+        category: !required,
+        date: !required
+      },
+      required
+    };
+  }
+
+  function confirmReceiptDraftChecks(draft, field) {
+    const nextChecks = {
+      amount: Boolean(draft?.reviewState?.checks?.amount),
+      category: Boolean(draft?.reviewState?.checks?.category),
+      date: Boolean(draft?.reviewState?.checks?.date)
+    };
+
+    if (field === "semua") {
+      nextChecks.amount = true;
+      nextChecks.category = true;
+      nextChecks.date = true;
+    } else if (field === "nominal") {
+      nextChecks.amount = true;
+    } else if (field === "tanggal") {
+      nextChecks.date = true;
+    } else if (field === "kategori") {
+      nextChecks.category = true;
+    }
+
+    return {
+      ...draft,
+      reviewState: {
+        checks: nextChecks,
+        required: Boolean(draft?.reviewState?.required)
+      },
+      expiresAt: Date.now() + draftTtlMs
+    };
+  }
+
+  function validateReceiptDraftBeforeSave(draft) {
+    if (!draft?.reviewState?.required) {
+      return {
+        ok: true
+      };
+    }
+
+    const missing = [];
+    if (!draft.reviewState.checks.amount) {
+      missing.push("nominal");
+    }
+
+    if (!draft.reviewState.checks.date) {
+      missing.push("tanggal");
+    }
+
+    if (!draft.reviewState.checks.category) {
+      missing.push("kategori");
+    }
+
+    return {
+      missing,
+      ok: missing.length === 0
     };
   }
 
@@ -408,7 +566,7 @@ function createTelegramService({
 
     const payload = {
       url: getTelegramWebhookUrl(),
-      allowed_updates: ["message"]
+      allowed_updates: ["message", "callback_query"]
     };
 
     if (secretToken) {
@@ -423,8 +581,10 @@ function createTelegramService({
       "Bot Telegram Arunika membaca pesan teks biasa.",
       "Bot juga bisa menerima foto struk atau bukti transfer untuk dibacakan OCR.",
       "Setelah OCR selesai, balas `simpan` untuk mencatat transaksi atau `batal` untuk membuang draft.",
+      "Shortcut tombol cepat juga tersedia: Simpan, Batal, dan Lihat Draft.",
       "Jika tipe transaksi perlu dibetulkan, balas `tipe pemasukan` atau `tipe pengeluaran`.",
-      "Anda juga bisa balas `lihat draft`, `reset draft`, `merchant ...`, atau `catatan ...` untuk mengoreksi hasil OCR.",
+      "Anda juga bisa balas `lihat draft`, `reset draft`, `merchant ...`, `catatan ...`, `hapus kategori`, atau `set default kategori` untuk mengoreksi hasil OCR.",
+      "Jika confidence OCR masih rendah, cek manual dulu dengan `cek nominal`, `cek tanggal`, `cek kategori`, atau `cek semua`.",
       "Kategori transaksi mengikuti pilihan utama di form web.",
       "Anda bisa langsung kirim:",
       "- kode tautan dari dashboard web untuk menghubungkan akun",
@@ -474,15 +634,24 @@ function createTelegramService({
       }
 
       const suggestion = await activeReceiptAnalyzer.analyzeReceipt(receiptUpload, preferredType);
+      const reviewState = createReceiptDraftReviewState(suggestion);
       setTelegramReceiptDraft(chatId, {
         linkedUserId: linked.user.id,
         originalSuggestion: {
           ...suggestion
         },
         receiptUpload,
+        reviewState,
         suggestion
       });
-      await sendTelegramMessage(chatId, formatTelegramReceiptDraftReply(suggestion));
+      await sendTelegramMessage(chatId, formatTelegramReceiptDraftReply({
+        reviewState,
+        suggestion
+      }), {
+        replyMarkup: buildReceiptDraftReplyMarkup({
+          reviewState
+        })
+      });
     } catch (error) {
       await sendTelegramMessage(chatId, `Foto belum bisa dibaca: ${error.message || "Terjadi kesalahan saat OCR."}`);
     }
@@ -569,18 +738,59 @@ function createTelegramService({
       }
 
       if (draftCommand.action === "preview") {
-        await sendTelegramMessage(chatId, formatTelegramReceiptDraftReply(receiptDraft.suggestion));
+        await sendTelegramMessage(chatId, formatTelegramReceiptDraftReply(receiptDraft), {
+          replyMarkup: buildReceiptDraftReplyMarkup(receiptDraft)
+        });
         return;
       }
 
       if (draftCommand.action === "reset") {
         const resetDraft = resetTelegramReceiptDraft(receiptDraft);
         setTelegramReceiptDraft(chatId, resetDraft);
-        await sendTelegramMessage(chatId, formatTelegramReceiptDraftReply(resetDraft.suggestion));
+        await sendTelegramMessage(chatId, formatTelegramReceiptDraftReply(resetDraft), {
+          replyMarkup: buildReceiptDraftReplyMarkup(resetDraft)
+        });
+        return;
+      }
+
+      if (draftCommand.action === "confirm") {
+        const confirmedDraft = confirmReceiptDraftChecks(receiptDraft, draftCommand.field);
+        setTelegramReceiptDraft(chatId, confirmedDraft);
+        await sendTelegramMessage(chatId, formatTelegramReceiptDraftReply(confirmedDraft), {
+          replyMarkup: buildReceiptDraftReplyMarkup(confirmedDraft)
+        });
+        return;
+      }
+
+      if (draftCommand.action === "default-category") {
+        try {
+          const updatedDraft = applyTelegramReceiptDraftPatch(receiptDraft, {
+            category: resolveDefaultDraftCategory(receiptDraft)
+          });
+          setTelegramReceiptDraft(chatId, updatedDraft);
+          await sendTelegramMessage(chatId, formatTelegramReceiptDraftReply(updatedDraft), {
+            replyMarkup: buildReceiptDraftReplyMarkup(updatedDraft)
+          });
+        } catch (error) {
+          await sendTelegramMessage(chatId, `Kategori default belum bisa dipakai: ${error.message || "Terjadi kesalahan."}`);
+        }
+
         return;
       }
 
       if (draftCommand.action === "save") {
+        const draftValidation = validateReceiptDraftBeforeSave(receiptDraft);
+        if (!draftValidation.ok) {
+          await sendTelegramMessage(
+            chatId,
+            `Sebelum simpan, mohon cek manual ${draftValidation.missing.join(", ")} dulu karena confidence OCR masih perlu verifikasi. Balas \`cek nominal\`, \`cek tanggal\`, \`cek kategori\`, atau \`cek semua\`.`,
+            {
+              replyMarkup: buildReceiptDraftReplyMarkup(receiptDraft)
+            }
+          );
+          return;
+        }
+
         try {
           const transaction = await saveTelegramReceiptDraftTransaction(linked.user.id, receiptDraft);
           clearTelegramReceiptDraft(chatId);
@@ -605,7 +815,9 @@ function createTelegramService({
         try {
           const updatedDraft = applyTelegramReceiptDraftPatch(receiptDraft, draftCommand.patch);
           setTelegramReceiptDraft(chatId, updatedDraft);
-          await sendTelegramMessage(chatId, formatTelegramReceiptDraftReply(updatedDraft.suggestion));
+          await sendTelegramMessage(chatId, formatTelegramReceiptDraftReply(updatedDraft), {
+            replyMarkup: buildReceiptDraftReplyMarkup(updatedDraft)
+          });
         } catch (error) {
           await sendTelegramMessage(chatId, `Perubahan draft belum bisa dipakai: ${error.message || "Format belum sesuai."}`);
         }
@@ -617,7 +829,7 @@ function createTelegramService({
     if (receiptDraft) {
       await sendTelegramMessage(
         chatId,
-        "Masih ada draft hasil OCR yang belum diputuskan. Balas `simpan`, `batal`, `lihat draft`, `reset draft`, atau ubah dengan `tipe ...`, `kategori ...`, `merchant ...`, `deskripsi ...`, `catatan ...`, `nominal ...`, `tanggal ...`."
+        "Masih ada draft hasil OCR yang belum diputuskan. Balas `simpan`, `batal`, `lihat draft`, `reset draft`, `cek nominal/tanggal/kategori/semua`, atau ubah dengan `tipe ...`, `kategori ...`, `hapus kategori`, `set default kategori`, `merchant ...`, `deskripsi ...`, `catatan ...`, `hapus catatan`, `nominal ...`, `tanggal ...`."
       );
       return;
     }
@@ -633,7 +845,46 @@ function createTelegramService({
     await sendTelegramMessage(chatId, result.reply);
   }
 
+  async function handleTelegramCallbackQuery(callbackQuery) {
+    const callbackId = callbackQuery?.id;
+    const chatId = callbackQuery?.message?.chat?.id;
+    const data = String(callbackQuery?.data || "").trim().toLowerCase();
+
+    if (!callbackId || !chatId) {
+      return;
+    }
+
+    const mappedText =
+      data === "draft_save"
+        ? "simpan"
+        : data === "draft_cancel"
+          ? "batal"
+          : data === "draft_preview"
+            ? "lihat draft"
+            : data === "draft_check_all"
+              ? "cek semua"
+              : "";
+
+    await sendTelegramApiRequest("answerCallbackQuery", {
+      callback_query_id: callbackId
+    });
+
+    if (!mappedText) {
+      return;
+    }
+
+    await handleTelegramTextMessage({
+      chat: { id: chatId },
+      text: mappedText
+    });
+  }
+
   async function handleTelegramUpdate(update) {
+    if (update?.callback_query) {
+      await handleTelegramCallbackQuery(update.callback_query);
+      return;
+    }
+
     if (!update?.message) {
       return;
     }

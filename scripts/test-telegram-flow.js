@@ -22,6 +22,7 @@ async function run() {
   const drafts = new Map();
   const storedTransactions = [];
   const sentMessages = [];
+  const answeredCallbacks = [];
   const linkedUser = { id: "user-1", email: "telegram@example.com" };
 
   global.fetch = async (url, options = {}) => {
@@ -41,7 +42,10 @@ async function run() {
 
     if (normalizedUrl.includes("/sendMessage")) {
       const payload = JSON.parse(String(options.body || "{}"));
-      sentMessages.push(payload.text);
+      sentMessages.push({
+        replyMarkup: payload.reply_markup || null,
+        text: payload.text
+      });
       return {
         ok: true,
         json: async () => ({
@@ -49,6 +53,18 @@ async function run() {
           result: {
             message_id: sentMessages.length
           }
+        })
+      };
+    }
+
+    if (normalizedUrl.includes("/answerCallbackQuery")) {
+      const payload = JSON.parse(String(options.body || "{}"));
+      answeredCallbacks.push(payload.callback_query_id);
+      return {
+        ok: true,
+        json: async () => ({
+          ok: true,
+          result: true
         })
       };
     }
@@ -73,7 +89,7 @@ async function run() {
       notes: "OCR test",
       reviewAlert: "",
       reviewFlags: [],
-      reviewLevel: "high",
+      reviewLevel: "low",
       type: preferredType || "expense"
     }),
     appBaseUrl: "https://example.com",
@@ -140,53 +156,14 @@ async function run() {
   });
 
   assert.strictEqual(drafts.size, 1);
-  assert.ok(sentMessages.some((entry) => /Sedang membaca foto struk/i.test(entry)));
-  assert.ok(sentMessages.some((entry) => /Balas `simpan`/i.test(entry)));
-
-  await telegramService.handleTelegramUpdate({
-    message: {
-      chat: { id: 123, type: "private" },
-      text: "lihat draft"
-    }
-  });
-
-  assert.ok(sentMessages.some((entry) => /Hasil baca struk:/i.test(entry)));
-
-  await telegramService.handleTelegramUpdate({
-    message: {
-      chat: { id: 123, type: "private" },
-      text: "kategori Belanja"
-    }
-  });
-
-  assert.ok(sentMessages.some((entry) => /Belanja/i.test(entry)));
-
-  await telegramService.handleTelegramUpdate({
-    message: {
-      chat: { id: 123, type: "private" },
-      text: "merchant Alfamart Dadap"
-    }
-  });
-
-  assert.ok(sentMessages.some((entry) => /Alfamart Dadap/i.test(entry)));
-
-  await telegramService.handleTelegramUpdate({
-    message: {
-      chat: { id: 123, type: "private" },
-      text: "catatan dibayar tunai"
-    }
-  });
-
-  assert.ok(sentMessages.some((entry) => /dibayar tunai/i.test(entry)));
-
-  await telegramService.handleTelegramUpdate({
-    message: {
-      chat: { id: 123, type: "private" },
-      text: "reset draft"
-    }
-  });
-
-  assert.ok(sentMessages.some((entry) => /Transfer ke DANA/i.test(entry)));
+  assert.ok(sentMessages.some((entry) => /Sedang membaca foto struk/i.test(entry.text)));
+  assert.ok(sentMessages.some((entry) => /Balas `simpan`/i.test(entry.text)));
+  assert.ok(sentMessages.some((entry) => /Checklist verifikasi/i.test(entry.text)));
+  assert.ok(
+    sentMessages.some((entry) =>
+      entry.replyMarkup?.inline_keyboard?.some((row) => row.some((button) => button.callback_data === "draft_save"))
+    )
+  );
 
   await telegramService.handleTelegramUpdate({
     message: {
@@ -195,13 +172,106 @@ async function run() {
     }
   });
 
+  assert.strictEqual(storedTransactions.length, 0);
+  assert.ok(sentMessages.some((entry) => /Sebelum simpan, mohon cek manual/i.test(entry.text)));
+
+  await telegramService.handleTelegramUpdate({
+    callback_query: {
+      id: "cb-preview-1",
+      data: "draft_preview",
+      message: {
+        chat: { id: 123, type: "private" }
+      }
+    }
+  });
+
+  assert.ok(answeredCallbacks.includes("cb-preview-1"));
+  assert.ok(sentMessages.some((entry) => /Hasil baca struk:/i.test(entry.text)));
+
+  await telegramService.handleTelegramUpdate({
+    message: {
+      chat: { id: 123, type: "private" },
+      text: "kategori Belanja"
+    }
+  });
+
+  assert.ok(sentMessages.some((entry) => /Belanja/i.test(entry.text)));
+
+  await telegramService.handleTelegramUpdate({
+    message: {
+      chat: { id: 123, type: "private" },
+      text: "hapus kategori"
+    }
+  });
+
+  assert.ok(sentMessages.some((entry) => /Transfer/i.test(entry.text)));
+
+  await telegramService.handleTelegramUpdate({
+    message: {
+      chat: { id: 123, type: "private" },
+      text: "merchant Alfamart Dadap"
+    }
+  });
+
+  assert.ok(sentMessages.some((entry) => /Alfamart Dadap/i.test(entry.text)));
+
+  await telegramService.handleTelegramUpdate({
+    message: {
+      chat: { id: 123, type: "private" },
+      text: "catatan dibayar tunai"
+    }
+  });
+
+  assert.ok(sentMessages.some((entry) => /dibayar tunai/i.test(entry.text)));
+
+  await telegramService.handleTelegramUpdate({
+    message: {
+      chat: { id: 123, type: "private" },
+      text: "hapus catatan"
+    }
+  });
+
+  assert.ok(sentMessages.some((entry) => /- Catatan: ?$/im.test(entry.text)));
+
+  await telegramService.handleTelegramUpdate({
+    message: {
+      chat: { id: 123, type: "private" },
+      text: "reset draft"
+    }
+  });
+
+  assert.ok(sentMessages.some((entry) => /Transfer ke DANA/i.test(entry.text)));
+
+  await telegramService.handleTelegramUpdate({
+    callback_query: {
+      id: "cb-check-all-1",
+      data: "draft_check_all",
+      message: {
+        chat: { id: 123, type: "private" }
+      }
+    }
+  });
+
+  assert.ok(answeredCallbacks.includes("cb-check-all-1"));
+
+  await telegramService.handleTelegramUpdate({
+    callback_query: {
+      id: "cb-save-1",
+      data: "draft_save",
+      message: {
+        chat: { id: 123, type: "private" }
+      }
+    }
+  });
+
+  assert.ok(answeredCallbacks.includes("cb-save-1"));
   assert.strictEqual(drafts.size, 0);
   assert.strictEqual(storedTransactions.length, 1);
   assert.strictEqual(storedTransactions[0].category, "Transfer");
   assert.strictEqual(storedTransactions[0].description, "Transfer ke DANA");
   assert.strictEqual(storedTransactions[0].notes, "OCR test");
   assert.strictEqual(storedTransactions[0].receiptPath, "receipts/test-receipt.jpg");
-  assert.ok(sentMessages.some((entry) => /berhasil disimpan/i.test(entry)));
+  assert.ok(sentMessages.some((entry) => /berhasil disimpan/i.test(entry.text)));
 
   await telegramService.handleTelegramUpdate({
     message: {
@@ -214,14 +284,18 @@ async function run() {
   assert.strictEqual(drafts.size, 1);
 
   await telegramService.handleTelegramUpdate({
-    message: {
-      chat: { id: 123, type: "private" },
-      text: "batal"
+    callback_query: {
+      id: "cb-cancel-1",
+      data: "draft_cancel",
+      message: {
+        chat: { id: 123, type: "private" }
+      }
     }
   });
 
+  assert.ok(answeredCallbacks.includes("cb-cancel-1"));
   assert.strictEqual(drafts.size, 0);
-  assert.ok(sentMessages.some((entry) => /dibatalkan/i.test(entry)));
+  assert.ok(sentMessages.some((entry) => /dibatalkan/i.test(entry.text)));
 }
 
 function sanitizeText(value, maxLength) {
