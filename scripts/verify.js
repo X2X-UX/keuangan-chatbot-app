@@ -10,7 +10,20 @@ const FILES_TO_CHECK = [
   "database.next.js",
   "transaction-amount.js",
   "transaction-categories.js",
-  "register-telegram-webhook.js"
+  "register-telegram-webhook.js",
+  "src/server/auth/session.js",
+  "src/server/app.js",
+  "src/server/http.js",
+  "src/server/routes/auth.js",
+  "src/server/routes/chat.js",
+  "src/server/index.js",
+  "src/server/routes/system.js",
+  "src/server/routes/telegram.js",
+  "src/server/routes/transactions.js",
+  "src/server/services/receipts/analyzer.js",
+  "src/server/services/receipts/parser.js",
+  "src/server/services/telegram/service.js",
+  "src/server/services/transactions/service.js"
 ];
 
 runNodeScript(path.join(ROOT, "scripts", "sync-public.js"));
