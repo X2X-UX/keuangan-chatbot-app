@@ -944,6 +944,96 @@ function normalizeReceiptOcrLines(text) {
     .filter(Boolean);
 }
 
+function escapeReceiptRegex(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractReceiptValueByLabels(text, labels = []) {
+  const lines = normalizeReceiptOcrLines(text);
+
+  for (const label of labels) {
+    const pattern = new RegExp(`^${escapeReceiptRegex(label)}\\s*[:=]?\\s*(.+)$`, "i");
+    for (const line of lines) {
+      const match = line.match(pattern);
+      if (match?.[1]) {
+        return sanitizeText(match[1], 160);
+      }
+    }
+  }
+
+  return "";
+}
+
+function extractReceiptValueAfterStandaloneLabels(text, labels = []) {
+  const lines = normalizeReceiptOcrLines(text);
+
+  for (const label of labels) {
+    const exactPattern = new RegExp(`^${escapeReceiptRegex(label)}\\s*[:=]?$`, "i");
+    for (let index = 0; index < lines.length; index += 1) {
+      if (!exactPattern.test(lines[index])) {
+        continue;
+      }
+
+      const nextValue = sanitizeText(lines[index + 1] || "", 160);
+      if (nextValue) {
+        return nextValue;
+      }
+    }
+  }
+
+  return "";
+}
+
+function extractReceiptLineMatching(text, pattern) {
+  return normalizeReceiptOcrLines(text).find((line) => pattern.test(line)) || "";
+}
+
+function extractReceiptAmountByLabels(text, labels = []) {
+  const lines = normalizeReceiptOcrLines(text);
+
+  for (const label of labels) {
+    const pattern = new RegExp(`^${escapeReceiptRegex(label)}\\s*[:=]?\\s*(.+)$`, "i");
+    for (const line of lines) {
+      const match = line.match(pattern);
+      if (!match?.[1]) {
+        continue;
+      }
+
+      const amount = parseFlexibleAmount(match[1]);
+      if (amount && amount > 0) {
+        return amount;
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractReceiptStoreName(text) {
+  const lines = normalizeReceiptOcrLines(text);
+  return lines.find((line) => /\b(indomaret|alfamart|alfamidi|superindo|hypermart|minimarket|bca|dana|gopay|ovo|tokopedia)\b/i.test(line)) || "";
+}
+
+function extractReceiptBranchName(text) {
+  const lines = normalizeReceiptOcrLines(text);
+  const skipPattern =
+    /\b(pt|gedung|npwp|jl\.|jalan|kec\.|kab|kota|jakarta|slip|pembayaran|merchant|biller|deskripsi|amount|total|tunai|referensi|kode pembayaran)\b/i;
+
+  return (
+    lines.find((line) => {
+      if (line.length < 4 || line.length > 40) {
+        return false;
+      }
+
+      if (skipPattern.test(line)) {
+        return false;
+      }
+
+      return /^[A-Z0-9\s.-]+$/.test(line);
+    }) || ""
+  );
+}
+
 function extractReceiptDateFromText(text) {
   const raw = String(text || "");
   const patterns = [
@@ -973,14 +1063,40 @@ function scoreReceiptAmountLine(line) {
     score += 2;
   }
 
+  if (/^\s*(rp\.?\s*)?\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?\s*$/i.test(text)) {
+    score += 4;
+  }
+
   if (/\b(subtotal|tax|ppn|pb1|service|diskon|discount|voucher|kembalian|change|rounding|admin)\b/.test(text)) {
     score -= 4;
+  }
+
+  if (/\b(ref|referensi|reference|kode pembayaran|payment code|npwp|pan|terminal|merchant pan|customer pan|id transaksi|id order|nomor|rekening|account|akun dana)\b/.test(text)) {
+    score -= 8;
   }
 
   return score;
 }
 
 function extractReceiptAmountFromText(text) {
+  const labeledAmount =
+    extractReceiptAmountByLabels(text, [
+      "Total Amount",
+      "Total Belanja",
+      "Rp. Bayar",
+      "Rp Bayar",
+      "Total Bayar",
+      "Grand Total",
+      "Jumlah",
+      "Amount Due",
+      "Net Total"
+    ]) ||
+    extractReceiptAmountByLabels(text, ["Amount", "Nominal"]);
+
+  if (labeledAmount) {
+    return labeledAmount;
+  }
+
   const lines = normalizeReceiptOcrLines(text);
   let bestCandidate = null;
 
@@ -1030,10 +1146,71 @@ function inferReceiptTypeFromText(text, preferredType = "") {
   return "expense";
 }
 
+function extractBcaTransferRecipient(text) {
+  const lines = normalizeReceiptOcrLines(text);
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/^ke\s+\d+/i.test(lines[index])) {
+      continue;
+    }
+
+    const nextLine = sanitizeText(lines[index + 1] || "", 120);
+    if (nextLine && !/\b(rp|jumlah|berhasil|m-?transfer)\b/i.test(nextLine)) {
+      return nextLine;
+    }
+  }
+
+  if (lines.some((line) => /^dana$/i.test(line))) {
+    return "DANA";
+  }
+
+  return "";
+}
+
 function pickReceiptDescriptionFromText(text, preferredType = "") {
+  const raw = String(text || "");
+
+  if (/\bpembayaran qris berhasil\b/i.test(raw)) {
+    const qrisMerchant =
+      extractReceiptValueByLabels(text, ["Pembayaran ke"]) || extractReceiptValueAfterStandaloneLabels(text, ["Pembayaran ke"]);
+    if (qrisMerchant) {
+      return `Pembayaran QRIS ke ${qrisMerchant}`;
+    }
+
+    return "Pembayaran QRIS";
+  }
+
+  const danaTransferMatch = raw.match(/kirim uang(?:\s+rp[\d.,]+)?\s+ke\s+(.+?)(?=\s*-\s*\d|\s*$)/i);
+  if (danaTransferMatch?.[1]) {
+    return sanitizeText(`Kirim Uang ke ${danaTransferMatch[1]}`, 120);
+  }
+
+  if (/\bm-?transfer\b/i.test(raw)) {
+    const recipient = extractBcaTransferRecipient(text);
+    if (recipient) {
+      return `Transfer ke ${recipient}`;
+    }
+
+    return "Transfer BCA";
+  }
+
+  const explicitDescription = extractReceiptValueByLabels(text, ["Deskripsi", "Description", "Keterangan", "Desc"]);
+  if (explicitDescription) {
+    return explicitDescription;
+  }
+
+  const merchantBiller = extractReceiptValueByLabels(text, ["Merchant/Biller", "Merchant", "Biller"]);
+  if (merchantBiller) {
+    if (/\b(top\s*up|topup|isi saldo)\b/i.test(text)) {
+      return `Topup ${merchantBiller}`;
+    }
+
+    return merchantBiller;
+  }
+
   const lines = normalizeReceiptOcrLines(text);
   const skipPattern =
-    /\b(struk|receipt|invoice|nota|tanggal|date|jam|time|kasir|cashier|total|subtotal|tax|ppn|service|discount|diskon|payment|metode|change|kembalian|qris|debit|credit)\b/i;
+    /\b(struk|receipt|invoice|nota|tanggal|date|jam|time|kasir|cashier|total|subtotal|tax|ppn|service|discount|diskon|payment|metode|change|kembalian|qris|debit|credit|merchant|biller|referensi|kode pembayaran|pelanggan)\b/i;
 
   for (const line of lines) {
     if (!/[a-z]/i.test(line)) {
@@ -1055,6 +1232,75 @@ function pickReceiptDescriptionFromText(text, preferredType = "") {
 }
 
 function pickReceiptNotesFromText(text) {
+  const merchantBiller = extractReceiptValueByLabels(text, ["Merchant/Biller", "Merchant", "Biller"]);
+  const customerName = extractReceiptValueByLabels(text, ["Nama Pelanggan", "Pelanggan", "Customer"]);
+  const reference = extractReceiptValueByLabels(text, ["No. Referensi", "No Referensi", "Referensi", "Reference", "Ref"]);
+  const paymentCode = extractReceiptValueByLabels(text, ["Kode Pembayaran", "Payment Code"]);
+  const danaAccount =
+    extractReceiptValueByLabels(text, ["Akun DANA"]) || extractReceiptValueAfterStandaloneLabels(text, ["Akun DANA"]);
+  const transactionId =
+    extractReceiptValueByLabels(text, ["ID Transaksi"]) || extractReceiptValueAfterStandaloneLabels(text, ["ID Transaksi"]);
+  const qrisMerchant =
+    extractReceiptValueByLabels(text, ["Pembayaran ke"]) || extractReceiptValueAfterStandaloneLabels(text, ["Pembayaran ke"]);
+  const qrisAcquirer =
+    extractReceiptValueByLabels(text, ["Pengakuisisi"]) || extractReceiptValueAfterStandaloneLabels(text, ["Pengakuisisi"]);
+  const transferDestination = extractReceiptLineMatching(text, /^ke\s+\d+/i);
+  const danaDnid = extractReceiptLineMatching(text, /^dnid\b/i);
+  const storeName = extractReceiptStoreName(text);
+  const branchName = extractReceiptBranchName(text);
+  const parts = [storeName, branchName];
+
+  if (merchantBiller) {
+    parts.push(`Merchant ${merchantBiller}`);
+  }
+
+  if (customerName) {
+    parts.push(`Pelanggan ${customerName}`);
+  }
+
+  if (reference) {
+    parts.push(`Ref ${reference}`);
+  }
+
+  if (paymentCode) {
+    parts.push(`Kode ${paymentCode}`);
+  }
+
+  if (transferDestination) {
+    parts.push(transferDestination);
+  }
+
+  if (danaDnid) {
+    parts.push(danaDnid);
+  }
+
+  if (danaAccount) {
+    parts.push(`Akun ${danaAccount}`);
+  }
+
+  if (transactionId) {
+    parts.push(`Trx ${transactionId}`);
+  }
+
+  if (qrisMerchant) {
+    parts.push(`Merchant ${qrisMerchant}`);
+  }
+
+  if (qrisAcquirer) {
+    parts.push(`Akuisisi ${qrisAcquirer}`);
+  }
+
+  const note = sanitizeText(
+    [...new Set(parts.filter(Boolean))]
+      .join(" - ")
+      .replace(/\s+-\s+-/g, " - "),
+    240
+  );
+
+  if (note) {
+    return note;
+  }
+
   const lines = normalizeReceiptOcrLines(text);
   const noteLine = lines.find((line) => /\b(inv|invoice|ref|trx|transaction|order|kasir|payment|metode)\b/i.test(line));
   return noteLine || "Hasil OCR.space";
@@ -1062,11 +1308,12 @@ function pickReceiptNotesFromText(text) {
 
 function buildReceiptSuggestionFromOcrText(text, preferredType = "") {
   const type = inferReceiptTypeFromText(text, preferredType);
+  const merchant = extractReceiptValueByLabels(text, ["Merchant/Biller", "Merchant", "Biller"]);
   const description = pickReceiptDescriptionFromText(text, type);
   const amount = extractReceiptAmountFromText(text);
   const date = extractReceiptDateFromText(text);
   const notes = pickReceiptNotesFromText(text);
-  const category = inferTransactionCategory(type, `${description} ${notes}`) || (type === "income" ? "Hadiah" : "Belanja");
+  const category = inferTransactionCategory(type, `${description} ${merchant} ${notes}`) || (type === "income" ? "Hadiah" : "Belanja");
 
   return sanitizeReceiptSuggestion(
     {
@@ -1074,6 +1321,7 @@ function buildReceiptSuggestionFromOcrText(text, preferredType = "") {
       category,
       date,
       description,
+      merchant,
       notes,
       type
     },
@@ -1487,6 +1735,68 @@ async function sendTelegramMessage(chatId, text) {
   }
 }
 
+function getMimeTypeFromTelegramFilePath(filePath) {
+  return MIME_TYPES[path.extname(String(filePath || "")).toLowerCase()] || "image/jpeg";
+}
+
+function getPreferredReceiptTypeFromText(text = "") {
+  const raw = String(text || "").toLowerCase();
+  if (/\b(pemasukan|income|uang masuk|transfer masuk)\b/.test(raw)) {
+    return "income";
+  }
+
+  if (/\b(pengeluaran|expense|bayar|belanja|topup|transfer|qris)\b/.test(raw)) {
+    return "expense";
+  }
+
+  return "";
+}
+
+function formatReceiptSuggestionForTelegram(suggestion) {
+  const lines = [
+    "Hasil baca struk:",
+    `- Tipe: ${suggestion.type === "income" ? "Pemasukan" : "Pengeluaran"}`,
+    `- Deskripsi: ${suggestion.description || "-"}`,
+    `- Nominal: ${formatCurrency(suggestion.amount)}`,
+    `- Tanggal: ${suggestion.date || "-"}`,
+    `- Kategori: ${suggestion.category || "-"}`,
+    `- Catatan: ${suggestion.notes || "-"}`
+  ];
+
+  return lines.join("\n");
+}
+
+async function downloadTelegramPhotoUpload(message) {
+  const photoList = Array.isArray(message?.photo) ? message.photo : [];
+  const picked = photoList[photoList.length - 1];
+  if (!picked?.file_id) {
+    return null;
+  }
+
+  const file = await sendTelegramApiRequest("getFile", {
+    file_id: picked.file_id
+  });
+
+  if (!file?.file_path) {
+    throw new Error("Telegram tidak mengembalikan path file foto.");
+  }
+
+  const response = await fetch(`https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${file.file_path}`, {
+    signal: AbortSignal.timeout(25_000)
+  });
+
+  if (!response.ok) {
+    throw new Error("Gagal mengunduh foto struk dari Telegram.");
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    fileName: path.basename(file.file_path),
+    mimeType: getMimeTypeFromTelegramFilePath(file.file_path)
+  };
+}
+
 async function ensureTelegramWebhook() {
   if (!hasTelegramWebhookConfig()) {
     return null;
@@ -1507,11 +1817,13 @@ async function ensureTelegramWebhook() {
 function telegramHelpText() {
   return [
     "Bot Telegram Arunika membaca pesan teks biasa.",
+    "Bot juga bisa menerima foto struk atau bukti transfer untuk dibacakan OCR.",
     "Kategori transaksi mengikuti pilihan utama di form web.",
     "Anda bisa langsung kirim:",
     "- kode tautan dari dashboard web untuk menghubungkan akun",
     "- `pengeluaran 25rb makan siang kategori Makanan`",
     "- `pemasukan 1,5jt gaji kategori Gaji`",
+    "- foto struk dengan caption opsional seperti `pengeluaran` atau `pemasukan`",
     "- pertanyaan bebas seperti `ringkasan keuangan saya`",
     "",
     "Format nominal fleksibel: 15000, 15.000, Rp15.000, 15rb, 1,5jt",
@@ -1524,6 +1836,37 @@ function telegramHelpText() {
     "",
     "Anda juga tetap bisa memakai format `catat ...` jika lebih nyaman."
   ].join("\n");
+}
+
+async function handleTelegramPhotoMessage(message) {
+  const chatId = message.chat?.id;
+  if (!chatId) {
+    return;
+  }
+
+  const linked = getTelegramLinkByChatId(chatId);
+  if (!linked) {
+    await sendTelegramMessage(
+      chatId,
+      "Chat ini belum terhubung ke akun Arunika Finance. Masuk ke web app, buat kode Telegram, lalu kirim atau tempel kode tautan ke bot ini."
+    );
+    return;
+  }
+
+  try {
+    await sendTelegramMessage(chatId, "Sedang membaca foto struk...");
+    const receiptUpload = await downloadTelegramPhotoUpload(message);
+    if (!receiptUpload) {
+      await sendTelegramMessage(chatId, "Foto struk belum ditemukan. Coba kirim ulang sebagai gambar.");
+      return;
+    }
+
+    const preferredType = getPreferredReceiptTypeFromText(message.caption || "");
+    const suggestion = await analyzeReceipt(receiptUpload, preferredType);
+    await sendTelegramMessage(chatId, formatReceiptSuggestionForTelegram(suggestion));
+  } catch (error) {
+    await sendTelegramMessage(chatId, `Foto belum bisa dibaca: ${error.message || "Terjadi kesalahan saat OCR."}`);
+  }
 }
 
 async function handleTelegramTextMessage(message) {
@@ -1605,6 +1948,11 @@ async function handleTelegramTextMessage(message) {
 
 async function handleTelegramUpdate(update) {
   if (!update?.message) {
+    return;
+  }
+
+  if (Array.isArray(update.message.photo) && update.message.photo.length > 0) {
+    await handleTelegramPhotoMessage(update.message);
     return;
   }
 
