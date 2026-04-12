@@ -11,10 +11,18 @@ const FILES_TO_CHECK = [
   "transaction-amount.js",
   "transaction-categories.js",
   "register-telegram-webhook.js",
+  "scripts/test-modules.js",
   "src/server/auth/session.js",
   "src/server/app.js",
   "src/server/http.js",
   "src/server/data/database.js",
+  "src/client/transaction-amount.js",
+  "src/client/transaction-categories.js",
+  "src/client/app/00-core.js",
+  "src/client/app/10-receipts.js",
+  "src/client/app/20-import.js",
+  "src/client/app/30-ui.js",
+  "src/client/app/40-main.js",
   "src/server/routes/auth.js",
   "src/server/routes/chat.js",
   "src/server/index.js",
@@ -28,6 +36,7 @@ const FILES_TO_CHECK = [
 ];
 
 runNodeScript(path.join(ROOT, "scripts", "sync-public.js"));
+runNodeScript(path.join(ROOT, "scripts", "test-modules.js"));
 
 for (const relativePath of FILES_TO_CHECK) {
   runNodeCommand(["--check", path.join(ROOT, relativePath)]);

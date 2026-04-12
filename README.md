@@ -31,7 +31,7 @@ npm.cmd start
 4. Buka browser ke `http://localhost:3000` (atau port dari env `PORT`).
 
 Catatan:
-- Saat `npm start` atau `npm run dev`, file frontend root (`index.html`, `styles.css`, `app.js`) otomatis disinkronkan ke folder `public/`.
+- Saat `npm start` atau `npm run dev`, source frontend di `src/client/` otomatis dirakit lalu disinkronkan ke root assets (`index.html`, `styles.css`, `app.js`, dst.) dan ke folder `public/`.
 - Backend menerapkan header keamanan HTTP, rate limit API, serta validasi origin untuk endpoint mutasi.
 - Sebelum push ke GitHub, jalankan verifikasi cepat:
 
@@ -39,7 +39,52 @@ Catatan:
 npm.cmd run verify
 ```
 
-Perintah ini akan menyinkronkan aset `public/` lalu mengecek sintaks file JavaScript utama.
+Perintah ini akan menyinkronkan aset frontend, menjalankan test modul ringan, lalu mengecek sintaks file JavaScript utama.
+
+## Struktur proyek
+
+Source utama sekarang dipusatkan di folder `src/`:
+
+```text
+src/
+  client/
+    index.html
+    styles.css
+    transaction-categories.js
+    transaction-amount.js
+    app/
+      00-core.js
+      10-receipts.js
+      20-import.js
+      30-ui.js
+      40-main.js
+  server/
+    app.js
+    index.js
+    auth/
+    data/
+    routes/
+    services/
+```
+
+Catatan struktur:
+- `src/client/` adalah source of truth frontend.
+- `src/server/` adalah source of truth backend.
+- File legacy seperti `server.js`, `server.next.js`, `database.js`, dan `database.next.js` sekarang hanya wrapper kompatibilitas.
+- Root `app.js` dan asset frontend root lain adalah output sinkronisasi dari `src/client/`.
+
+## Test ringan
+
+Selain `verify`, tersedia juga test modul ringan untuk area yang paling rawan berubah:
+
+```powershell
+npm.cmd run test:light
+```
+
+Saat ini test ringan mencakup:
+- parsing nominal fleksibel
+- parser OCR receipt
+- helper transaksi dasar
 
 ## Instal sebagai aplikasi HP (PWA)
 

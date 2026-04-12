@@ -1,3 +1,4 @@
+// 00-core.js
 const state = {
   authMode: "login",
   chatHistory: [],
@@ -467,6 +468,7 @@ function syncTransactionCategoryOptions(preferredValue) {
   elements.transactionCategory.value = nextValue;
 }
 
+// 10-receipts.js
 function renderTransactionAmountHint() {
   const rawValue = elements.transactionAmount.value.trim();
   if (!rawValue) {
@@ -1255,6 +1257,7 @@ function detectCsvDelimiter(text) {
   return semicolonCount > commaCount ? ";" : ",";
 }
 
+// 20-import.js
 function parseCsvText(text) {
   const rows = [];
   let current = "";
@@ -1878,6 +1881,7 @@ function escapeHTML(value) {
     .replaceAll("'", "&#39;");
 }
 
+// 30-ui.js
 async function request(path, options = {}) {
   const response = await fetch(path, {
     credentials: "same-origin",
@@ -2408,6 +2412,7 @@ function resetChat() {
   state.chatHistory.push({ role: "assistant", content: intro });
 }
 
+// 40-main.js
 function handleUnauthorized(error) {
   if (error?.status !== 401) {
     return false;
