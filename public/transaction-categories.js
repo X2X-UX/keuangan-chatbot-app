@@ -4,6 +4,7 @@
       "Makanan",
       "Transportasi",
       "Tagihan",
+      "Transfer",
       "Belanja",
       "Kesehatan",
       "Pendidikan",
@@ -16,6 +17,7 @@
       "Bonus",
       "Penjualan",
       "Investasi",
+      "Transfer",
       "Hadiah"
     ]
   };
@@ -25,6 +27,18 @@
       Makanan: ["makan", "makanan", "kuliner", "sarapan", "makan siang", "makan malam", "snack", "jajan"],
       Transportasi: ["transport", "transportasi", "bensin", "bbm", "parkir", "ojek", "tol", "kereta", "bus"],
       Tagihan: ["tagihan", "hunian", "listrik", "air", "ipl", "pln", "pam", "bpjs", "asuransi", "telepon"],
+      Transfer: [
+        "transfer",
+        "topup",
+        "top up",
+        "top-up",
+        "isi saldo",
+        "isi ulang",
+        "kirim uang",
+        "e-wallet",
+        "ewallet",
+        "dompet digital"
+      ],
       Belanja: ["belanja", "kebutuhan", "shopping", "sembako", "minimarket", "supermarket", "marketplace"],
       Kesehatan: ["kesehatan", "obat", "dokter", "klinik", "rumah sakit", "vitamin"],
       Pendidikan: ["pendidikan", "sekolah", "kuliah", "kursus", "buku", "les"],
@@ -37,6 +51,16 @@
       Bonus: ["bonus", "insentif", "reward"],
       Penjualan: ["penjualan", "jualan", "sales", "omzet", "order"],
       Investasi: ["investasi", "return", "capital gain", "profit"],
+      Transfer: [
+        "transfer masuk",
+        "uang masuk",
+        "dana masuk",
+        "diterima",
+        "penerimaan transfer",
+        "cash in",
+        "refund",
+        "topup masuk"
+      ],
       Hadiah: ["hadiah", "gift", "pemberian", "hibah"]
     }
   };

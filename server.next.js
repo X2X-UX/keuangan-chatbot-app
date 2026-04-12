@@ -990,22 +990,172 @@ function extractReceiptLineMatching(text, pattern) {
   return normalizeReceiptOcrLines(text).find((line) => pattern.test(line)) || "";
 }
 
+const FINAL_RECEIPT_AMOUNT_LABEL_SPECS = [
+  { label: "Total Amount", score: 16 },
+  { label: "Total Belanja", score: 16 },
+  { label: "Grand Total", score: 16 },
+  { label: "Jumlah", score: 15 },
+  { label: "Total", score: 15 },
+  { label: "Total Bayar", score: 15 },
+  { label: "Rp. Bayar", score: 14 },
+  { label: "Rp Bayar", score: 14 },
+  { label: "Amount Due", score: 14 },
+  { label: "Net Total", score: 14 },
+  { label: "Tunai", score: 12 },
+  { label: "Paid Amount", score: 12 }
+];
+
+const SECONDARY_RECEIPT_AMOUNT_LABEL_SPECS = [
+  { label: "Amount", score: 8 },
+  { label: "Nominal", score: 8 }
+];
+
+const FINAL_RECEIPT_AMOUNT_PATTERN =
+  /\b(total amount|total belanja|grand total|jumlah|total bayar|amount due|net total|rp\.?\s*bayar|paid amount|total|tunai)\b/i;
+
+function extractReceiptAmountCandidatesFromLine(line) {
+  const matches =
+    String(line || "").match(/(?:rp\.?\s*)?\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?|(?:rp\.?\s*)?\d{4,}(?:[.,]\d{2})?/gi) || [];
+
+  return matches
+    .map((raw) => {
+      const amount = parseFlexibleAmount(raw);
+      if (!amount || amount <= 0) {
+        return null;
+      }
+
+      return {
+        amount,
+        digitsLength: raw.replace(/[^\d]/g, "").length,
+        raw
+      };
+    })
+    .filter(Boolean);
+}
+
+function isReceiptFinalAmountLine(line) {
+  return FINAL_RECEIPT_AMOUNT_PATTERN.test(String(line || ""));
+}
+
+function looksLikeReceiptItemPriceLine(line) {
+  const text = String(line || "").toLowerCase();
+  if (!text || isReceiptFinalAmountLine(text)) {
+    return false;
+  }
+
+  const amountCandidates = extractReceiptAmountCandidatesFromLine(line);
+  if (amountCandidates.length >= 2) {
+    return true;
+  }
+
+  if (/\b\d+\s*[x*]\s*(?:rp\.?\s*)?\d/i.test(text) || /\bqty\b|\bpcs\b|\bitem\b/.test(text)) {
+    return true;
+  }
+
+  return false;
+}
+
+function scoreReceiptAmountValue(rawAmount, amount, line = "") {
+  const digitsLength = String(rawAmount || "").replace(/[^\d]/g, "").length;
+  let score = 0;
+
+  if (/\brp\b/i.test(rawAmount)) {
+    score += 3;
+  }
+
+  if (/\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?/i.test(rawAmount)) {
+    score += 3;
+  }
+
+  if (/[.,]\d{2}$/.test(rawAmount)) {
+    score += 1;
+  }
+
+  if (digitsLength >= 12) {
+    score -= 14;
+  } else if (digitsLength >= 10 && !/[.,]/.test(rawAmount)) {
+    score -= 9;
+  }
+
+  if (amount >= 1_000 && amount <= 5_000_000_000) {
+    score += 2;
+  }
+
+  if (amount > 5_000_000_000) {
+    score -= 6;
+  }
+
+  if (
+    /\b(ref|referensi|reference|kode pembayaran|payment code|npwp|pan|terminal|merchant pan|customer pan|id transaksi|id order|rekening|account|akun dana|nomor|no\.?)\b/i.test(
+      line
+    )
+  ) {
+    score -= 4;
+  }
+
+  return score;
+}
+
 function extractReceiptAmountByLabels(text, labels = []) {
   const lines = normalizeReceiptOcrLines(text);
+  let bestCandidate = null;
 
-  for (const label of labels) {
+  for (const labelSpec of labels) {
+    const label = typeof labelSpec === "string" ? labelSpec : String(labelSpec?.label || "");
+    const labelScore = typeof labelSpec === "object" && Number.isFinite(labelSpec.score) ? labelSpec.score : 0;
+    if (!label) {
+      continue;
+    }
+
     const pattern = new RegExp(`^${escapeReceiptRegex(label)}\\s*[:=]?\\s*(.+)$`, "i");
+    const standalonePattern = new RegExp(`^${escapeReceiptRegex(label)}\\s*[:=]?$`, "i");
+
     for (const line of lines) {
       const match = line.match(pattern);
-      if (!match?.[1]) {
+      if (match?.[1]) {
+        for (const candidate of extractReceiptAmountCandidatesFromLine(match[1])) {
+          const scoredCandidate = {
+            amount: candidate.amount,
+            score: labelScore + scoreReceiptAmountValue(candidate.raw, candidate.amount, line),
+            line
+          };
+
+          if (
+            !bestCandidate ||
+            scoredCandidate.score > bestCandidate.score ||
+            (scoredCandidate.score === bestCandidate.score && scoredCandidate.amount > bestCandidate.amount)
+          ) {
+            bestCandidate = scoredCandidate;
+          }
+        }
+      }
+    }
+
+    for (let index = 0; index < lines.length; index += 1) {
+      if (!standalonePattern.test(lines[index])) {
         continue;
       }
 
-      const amount = parseFlexibleAmount(match[1]);
-      if (amount && amount > 0) {
-        return amount;
+      for (const candidate of extractReceiptAmountCandidatesFromLine(lines[index + 1] || "")) {
+        const scoredCandidate = {
+          amount: candidate.amount,
+          score: labelScore + 1 + scoreReceiptAmountValue(candidate.raw, candidate.amount, lines[index + 1] || ""),
+          line: lines[index + 1] || ""
+        };
+
+        if (
+          !bestCandidate ||
+          scoredCandidate.score > bestCandidate.score ||
+          (scoredCandidate.score === bestCandidate.score && scoredCandidate.amount > bestCandidate.amount)
+        ) {
+          bestCandidate = scoredCandidate;
+        }
       }
     }
+  }
+
+  if (bestCandidate) {
+    return bestCandidate.amount;
   }
 
   return null;
@@ -1053,20 +1203,38 @@ function extractReceiptDateFromText(text) {
   return todayDateValue();
 }
 
-function scoreReceiptAmountLine(line) {
+function scoreReceiptAmountLine(line, lineIndex = 0, totalLines = 1) {
   const text = String(line || "").toLowerCase();
   let score = 0;
+  const isBottomHalf = lineIndex >= Math.floor(totalLines / 2);
+  const isBottomQuarter = lineIndex >= Math.floor(totalLines * 0.75);
 
-  if (/\b(total|grand total|jumlah|tagihan|total bayar|amount due|net total)\b/.test(text)) {
-    score += 6;
+  if (/\b(total|grand total|jumlah|tagihan|total bayar|amount due|net total|rp\.?\s*bayar|paid amount|tunai)\b/.test(text)) {
+    score += 8;
   }
 
   if (/\b(paid|payment|debit|kartu|qris|cash|tunai|bayar)\b/.test(text)) {
     score += 2;
   }
 
+  if (/\b(amount|nominal|topup|top up|transfer berhasil|transaksi berhasil)\b/.test(text)) {
+    score += 2;
+  }
+
   if (/^\s*(rp\.?\s*)?\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?\s*$/i.test(text)) {
     score += 4;
+  }
+
+  if (isReceiptFinalAmountLine(text) && isBottomHalf) {
+    score += 4;
+  }
+
+  if (isBottomQuarter && extractReceiptAmountCandidatesFromLine(line).length > 0) {
+    score += 2;
+  }
+
+  if (looksLikeReceiptItemPriceLine(line)) {
+    score -= 10;
   }
 
   if (/\b(subtotal|tax|ppn|pb1|service|diskon|discount|voucher|kembalian|change|rounding|admin)\b/.test(text)) {
@@ -1082,18 +1250,8 @@ function scoreReceiptAmountLine(line) {
 
 function extractReceiptAmountFromText(text) {
   const labeledAmount =
-    extractReceiptAmountByLabels(text, [
-      "Total Amount",
-      "Total Belanja",
-      "Rp. Bayar",
-      "Rp Bayar",
-      "Total Bayar",
-      "Grand Total",
-      "Jumlah",
-      "Amount Due",
-      "Net Total"
-    ]) ||
-    extractReceiptAmountByLabels(text, ["Amount", "Nominal"]);
+    extractReceiptAmountByLabels(text, FINAL_RECEIPT_AMOUNT_LABEL_SPECS) ||
+    extractReceiptAmountByLabels(text, SECONDARY_RECEIPT_AMOUNT_LABEL_SPECS);
 
   if (labeledAmount) {
     return labeledAmount;
@@ -1102,18 +1260,13 @@ function extractReceiptAmountFromText(text) {
   const lines = normalizeReceiptOcrLines(text);
   let bestCandidate = null;
 
-  for (const line of lines) {
-    const matches = line.match(/(?:rp\.?\s*)?\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?|(?:rp\.?\s*)?\d{4,}(?:[.,]\d{2})?/gi) || [];
-    for (const match of matches) {
-      const amount = parseFlexibleAmount(match);
-      if (!amount || amount <= 0) {
-        continue;
-      }
-
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    for (const match of extractReceiptAmountCandidatesFromLine(line)) {
       const candidate = {
-        amount,
+        amount: match.amount,
         line,
-        score: scoreReceiptAmountLine(line)
+        score: scoreReceiptAmountLine(line, index, lines.length) + scoreReceiptAmountValue(match.raw, match.amount, line)
       };
 
       if (
@@ -1130,8 +1283,15 @@ function extractReceiptAmountFromText(text) {
     return bestCandidate.amount;
   }
 
-  const fallbackMatches = String(text || "").match(/\d+/g) || [];
-  const fallbackAmounts = fallbackMatches.map((item) => Number(item)).filter((item) => item >= 1000);
+  const fallbackMatches =
+    String(text || "").match(/(?:rp\.?\s*)?\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?|(?:rp\.?\s*)?\d{4,}(?:[.,]\d{2})?/gi) || [];
+  const fallbackAmounts = fallbackMatches
+    .map((item) => ({
+      amount: parseFlexibleAmount(item),
+      raw: item
+    }))
+    .filter((item) => item.amount && item.amount >= 1000 && item.raw.replace(/[^\d]/g, "").length <= 9)
+    .map((item) => item.amount);
   return fallbackAmounts.length ? Math.max(...fallbackAmounts) : null;
 }
 

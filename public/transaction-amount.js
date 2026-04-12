@@ -55,6 +55,78 @@
     return decimalPart ? `${integerPart || "0"}.${decimalPart}` : integerPart;
   }
 
+  function countOccurrences(value, pattern) {
+    return (String(value || "").match(pattern) || []).length;
+  }
+
+  function hasGroupedThousands(value, separator) {
+    const parts = String(value || "").split(separator);
+    return parts.length > 1 && parts.slice(1).every((part) => /^\d{3}$/.test(part));
+  }
+
+  function parsePlainCurrencyAmount(value) {
+    const raw = String(value || "")
+      .replace(/\s+/g, "")
+      .replace(/idr/gi, "")
+      .replace(/[^\d,.-]/g, "")
+      .replace(/^[+-]/, "");
+
+    if (!raw) {
+      return null;
+    }
+
+    const commaCount = countOccurrences(raw, /,/g);
+    const dotCount = countOccurrences(raw, /\./g);
+    const digitsOnly = raw.replace(/[^\d]/g, "");
+
+    if (!commaCount && !dotCount) {
+      return digitsOnly ? Number.parseInt(digitsOnly, 10) : null;
+    }
+
+    if (commaCount && !dotCount) {
+      if (hasGroupedThousands(raw, ",")) {
+        return Number.parseInt(raw.replace(/,/g, ""), 10);
+      }
+
+      const parts = raw.split(",");
+      if (parts.length === 2 && /^\d{1,2}$/.test(parts[1])) {
+        const normalized = normalizeDecimalNumber(raw);
+        const amount = Number(normalized);
+        return Number.isFinite(amount) ? Math.round(amount) : null;
+      }
+
+      return digitsOnly ? Number.parseInt(digitsOnly, 10) : null;
+    }
+
+    if (dotCount && !commaCount) {
+      if (hasGroupedThousands(raw, ".")) {
+        return Number.parseInt(raw.replace(/\./g, ""), 10);
+      }
+
+      const parts = raw.split(".");
+      if (parts.length === 2 && /^\d{1,2}$/.test(parts[1])) {
+        const normalized = normalizeDecimalNumber(raw);
+        const amount = Number(normalized);
+        return Number.isFinite(amount) ? Math.round(amount) : null;
+      }
+
+      return digitsOnly ? Number.parseInt(digitsOnly, 10) : null;
+    }
+
+    const lastComma = raw.lastIndexOf(",");
+    const lastDot = raw.lastIndexOf(".");
+    const decimalIndex = Math.max(lastComma, lastDot);
+    const decimalPart = raw.slice(decimalIndex + 1).replace(/[^\d]/g, "");
+
+    if (/^\d{1,2}$/.test(decimalPart)) {
+      const normalized = normalizeDecimalNumber(raw);
+      const amount = Number(normalized);
+      return Number.isFinite(amount) ? Math.round(amount) : null;
+    }
+
+    return digitsOnly ? Number.parseInt(digitsOnly, 10) : null;
+  }
+
   function parseFlexibleAmount(value) {
     const raw = String(value || "")
       .toLowerCase()
@@ -82,13 +154,12 @@
       return Number.isFinite(amount) && amount > 0 ? Math.round(amount) : null;
     }
 
-    const digits = numericPart.replace(/[^\d]/g, "");
-    if (!digits) {
+    const amount = parsePlainCurrencyAmount(numericPart);
+    if (!Number.isFinite(amount) || amount <= 0) {
       return null;
     }
 
-    const amount = Number.parseInt(digits, 10);
-    return Number.isFinite(amount) && amount > 0 ? amount : null;
+    return amount;
   }
 
   const transactionAmountExports = {

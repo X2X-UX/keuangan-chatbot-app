@@ -19,8 +19,8 @@ const state = {
 };
 const COMPACT_MODE_STORAGE_KEY = "arunika_compact_mode";
 const TRANSACTION_CATEGORY_OPTIONS = globalThis.TRANSACTION_CATEGORY_OPTIONS || {
-  expense: ["Makanan", "Transportasi", "Tagihan", "Belanja", "Kesehatan", "Pendidikan", "Hiburan", "Rumah Tangga"],
-  income: ["Gaji", "Freelance", "Bonus", "Penjualan", "Investasi", "Hadiah"]
+  expense: ["Makanan", "Transportasi", "Tagihan", "Transfer", "Belanja", "Kesehatan", "Pendidikan", "Hiburan", "Rumah Tangga"],
+  income: ["Gaji", "Freelance", "Bonus", "Penjualan", "Investasi", "Transfer", "Hadiah"]
 };
 const findCanonicalTransactionCategory =
   globalThis.findCanonicalTransactionCategory ||
