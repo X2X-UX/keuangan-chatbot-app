@@ -106,7 +106,8 @@ async function run() {
         `- Tipe: ${suggestion.type}`,
         `- Deskripsi: ${suggestion.description}`,
         `- Nominal: ${suggestion.amount}`,
-        `- Kategori: ${suggestion.category}`
+        `- Kategori: ${suggestion.category}`,
+        `- Catatan: ${suggestion.notes}`
       ].join("\n"),
     getTelegramLinkByChatId: (chatId) =>
       String(chatId) === "123"
@@ -145,11 +146,47 @@ async function run() {
   await telegramService.handleTelegramUpdate({
     message: {
       chat: { id: 123, type: "private" },
+      text: "lihat draft"
+    }
+  });
+
+  assert.ok(sentMessages.some((entry) => /Hasil baca struk:/i.test(entry)));
+
+  await telegramService.handleTelegramUpdate({
+    message: {
+      chat: { id: 123, type: "private" },
       text: "kategori Belanja"
     }
   });
 
   assert.ok(sentMessages.some((entry) => /Belanja/i.test(entry)));
+
+  await telegramService.handleTelegramUpdate({
+    message: {
+      chat: { id: 123, type: "private" },
+      text: "merchant Alfamart Dadap"
+    }
+  });
+
+  assert.ok(sentMessages.some((entry) => /Alfamart Dadap/i.test(entry)));
+
+  await telegramService.handleTelegramUpdate({
+    message: {
+      chat: { id: 123, type: "private" },
+      text: "catatan dibayar tunai"
+    }
+  });
+
+  assert.ok(sentMessages.some((entry) => /dibayar tunai/i.test(entry)));
+
+  await telegramService.handleTelegramUpdate({
+    message: {
+      chat: { id: 123, type: "private" },
+      text: "reset draft"
+    }
+  });
+
+  assert.ok(sentMessages.some((entry) => /Transfer ke DANA/i.test(entry)));
 
   await telegramService.handleTelegramUpdate({
     message: {
@@ -160,7 +197,9 @@ async function run() {
 
   assert.strictEqual(drafts.size, 0);
   assert.strictEqual(storedTransactions.length, 1);
-  assert.strictEqual(storedTransactions[0].category, "Belanja");
+  assert.strictEqual(storedTransactions[0].category, "Transfer");
+  assert.strictEqual(storedTransactions[0].description, "Transfer ke DANA");
+  assert.strictEqual(storedTransactions[0].notes, "OCR test");
   assert.strictEqual(storedTransactions[0].receiptPath, "receipts/test-receipt.jpg");
   assert.ok(sentMessages.some((entry) => /berhasil disimpan/i.test(entry)));
 

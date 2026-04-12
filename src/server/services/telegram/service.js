@@ -175,11 +175,16 @@ function createTelegramService({
       "",
       "Balas `simpan` untuk mencatat transaksi ini.",
       "Balas `batal` untuk membuang hasil OCR.",
+      "Balas `lihat draft` untuk melihat draft saat ini.",
+      "Balas `reset draft` untuk kembali ke hasil OCR awal.",
       "Edit cepat juga didukung:",
       "- `tipe pemasukan`",
       "- `tipe pengeluaran`",
       "- `kategori Makanan`",
       "- `deskripsi Topup GoPay`",
+      "- `merchant Alfamart`",
+      "- `toko Indomaret Fresh`",
+      "- `catatan dibayar tunai`",
       "- `nominal 800000`",
       "- `tanggal 2026-04-12`"
     ].join("\n");
@@ -219,6 +224,14 @@ function createTelegramService({
       return { action: "cancel" };
     }
 
+    if (/^lihat\s+draft$/i.test(command)) {
+      return { action: "preview" };
+    }
+
+    if (/^reset\s+draft$/i.test(command)) {
+      return { action: "reset" };
+    }
+
     const typeMatch = command.match(/^tipe\s+(pemasukan|pengeluaran|income|expense)$/i);
     if (typeMatch?.[1]) {
       return {
@@ -239,12 +252,32 @@ function createTelegramService({
       };
     }
 
+    const merchantMatch = command.match(/^(?:merchant|toko)\s+(.+)$/i);
+    if (merchantMatch?.[1]) {
+      return {
+        action: "patch",
+        patch: {
+          description: sanitizeText(merchantMatch[1], 120)
+        }
+      };
+    }
+
     const descriptionMatch = command.match(/^deskripsi\s+(.+)$/i);
     if (descriptionMatch?.[1]) {
       return {
         action: "patch",
         patch: {
           description: sanitizeText(descriptionMatch[1], 120)
+        }
+      };
+    }
+
+    const notesMatch = command.match(/^catatan\s+(.+)$/i);
+    if (notesMatch?.[1]) {
+      return {
+        action: "patch",
+        patch: {
+          notes: sanitizeText(notesMatch[1], 240)
         }
       };
     }
@@ -298,6 +331,16 @@ function createTelegramService({
         reviewAlert: draft.suggestion.reviewAlert || "",
         reviewFlags: Array.isArray(draft.suggestion.reviewFlags) ? [...draft.suggestion.reviewFlags] : [],
         reviewLevel: draft.suggestion.reviewLevel || "high"
+      },
+      expiresAt: Date.now() + draftTtlMs
+    };
+  }
+
+  function resetTelegramReceiptDraft(draft) {
+    return {
+      ...draft,
+      suggestion: {
+        ...draft.originalSuggestion
       },
       expiresAt: Date.now() + draftTtlMs
     };
@@ -381,6 +424,7 @@ function createTelegramService({
       "Bot juga bisa menerima foto struk atau bukti transfer untuk dibacakan OCR.",
       "Setelah OCR selesai, balas `simpan` untuk mencatat transaksi atau `batal` untuk membuang draft.",
       "Jika tipe transaksi perlu dibetulkan, balas `tipe pemasukan` atau `tipe pengeluaran`.",
+      "Anda juga bisa balas `lihat draft`, `reset draft`, `merchant ...`, atau `catatan ...` untuk mengoreksi hasil OCR.",
       "Kategori transaksi mengikuti pilihan utama di form web.",
       "Anda bisa langsung kirim:",
       "- kode tautan dari dashboard web untuk menghubungkan akun",
@@ -432,6 +476,9 @@ function createTelegramService({
       const suggestion = await activeReceiptAnalyzer.analyzeReceipt(receiptUpload, preferredType);
       setTelegramReceiptDraft(chatId, {
         linkedUserId: linked.user.id,
+        originalSuggestion: {
+          ...suggestion
+        },
         receiptUpload,
         suggestion
       });
@@ -521,6 +568,18 @@ function createTelegramService({
         return;
       }
 
+      if (draftCommand.action === "preview") {
+        await sendTelegramMessage(chatId, formatTelegramReceiptDraftReply(receiptDraft.suggestion));
+        return;
+      }
+
+      if (draftCommand.action === "reset") {
+        const resetDraft = resetTelegramReceiptDraft(receiptDraft);
+        setTelegramReceiptDraft(chatId, resetDraft);
+        await sendTelegramMessage(chatId, formatTelegramReceiptDraftReply(resetDraft.suggestion));
+        return;
+      }
+
       if (draftCommand.action === "save") {
         try {
           const transaction = await saveTelegramReceiptDraftTransaction(linked.user.id, receiptDraft);
@@ -558,7 +617,7 @@ function createTelegramService({
     if (receiptDraft) {
       await sendTelegramMessage(
         chatId,
-        "Masih ada draft hasil OCR yang belum diputuskan. Balas `simpan`, `batal`, atau ubah dengan `tipe ...`, `kategori ...`, `deskripsi ...`, `nominal ...`, `tanggal ...`."
+        "Masih ada draft hasil OCR yang belum diputuskan. Balas `simpan`, `batal`, `lihat draft`, `reset draft`, atau ubah dengan `tipe ...`, `kategori ...`, `merchant ...`, `deskripsi ...`, `catatan ...`, `nominal ...`, `tanggal ...`."
       );
       return;
     }
