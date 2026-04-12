@@ -1,4 +1,4 @@
-const STATIC_CACHE = "arunika-static-v3";
+const STATIC_CACHE = "arunika-static-v4";
 
 const STATIC_ASSETS = [
   "/",
@@ -12,6 +12,8 @@ const STATIC_ASSETS = [
   "/icons/favicon.svg",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
+  "/icons/shortcut-scan-96.png",
+  "/icons/shortcut-manual-96.png",
   "/offline.html"
 ];
 

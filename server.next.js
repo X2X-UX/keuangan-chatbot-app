@@ -1177,6 +1177,11 @@ function extractReceiptStoreName(text) {
   return lines.find((line) => /\b(indomaret|alfamart|alfamidi|superindo|hypermart|minimarket|bca|dana|gopay|ovo|tokopedia)\b/i.test(line)) || "";
 }
 
+function isBcaAtmReceipt(text) {
+  const raw = String(text || "");
+  return /\batm bca\b/i.test(raw) || (/\bbca\b/i.test(raw) && /\b(no\.?\s*urut|setoran|saldo)\b/i.test(raw));
+}
+
 function isRetailOrderReceipt(text) {
   const raw = String(text || "");
   return /\balfamart\b/i.test(raw) && /\bstatus order\b/i.test(raw);
@@ -1207,6 +1212,17 @@ function extractReceiptReference(text) {
   }
 
   return "";
+}
+
+function extractReceiptSequence(text) {
+  return (
+    extractReceiptValueByLabels(text, ["No. Urut", "NO. URUT", "No Urut"]) ||
+    sanitizeText((extractReceiptLineMatching(text, /^no\.?\s*urut\s*:\s*.+$/i) || "").replace(/^no\.?\s*urut\s*:\s*/i, ""), 80)
+  );
+}
+
+function extractReceiptBalance(text) {
+  return extractReceiptAmountByLabels(text, [{ label: "Saldo", score: 4 }]) || null;
 }
 
 function extractReceiptBranchName(text) {
@@ -1272,6 +1288,16 @@ function parseReceiptTglDate(text) {
   return buildIsoDate(match[3], match[2], match[1]);
 }
 
+function parseShortLocalReceiptDate(text) {
+  const raw = String(text || "");
+  const match = raw.match(/\b(\d{2})[/-](\d{2})[/-](\d{2})\b/);
+  if (!match) {
+    return "";
+  }
+
+  return buildIsoDate(`20${match[3]}`, match[2], match[1]);
+}
+
 function parseThermalReceiptHeaderDate(text) {
   const raw = String(text || "");
   const match = raw.match(/\b(\d{2})[./-](\d{2})[./-](\d{2,4})-\d{2}:\d{2}\b/);
@@ -1286,6 +1312,7 @@ function parseThermalReceiptHeaderDate(text) {
 function extractReceiptDateFromText(text) {
   const referenceDate = parseReceiptReferenceDate(extractReceiptReference(text));
   const tglDate = parseReceiptTglDate(text);
+  const shortLocalDate = parseShortLocalReceiptDate(text);
   const thermalDate = parseThermalReceiptHeaderDate(text);
 
   if (isRetailOrderReceipt(text)) {
@@ -1298,6 +1325,10 @@ function extractReceiptDateFromText(text) {
 
   if (tglDate) {
     return tglDate;
+  }
+
+  if (shortLocalDate) {
+    return shortLocalDate;
   }
 
   if (thermalDate) {
@@ -1424,6 +1455,16 @@ function inferReceiptTypeFromText(text, preferredType = "") {
   }
 
   const raw = String(text || "").toLowerCase();
+  if (isBcaAtmReceipt(text)) {
+    if (/\bsetoran\b/.test(raw)) {
+      return "income";
+    }
+
+    if (/\btarik tunai\b/.test(raw) && !/\bsetoran\b/.test(raw)) {
+      return "expense";
+    }
+  }
+
   if (/\b(transfer masuk|uang masuk|kredit masuk|received|payment received|gaji|salary|bonus|income)\b/.test(raw)) {
     return "income";
   }
@@ -1456,6 +1497,15 @@ function pickReceiptDescriptionFromText(text, preferredType = "") {
   const raw = String(text || "");
   const storeName = extractReceiptStoreName(text);
   const branchName = extractReceiptBranchName(text);
+  const isBcaAtm = isBcaAtmReceipt(text);
+
+  if (isBcaAtm && /\bsetoran\b/i.test(raw)) {
+    return sanitizeText(`Setoran tunai ATM BCA${branchName ? ` ${branchName}` : ""}`, 120);
+  }
+
+  if (isBcaAtm && /\btarik tunai\b/i.test(raw) && !/\bsetoran\b/i.test(raw)) {
+    return sanitizeText(`Tarik tunai ATM BCA${branchName ? ` ${branchName}` : ""}`, 120);
+  }
 
   if (isRetailOrderReceipt(text) && /\balfamart\b/i.test(storeName || raw)) {
     return sanitizeText(`Belanja Alfamart${branchName ? ` ${branchName}` : ""}`, 120);
@@ -1547,6 +1597,8 @@ function pickReceiptNotesFromText(text) {
     extractReceiptValueByLabels(text, ["Pengakuisisi"]) || extractReceiptValueAfterStandaloneLabels(text, ["Pengakuisisi"]);
   const orderStatus = extractReceiptValueByLabels(text, ["Status Order", "Status"]);
   const thermalTxnCode = extractReceiptLineMatching(text, /^\d{2}[./-]\d{2}[./-]\d{2,4}-\d{2}:\d{2}\/.+$/i);
+  const atmSequence = extractReceiptSequence(text);
+  const atmBalance = extractReceiptBalance(text);
   const transferDestination = extractReceiptLineMatching(text, /^ke\s+\d+/i);
   const danaDnid = extractReceiptLineMatching(text, /^dnid\b/i);
   const storeName = extractReceiptStoreName(text);
@@ -1571,6 +1623,14 @@ function pickReceiptNotesFromText(text) {
 
   if (thermalTxnCode) {
     parts.push(`Trx ${thermalTxnCode}`);
+  }
+
+  if (atmSequence) {
+    parts.push(`No. Urut ${atmSequence}`);
+  }
+
+  if (atmBalance) {
+    parts.push(`Saldo ${atmBalance}`);
   }
 
   if (paymentCode) {

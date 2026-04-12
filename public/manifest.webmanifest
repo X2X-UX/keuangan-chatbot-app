@@ -16,8 +16,8 @@
       "url": "/?shortcut=scan-receipt",
       "icons": [
         {
-          "src": "/icons/icon-192.png",
-          "sizes": "192x192",
+          "src": "/icons/shortcut-scan-96.png",
+          "sizes": "96x96",
           "type": "image/png"
         }
       ]
@@ -29,8 +29,8 @@
       "url": "/?shortcut=manual-entry",
       "icons": [
         {
-          "src": "/icons/icon-192.png",
-          "sizes": "192x192",
+          "src": "/icons/shortcut-manual-96.png",
+          "sizes": "96x96",
           "type": "image/png"
         }
       ]
@@ -40,12 +40,14 @@
     {
       "src": "/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
