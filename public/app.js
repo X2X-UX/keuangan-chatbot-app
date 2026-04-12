@@ -164,7 +164,18 @@ const elements = {
   transactionReviewManageButton: document.getElementById("transactionReviewManageButton"),
   transactionReviewReceiptImage: document.getElementById("transactionReviewReceiptImage"),
   transactionReviewReceiptLink: document.getElementById("transactionReviewReceiptLink"),
+  transactionReviewSummary: document.getElementById("transactionReviewSummary"),
+  transactionReviewSummaryText: document.getElementById("transactionReviewSummaryText"),
+  transactionReviewSummaryTitle: document.getElementById("transactionReviewSummaryTitle"),
   transactionReviewStatus: document.getElementById("transactionReviewStatus"),
+  transactionReviewChipAmount: document.getElementById("transactionReviewChipAmount"),
+  transactionReviewChipCategory: document.getElementById("transactionReviewChipCategory"),
+  transactionReviewChipDate: document.getElementById("transactionReviewChipDate"),
+  transactionReviewChipDescription: document.getElementById("transactionReviewChipDescription"),
+  transactionFieldAmount: document.getElementById("transactionFieldAmount"),
+  transactionFieldCategory: document.getElementById("transactionFieldCategory"),
+  transactionFieldDate: document.getElementById("transactionFieldDate"),
+  transactionFieldDescription: document.getElementById("transactionFieldDescription"),
   transactionScanManualButton: document.getElementById("transactionScanManualButton"),
   transactionScanEmptyState: document.getElementById("transactionScanEmptyState"),
   transactionScanReviewButton: document.getElementById("transactionScanReviewButton"),
@@ -590,6 +601,71 @@ function renderTransactionOCRError() {
   elements.transactionOCRErrorManualButton.disabled = isAnalyzing;
 }
 
+function setTransactionReviewChip(element, text = "") {
+  if (!element) {
+    return;
+  }
+
+  const hasText = Boolean(String(text || "").trim());
+  element.textContent = text;
+  element.classList.toggle("is-hidden", !hasText);
+}
+
+function renderTransactionReviewAssist() {
+  const description = elements.transactionForm.elements.description.value.trim();
+  const amount = parseFlexibleAmount(elements.transactionAmount.value);
+  const category = elements.transactionCategory.value.trim();
+  const date = elements.transactionForm.elements.date.value.trim();
+  const states = {
+    amount: amount ? "" : "Cek nominal",
+    category: category ? "" : "Pilih kategori",
+    date: date ? "" : "Pilih tanggal",
+    description: description ? "" : "Perlu diisi"
+  };
+  const issues = Object.entries(states).filter(([, message]) => Boolean(message));
+  const isScanFlow = state.transactionEntryMethod === "scan";
+
+  setTransactionReviewChip(elements.transactionReviewChipAmount, states.amount);
+  setTransactionReviewChip(elements.transactionReviewChipCategory, states.category);
+  setTransactionReviewChip(elements.transactionReviewChipDate, states.date);
+  setTransactionReviewChip(elements.transactionReviewChipDescription, states.description);
+
+  elements.transactionFieldAmount.classList.toggle("is-needs-review", Boolean(states.amount));
+  elements.transactionFieldCategory.classList.toggle("is-needs-review", Boolean(states.category));
+  elements.transactionFieldDate.classList.toggle("is-needs-review", Boolean(states.date));
+  elements.transactionFieldDescription.classList.toggle("is-needs-review", Boolean(states.description));
+
+  if (issues.length > 0) {
+    elements.transactionReviewSummaryTitle.textContent =
+      issues.length === 1 ? "1 field utama perlu dicek" : `${issues.length} field utama perlu dicek`;
+    elements.transactionReviewSummaryText.textContent = `Periksa ${issues
+      .map(([field]) => {
+        if (field === "amount") return "nominal";
+        if (field === "category") return "kategori";
+        if (field === "date") return "tanggal";
+        return "deskripsi";
+      })
+      .join(", ")} sebelum transaksi disimpan.`;
+    return;
+  }
+
+  elements.transactionReviewSummaryTitle.textContent = isScanFlow ? "Hasil scan siap disimpan" : "Form siap disimpan";
+  elements.transactionReviewSummaryText.textContent = isScanFlow
+    ? "Empat field utama sudah terisi. Review cepat selesai dan Anda bisa langsung simpan."
+    : "Field utama sudah lengkap. Tambahkan catatan bila perlu lalu simpan transaksi.";
+}
+
+function getPreferredTransactionReviewFocusField() {
+  const candidates = [
+    { element: elements.transactionAmount, invalid: !parseFlexibleAmount(elements.transactionAmount.value) },
+    { element: elements.transactionForm.elements.date, invalid: !elements.transactionForm.elements.date.value.trim() },
+    { element: elements.transactionCategory, invalid: !elements.transactionCategory.value.trim() },
+    { element: elements.transactionForm.elements.description, invalid: !elements.transactionForm.elements.description.value.trim() }
+  ];
+
+  return candidates.find((entry) => entry.invalid)?.element || elements.transactionForm.elements.description;
+}
+
 function renderTransactionEntryFlow() {
   const isEditing = Boolean(state.editingTransactionId);
   const step = isEditing
@@ -615,6 +691,7 @@ function renderTransactionEntryFlow() {
   renderTransactionOCRState();
   renderTransactionOCRError();
   renderTransactionReviewBanner();
+  renderTransactionReviewAssist();
 }
 
 function scrollTransactionFlowIntoView(target) {
@@ -650,9 +727,10 @@ function showTransactionReview(options = {}) {
   renderTransactionEntryFlow();
   scrollTransactionFlowIntoView(elements.transactionDetailsSection);
 
-  if (options.focusField) {
+  const focusField = options.focusField || (state.transactionEntryMethod === "scan" ? getPreferredTransactionReviewFocusField() : null);
+  if (focusField) {
     requestAnimationFrame(() => {
-      options.focusField.focus();
+      focusField.focus();
     });
   }
 }
@@ -2534,6 +2612,12 @@ function bindEvents() {
   elements.telegramUnlinkButton.addEventListener("click", handleTelegramUnlink);
   elements.transactionForm.addEventListener("submit", handleTransactionSubmit);
   elements.transactionCancelButton.addEventListener("click", resetTransactionForm);
+  elements.transactionForm.addEventListener("input", () => {
+    renderTransactionReviewAssist();
+  });
+  elements.transactionForm.addEventListener("change", () => {
+    renderTransactionReviewAssist();
+  });
   elements.transactionModeScanButton.addEventListener("click", () => {
     setTransactionReceiptError("");
     state.transactionEntryMethod = "scan";

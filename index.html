@@ -346,20 +346,33 @@
                   </div>
                 </div>
 
+                <div id="transactionReviewSummary" class="transaction-review-summary">
+                  <strong id="transactionReviewSummaryTitle">Cek field utama dulu</strong>
+                  <p id="transactionReviewSummaryText">Pastikan deskripsi, nominal, tanggal, dan kategori sudah benar sebelum simpan.</p>
+                </div>
+
                 <div class="transaction-form">
                   <label>
-                    <span>Tipe</span>
+                    <span class="transaction-field-head">
+                      <span>Tipe</span>
+                    </span>
                     <select id="transactionType" name="type" required>
                       <option value="income">Pemasukan</option>
                       <option value="expense">Pengeluaran</option>
                     </select>
                   </label>
-                  <label>
-                    <span>Deskripsi transaksi</span>
+                  <label id="transactionFieldDescription" class="transaction-field transaction-field-priority">
+                    <span class="transaction-field-head">
+                      <span>Deskripsi transaksi</span>
+                      <small id="transactionReviewChipDescription" class="transaction-review-chip is-hidden">Perlu diisi</small>
+                    </span>
                     <input type="text" name="description" placeholder="Contoh: Bayar listrik" required />
                   </label>
-                  <label>
-                    <span>Nominal</span>
+                  <label id="transactionFieldAmount" class="transaction-field transaction-field-priority">
+                    <span class="transaction-field-head">
+                      <span>Nominal</span>
+                      <small id="transactionReviewChipAmount" class="transaction-review-chip is-hidden">Cek nominal</small>
+                    </span>
                     <input
                       id="transactionAmount"
                       type="text"
@@ -373,16 +386,24 @@
                       Bisa isi nominal fleksibel seperti `Rp15.000`, `15rb`, atau `1,5jt`.
                     </small>
                   </label>
-                  <label>
-                    <span>Kategori transaksi</span>
+                  <label id="transactionFieldCategory" class="transaction-field transaction-field-priority">
+                    <span class="transaction-field-head">
+                      <span>Kategori transaksi</span>
+                      <small id="transactionReviewChipCategory" class="transaction-review-chip is-hidden">Pilih kategori</small>
+                    </span>
                     <select id="transactionCategory" name="category" required></select>
                   </label>
-                  <label>
-                    <span>Tanggal</span>
+                  <label id="transactionFieldDate" class="transaction-field transaction-field-priority">
+                    <span class="transaction-field-head">
+                      <span>Tanggal</span>
+                      <small id="transactionReviewChipDate" class="transaction-review-chip is-hidden">Pilih tanggal</small>
+                    </span>
                     <input type="date" name="date" required />
                   </label>
                   <label class="full-span">
-                    <span>Catatan</span>
+                    <span class="transaction-field-head">
+                      <span>Catatan</span>
+                    </span>
                     <textarea name="notes" rows="3" placeholder="Tambahan informasi jika perlu"></textarea>
                   </label>
                   <div class="transaction-form-actions full-span">
