@@ -265,7 +265,7 @@ textarea {
 }
 
 .auth-password-wrap input {
-  padding-right: 108px;
+  padding-right: 62px;
 }
 
 .auth-password-toggle {
@@ -273,15 +273,35 @@ textarea {
   right: 7px;
   top: 50%;
   transform: translateY(-50%);
+  width: 38px;
   height: 34px;
-  padding: 0 12px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 10px;
   border: 1px solid rgba(12, 74, 135, 0.18);
   background: rgba(12, 74, 135, 0.08);
   color: var(--primary);
-  font-size: 0.82rem;
-  font-weight: 700;
   cursor: pointer;
+}
+
+.auth-password-toggle-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.auth-password-toggle .icon-eye-closed.is-hidden,
+.auth-password-toggle .icon-eye-open.is-hidden {
+  display: none;
+}
+
+.auth-password-toggle.is-visible .icon-eye-open {
+  display: none;
+}
+
+.auth-password-toggle.is-visible .icon-eye-closed {
+  display: block;
 }
 
 .auth-password-toggle:hover {

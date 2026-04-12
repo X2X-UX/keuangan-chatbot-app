@@ -56,9 +56,10 @@ function setAuthPasswordVisibility(visible) {
     return;
   }
 
-  elements.authPasswordToggle.textContent = isVisible ? "Sembunyikan" : "Lihat";
+  elements.authPasswordToggle.classList.toggle("is-visible", isVisible);
   elements.authPasswordToggle.setAttribute("aria-pressed", isVisible ? "true" : "false");
   elements.authPasswordToggle.setAttribute("aria-label", isVisible ? "Sembunyikan password" : "Tampilkan password");
+  elements.authPasswordToggle.setAttribute("title", isVisible ? "Sembunyikan password" : "Tampilkan password");
 }
 
 function handleAuthPasswordToggle() {
