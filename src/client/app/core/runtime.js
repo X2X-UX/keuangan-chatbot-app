@@ -109,6 +109,7 @@ const elements = {
   authMessage: document.getElementById("authMessage"),
   authName: document.getElementById("authName"),
   authPassword: document.getElementById("authPassword"),
+  authPasswordToggle: document.getElementById("authPasswordToggle"),
   authSubmitButton: document.getElementById("authSubmitButton"),
   authSubtitle: document.getElementById("authSubtitle"),
   authTitle: document.getElementById("authTitle"),

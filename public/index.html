@@ -40,9 +40,20 @@
             <span>Email</span>
             <input id="authEmail" name="email" type="email" placeholder="nama@email.com" required />
           </label>
-          <label>
+          <label class="auth-password-field">
             <span>Password</span>
-            <input id="authPassword" name="password" type="password" placeholder="Minimal 8 karakter" required />
+            <div class="auth-password-wrap">
+              <input id="authPassword" name="password" type="password" placeholder="Minimal 8 karakter" required />
+              <button
+                id="authPasswordToggle"
+                class="auth-password-toggle"
+                type="button"
+                aria-label="Tampilkan password"
+                aria-pressed="false"
+              >
+                Lihat
+              </button>
+            </div>
           </label>
           <button id="authSubmitButton" class="primary-button" type="submit">Masuk</button>
         </form>

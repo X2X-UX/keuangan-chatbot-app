@@ -1,6 +1,9 @@
 function bindEvents() {
   elements.loginTabButton.addEventListener("click", () => setAuthMode("login"));
   elements.registerTabButton.addEventListener("click", () => setAuthMode("register"));
+  if (elements.authPasswordToggle) {
+    elements.authPasswordToggle.addEventListener("click", handleAuthPasswordToggle);
+  }
   elements.authForm.addEventListener("submit", handleAuthSubmit);
   elements.importFileInput.addEventListener("change", handleImportFileChange);
   elements.importPresetSelect.addEventListener("change", handleImportPresetChange);

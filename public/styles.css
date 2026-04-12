@@ -260,6 +260,39 @@ textarea {
   color: var(--text);
 }
 
+.auth-password-wrap {
+  position: relative;
+}
+
+.auth-password-wrap input {
+  padding-right: 108px;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(12, 74, 135, 0.18);
+  background: rgba(12, 74, 135, 0.08);
+  color: var(--primary);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-password-toggle:hover {
+  background: rgba(12, 74, 135, 0.14);
+}
+
+.auth-password-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(12, 74, 135, 0.14);
+}
+
 .auth-form input:focus {
   outline: none;
   border-color: rgba(12, 74, 135, 0.45);

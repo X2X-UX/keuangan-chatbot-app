@@ -79,6 +79,7 @@ async function handleAuthSubmit(event) {
     renderSession();
     hideAuthGate();
     elements.authForm.reset();
+    setAuthPasswordVisibility(false);
     resetTransactionForm();
     resetChat();
     await reloadDashboard();

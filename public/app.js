@@ -120,6 +120,7 @@ const elements = {
   authMessage: document.getElementById("authMessage"),
   authName: document.getElementById("authName"),
   authPassword: document.getElementById("authPassword"),
+  authPasswordToggle: document.getElementById("authPasswordToggle"),
   authSubmitButton: document.getElementById("authSubmitButton"),
   authSubtitle: document.getElementById("authSubtitle"),
   authTitle: document.getElementById("authTitle"),
@@ -526,6 +527,24 @@ function setAuthMode(mode) {
     : "Masuk untuk mengakses dashboard keuangan pribadi. Data transaksi setiap akun dipisahkan otomatis di sistem.";
   elements.authSubmitButton.textContent = isRegister ? "Daftar Akun" : "Masuk";
   elements.authMessage.textContent = "";
+  setAuthPasswordVisibility(false);
+}
+
+function setAuthPasswordVisibility(visible) {
+  const isVisible = visible === true;
+  elements.authPassword.type = isVisible ? "text" : "password";
+
+  if (!elements.authPasswordToggle) {
+    return;
+  }
+
+  elements.authPasswordToggle.textContent = isVisible ? "Sembunyikan" : "Lihat";
+  elements.authPasswordToggle.setAttribute("aria-pressed", isVisible ? "true" : "false");
+  elements.authPasswordToggle.setAttribute("aria-label", isVisible ? "Sembunyikan password" : "Tampilkan password");
+}
+
+function handleAuthPasswordToggle() {
+  setAuthPasswordVisibility(elements.authPassword.type === "password");
 }
 
 function renderSession() {
@@ -2546,6 +2565,7 @@ async function handleAuthSubmit(event) {
     renderSession();
     hideAuthGate();
     elements.authForm.reset();
+    setAuthPasswordVisibility(false);
     resetTransactionForm();
     resetChat();
     await reloadDashboard();
@@ -2815,6 +2835,9 @@ async function handleDelete(event) {
 function bindEvents() {
   elements.loginTabButton.addEventListener("click", () => setAuthMode("login"));
   elements.registerTabButton.addEventListener("click", () => setAuthMode("register"));
+  if (elements.authPasswordToggle) {
+    elements.authPasswordToggle.addEventListener("click", handleAuthPasswordToggle);
+  }
   elements.authForm.addEventListener("submit", handleAuthSubmit);
   elements.importFileInput.addEventListener("change", handleImportFileChange);
   elements.importPresetSelect.addEventListener("change", handleImportPresetChange);
