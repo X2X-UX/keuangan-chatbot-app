@@ -928,8 +928,7 @@ function sanitizeReceiptSuggestion(payload, preferredType = "") {
   const inferredCategory = inferTransactionCategory(type, `${description} ${rawCategory} ${notes}`) || null;
   const fallbackCategory = type === "income" ? "Hadiah" : "Belanja";
   const category = rawCategory ? findCanonicalCategory(type, rawCategory) || inferredCategory : inferredCategory;
-
-  return sanitizeTransaction({
+  const transaction = sanitizeTransaction({
     amount,
     category: category || fallbackCategory,
     date: normalizeReceiptDate(payload?.date),
@@ -937,6 +936,19 @@ function sanitizeReceiptSuggestion(payload, preferredType = "") {
     notes,
     type
   });
+
+  const reviewLevel = payload?.reviewLevel === "low" ? "low" : payload?.reviewLevel === "medium" ? "medium" : "high";
+  const reviewAlert = sanitizeText(payload?.reviewAlert, 200);
+  const reviewFlags = Array.isArray(payload?.reviewFlags)
+    ? [...new Set(payload.reviewFlags.map((item) => sanitizeText(item, 40)).filter(Boolean))].slice(0, 6)
+    : [];
+
+  return {
+    ...transaction,
+    reviewAlert,
+    reviewFlags,
+    reviewLevel
+  };
 }
 
 function normalizeReceiptOcrLines(text) {
@@ -1042,6 +1054,10 @@ function extractReceiptAmountCandidatesFromLine(line) {
       };
     })
     .filter(Boolean);
+}
+
+function lineContainsReceiptAmount(line, amount) {
+  return extractReceiptAmountCandidatesFromLine(line).some((candidate) => candidate.amount === amount);
 }
 
 function isReceiptSubtotalLine(line) {
@@ -1525,6 +1541,62 @@ function extractReceiptAmountFromText(text) {
   return fallbackAmounts.length ? Math.max(...fallbackAmounts) : null;
 }
 
+function assessReceiptAmountConfidence(text, amount) {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return {
+      reviewAlert: "Nominal OCR perlu dicek. Total akhir belum terbaca dengan yakin dari struk.",
+      reviewFlags: ["amount"],
+      reviewLevel: "low"
+    };
+  }
+
+  const lines = normalizeReceiptOcrLines(text);
+  const strongFinalLines = lines.filter(
+    (line) => !isReceiptSubtotalLine(line) && !isReceiptNonFinalSummaryLine(line) && isReceiptFinalAmountLine(line)
+  );
+  const matchingFinalLines = strongFinalLines.filter((line) => lineContainsReceiptAmount(line, amount));
+  const conflictingFinalAmounts = [
+    ...new Set(
+      strongFinalLines
+        .flatMap((line) => extractReceiptAmountCandidatesFromLine(line).map((candidate) => candidate.amount))
+        .filter((candidateAmount) => candidateAmount && candidateAmount !== amount)
+    )
+  ];
+  const matchingSubtotalOrSummary = lines.filter(
+    (line) => (isReceiptSubtotalLine(line) || isReceiptNonFinalSummaryLine(line)) && lineContainsReceiptAmount(line, amount)
+  );
+
+  if (strongFinalLines.length === 0) {
+    return {
+      reviewAlert: "Nominal OCR perlu dicek. Baris total akhir belum terbaca jelas, jadi sistem masih menebak dari kandidat angka lain.",
+      reviewFlags: ["amount"],
+      reviewLevel: "low"
+    };
+  }
+
+  if (matchingFinalLines.length === 0) {
+    return {
+      reviewAlert: "Nominal OCR perlu dicek. Ada baris total pada struk, tetapi nominal terpilih belum cocok persis dengan total akhir.",
+      reviewFlags: ["amount"],
+      reviewLevel: "low"
+    };
+  }
+
+  if (conflictingFinalAmounts.length > 0 || matchingSubtotalOrSummary.length > 0) {
+    return {
+      reviewAlert: "Nominal terdeteksi dari baris total, tetapi ada angka ringkasan lain yang mirip. Mohon cek total akhir sebelum menyimpan.",
+      reviewFlags: ["amount"],
+      reviewLevel: "medium"
+    };
+  }
+
+  return {
+    reviewAlert: "",
+    reviewFlags: [],
+    reviewLevel: "high"
+  };
+}
+
 function inferReceiptTypeFromText(text, preferredType = "") {
   if (preferredType === "income" || preferredType === "expense") {
     return preferredType;
@@ -1763,6 +1835,7 @@ function buildReceiptSuggestionFromOcrText(text, preferredType = "") {
   const date = extractReceiptDateFromText(text);
   const notes = pickReceiptNotesFromText(text);
   const category = inferTransactionCategory(type, `${description} ${merchant} ${notes}`) || (type === "income" ? "Hadiah" : "Belanja");
+  const amountReview = assessReceiptAmountConfidence(text, amount);
 
   return sanitizeReceiptSuggestion(
     {
@@ -1772,6 +1845,9 @@ function buildReceiptSuggestionFromOcrText(text, preferredType = "") {
       description,
       merchant,
       notes,
+      reviewAlert: amountReview.reviewAlert,
+      reviewFlags: amountReview.reviewFlags,
+      reviewLevel: amountReview.reviewLevel,
       type
     },
     preferredType
@@ -2206,11 +2282,15 @@ function formatReceiptSuggestionForTelegram(suggestion) {
     "Hasil baca struk:",
     `- Tipe: ${suggestion.type === "income" ? "Pemasukan" : "Pengeluaran"}`,
     `- Deskripsi: ${suggestion.description || "-"}`,
-    `- Nominal: ${formatCurrency(suggestion.amount)}`,
+    `- Nominal: ${formatCurrency(suggestion.amount)}${suggestion.reviewLevel && suggestion.reviewLevel !== "high" ? " (Perlu Dicek)" : ""}`,
     `- Tanggal: ${suggestion.date || "-"}`,
     `- Kategori: ${suggestion.category || "-"}`,
     `- Catatan: ${suggestion.notes || "-"}`
   ];
+
+  if (suggestion.reviewAlert) {
+    lines.push(`- Catatan OCR: ${suggestion.reviewAlert}`);
+  }
 
   return lines.join("\n");
 }
@@ -2349,7 +2429,12 @@ function applyTelegramReceiptDraftPatch(draft, patch) {
 
   return {
     ...draft,
-    suggestion: nextSuggestion,
+    suggestion: {
+      ...nextSuggestion,
+      reviewAlert: draft.suggestion.reviewAlert || "",
+      reviewFlags: Array.isArray(draft.suggestion.reviewFlags) ? [...draft.suggestion.reviewFlags] : [],
+      reviewLevel: draft.suggestion.reviewLevel || "high"
+    },
     expiresAt: Date.now() + TELEGRAM_RECEIPT_DRAFT_TTL_MS
   };
 }
@@ -2919,7 +3004,10 @@ async function handleRequest(req, res) {
       }
 
       sendJson(req, res, 200, {
-        message: "Struk berhasil dibaca. Silakan cek kembali hasil isian sebelum menyimpan transaksi.",
+        message:
+          suggestion.reviewLevel && suggestion.reviewLevel !== "high"
+            ? suggestion.reviewAlert || "Nominal dari struk perlu dicek lagi sebelum menyimpan transaksi."
+            : "Struk berhasil dibaca. Silakan cek kembali hasil isian sebelum menyimpan transaksi.",
         suggestion
       });
       return;
