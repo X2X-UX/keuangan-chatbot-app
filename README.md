@@ -98,6 +98,18 @@ Cakupannya:
 - proteksi endpoint transaksi
 - buat transaksi + hitung summary
 
+Flow Telegram OCR:
+
+```powershell
+npm.cmd run test:telegram
+```
+
+Cakupannya:
+- foto struk Telegram -> OCR draft
+- edit cepat draft (`kategori ...`)
+- `simpan`
+- `batal`
+
 ## Environment test
 
 Untuk isolasi data saat test atau eksperimen lokal, backend mendukung:

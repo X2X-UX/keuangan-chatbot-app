@@ -8,6 +8,7 @@
     "sync:public": "node scripts/sync-public.js",
     "test:light": "node scripts/test-modules.js",
     "test:routes": "node scripts/test-routes.js",
+    "test:telegram": "node scripts/test-telegram-flow.js",
     "verify": "node scripts/verify.js",
     "prestart": "npm run sync:public",
     "predev": "npm run sync:public",

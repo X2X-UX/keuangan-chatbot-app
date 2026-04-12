@@ -13,6 +13,7 @@ const FILES_TO_CHECK = [
   "register-telegram-webhook.js",
   "scripts/test-modules.js",
   "scripts/test-routes.js",
+  "scripts/test-telegram-flow.js",
   "src/server/auth/session.js",
   "src/server/app.js",
   "src/server/http.js",
@@ -49,6 +50,7 @@ const FILES_TO_CHECK = [
 runNodeScript(path.join(ROOT, "scripts", "sync-public.js"));
 runNodeScript(path.join(ROOT, "scripts", "test-modules.js"));
 runNodeScript(path.join(ROOT, "scripts", "test-routes.js"));
+runNodeScript(path.join(ROOT, "scripts", "test-telegram-flow.js"));
 
 for (const relativePath of FILES_TO_CHECK) {
   runNodeCommand(["--check", path.join(ROOT, relativePath)]);

@@ -1,6 +1,7 @@
 const path = require("path");
 
 function createTelegramService({
+  analyzeReceipt,
   appBaseUrl,
   botToken,
   botUsername,
@@ -27,6 +28,14 @@ function createTelegramService({
   secretToken,
   unlinkTelegramByChatId
 }) {
+  const activeReceiptAnalyzer =
+    receiptAnalyzer ||
+    (typeof analyzeReceipt === "function"
+      ? {
+          analyzeReceipt
+        }
+      : null);
+
   function isTelegramConfigured() {
     return Boolean(botToken);
   }
@@ -416,7 +425,11 @@ function createTelegramService({
       }
 
       const preferredType = getPreferredReceiptTypeFromText(message.caption || "");
-      const suggestion = await receiptAnalyzer.analyzeReceipt(receiptUpload, preferredType);
+      if (!activeReceiptAnalyzer?.analyzeReceipt) {
+        throw new Error("Receipt analyzer belum siap.");
+      }
+
+      const suggestion = await activeReceiptAnalyzer.analyzeReceipt(receiptUpload, preferredType);
       setTelegramReceiptDraft(chatId, {
         linkedUserId: linked.user.id,
         receiptUpload,

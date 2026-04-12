@@ -7,6 +7,38 @@ const path = require("path");
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "arunika-routes-"));
 process.env.ARUNIKA_DATA_DIR = path.join(tempRoot, "data");
 process.env.NODE_ENV = "test";
+process.env.OCR_SPACE_API_KEY = "test-key";
+
+const originalFetch = global.fetch;
+global.fetch = async (url) => {
+  if (/ocr\.space\/parse\/image/i.test(String(url))) {
+    return {
+      ok: true,
+      json: async () => ({
+        IsErroredOnProcessing: false,
+        ParsedResults: [
+          {
+            FileParseExitCode: 1,
+            ParsedText: [
+              "Alfamart",
+              "Status Order",
+              "Selesai",
+              "TAMAN DADAP",
+              "Ref. S-260301-AGTNQLW",
+              "Subtotal 113,800",
+              "Total Diskon -14,000",
+              "Biaya Pengiriman 0",
+              "Total 99,800",
+              "Tgl. 03-01-2026 11:43:48"
+            ].join("\n")
+          }
+        ]
+      })
+    };
+  }
+
+  throw new Error(`Unexpected fetch in route tests: ${url}`);
+};
 
 const { createAppServer } = require("../src/server/app");
 const { closeDatabase } = require("../src/server/data/database");
@@ -88,9 +120,29 @@ async function run() {
     assert.strictEqual(summary.statusCode, 200);
     assert.strictEqual(summary.body.summary.totalExpense, 25000);
     assert.strictEqual(summary.body.summary.totalIncome, 0);
+
+    const receiptAnalyze = await request(server, "POST", "/api/transactions/receipt-analyze", {
+      body: {
+        preferredType: "expense",
+        receiptUpload: {
+          dataUrl:
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0qUAAAAASUVORK5CYII=",
+          fileName: "receipt-test.png"
+        }
+      },
+      headers: {
+        Cookie: sessionCookie
+      }
+    });
+
+    assert.strictEqual(receiptAnalyze.statusCode, 200);
+    assert.strictEqual(receiptAnalyze.body.suggestion.amount, 99800);
+    assert.strictEqual(receiptAnalyze.body.suggestion.type, "expense");
+    assert.ok(/alfamart/i.test(receiptAnalyze.body.suggestion.description));
   } finally {
     await close(server);
     closeDatabase();
+    global.fetch = originalFetch;
     fs.rmSync(tempRoot, { force: true, recursive: true });
   }
 }
