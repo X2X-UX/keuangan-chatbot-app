@@ -1044,6 +1044,29 @@ function extractReceiptAmountCandidatesFromLine(line) {
     .filter(Boolean);
 }
 
+function isReceiptSubtotalLine(line) {
+  return /\bsub\s*total\b|\bsubtotal\b/i.test(String(line || ""));
+}
+
+function isReceiptNonFinalSummaryLine(line) {
+  return /\b(total diskon|diskon total|discount total|biaya pengiriman|ongkir|delivery fee|service charge|admin fee|biaya admin|pajak|tax|ppn|saldo|kembali|change)\b/i.test(
+    String(line || "")
+  );
+}
+
+function hasReceiptStrongFinalAmountLine(text) {
+  const lines = normalizeReceiptOcrLines(text);
+  return lines.some((line) => {
+    if (isReceiptSubtotalLine(line) || isReceiptNonFinalSummaryLine(line)) {
+      return false;
+    }
+
+    return /\b(total amount|total belanja|grand total|total bayar|jumlah|net total|amount due|rp\.?\s*bayar|paid amount|^total\b)\b/i.test(
+      line
+    );
+  });
+}
+
 function isReceiptFinalAmountLine(line) {
   return FINAL_RECEIPT_AMOUNT_PATTERN.test(String(line || ""));
 }
@@ -1389,7 +1412,15 @@ function scoreReceiptAmountLine(line, lineIndex = 0, totalLines = 1) {
     score -= 10;
   }
 
-  if (/\b(subtotal|tax|ppn|pb1|service|diskon|discount|voucher|kembalian|change|rounding|admin)\b/.test(text)) {
+  if (isReceiptSubtotalLine(line)) {
+    score -= 14;
+  }
+
+  if (isReceiptNonFinalSummaryLine(line)) {
+    score -= 12;
+  }
+
+  if (/\b(tax|ppn|pb1|service|diskon|discount|voucher|rounding|admin)\b/.test(text)) {
     score -= 4;
   }
 
@@ -1402,6 +1433,7 @@ function scoreReceiptAmountLine(line, lineIndex = 0, totalLines = 1) {
 
 function extractReceiptAmountFromText(text) {
   const isRetailReceipt = isRetailOrderReceipt(text) || isThermalRetailReceipt(text);
+  const hasStrongFinalLine = hasReceiptStrongFinalAmountLine(text);
   const labeledAmount =
     (isRetailReceipt ? extractReceiptAmountByLabels(text, STRICT_RETAIL_FINAL_AMOUNT_LABEL_SPECS) : null) ||
     extractReceiptAmountByLabels(text, FINAL_RECEIPT_AMOUNT_LABEL_SPECS) ||
@@ -1416,6 +1448,10 @@ function extractReceiptAmountFromText(text) {
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
+    if (hasStrongFinalLine && (isReceiptSubtotalLine(line) || isReceiptNonFinalSummaryLine(line))) {
+      continue;
+    }
+
     for (const match of extractReceiptAmountCandidatesFromLine(line)) {
       const candidate = {
         amount: match.amount,
