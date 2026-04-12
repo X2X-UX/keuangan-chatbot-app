@@ -49,8 +49,10 @@ const TELEGRAM_WEBHOOK_SECRET = String(process.env.TELEGRAM_WEBHOOK_SECRET || ""
 const TELEGRAM_BOT_USERNAME = String(process.env.TELEGRAM_BOT_USERNAME || "").trim();
 const APP_BASE_URL = String(process.env.APP_BASE_URL || "").trim();
 const TELEGRAM_AUTO_SET_WEBHOOK = String(process.env.TELEGRAM_AUTO_SET_WEBHOOK || "").trim().toLowerCase() === "true";
+const TELEGRAM_RECEIPT_DRAFT_TTL_MS = 15 * 60_000;
 const ALLOWED_ORIGINS = buildAllowedOrigins();
 const RATE_LIMIT_STORE = new Map();
+const TELEGRAM_RECEIPT_DRAFTS = new Map();
 const RATE_LIMITS = {
   api: { max: 240, windowMs: 60_000 },
   auth: { max: 20, windowMs: 10 * 60_000 },
@@ -1766,6 +1768,169 @@ function formatReceiptSuggestionForTelegram(suggestion) {
   return lines.join("\n");
 }
 
+function cleanupExpiredTelegramReceiptDrafts() {
+  const now = Date.now();
+
+  for (const [chatId, draft] of TELEGRAM_RECEIPT_DRAFTS.entries()) {
+    if (!draft || Number(draft.expiresAt || 0) <= now) {
+      TELEGRAM_RECEIPT_DRAFTS.delete(chatId);
+    }
+  }
+}
+
+function setTelegramReceiptDraft(chatId, draft) {
+  cleanupExpiredTelegramReceiptDrafts();
+  TELEGRAM_RECEIPT_DRAFTS.set(String(chatId), {
+    ...draft,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + TELEGRAM_RECEIPT_DRAFT_TTL_MS
+  });
+}
+
+function getTelegramReceiptDraft(chatId) {
+  cleanupExpiredTelegramReceiptDrafts();
+  return TELEGRAM_RECEIPT_DRAFTS.get(String(chatId)) || null;
+}
+
+function clearTelegramReceiptDraft(chatId) {
+  TELEGRAM_RECEIPT_DRAFTS.delete(String(chatId));
+}
+
+function formatTelegramReceiptDraftReply(suggestion) {
+  return [
+    formatReceiptSuggestionForTelegram(suggestion),
+    "",
+    "Balas `simpan` untuk mencatat transaksi ini.",
+    "Balas `batal` untuk membuang hasil OCR.",
+    "Edit cepat juga didukung:",
+    "- `tipe pemasukan`",
+    "- `tipe pengeluaran`",
+    "- `kategori Makanan`",
+    "- `deskripsi Topup GoPay`",
+    "- `nominal 800000`",
+    "- `tanggal 2026-04-12`"
+  ].join("\n");
+}
+
+function parseTelegramReceiptDraftCommand(text) {
+  const normalized = String(text || "").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const command = normalized.replace(/^\/(\w+)(?:@\w+)?\s*/, "$1 ").trim();
+
+  if (/^simpan$/i.test(command)) {
+    return { action: "save" };
+  }
+
+  if (/^batal$/i.test(command)) {
+    return { action: "cancel" };
+  }
+
+  const typeMatch = command.match(/^tipe\s+(pemasukan|pengeluaran|income|expense)$/i);
+  if (typeMatch?.[1]) {
+    return {
+      action: "patch",
+      patch: {
+        type: /^(pemasukan|income)$/i.test(typeMatch[1]) ? "income" : "expense"
+      }
+    };
+  }
+
+  const categoryMatch = command.match(/^kategori\s+(.+)$/i);
+  if (categoryMatch?.[1]) {
+    return {
+      action: "patch",
+      patch: {
+        category: sanitizeText(categoryMatch[1], 60)
+      }
+    };
+  }
+
+  const descriptionMatch = command.match(/^deskripsi\s+(.+)$/i);
+  if (descriptionMatch?.[1]) {
+    return {
+      action: "patch",
+      patch: {
+        description: sanitizeText(descriptionMatch[1], 120)
+      }
+    };
+  }
+
+  const amountMatch = command.match(/^(?:nominal|jumlah)\s+(.+)$/i);
+  if (amountMatch?.[1]) {
+    return {
+      action: "patch",
+      patch: {
+        amount: amountMatch[1]
+      }
+    };
+  }
+
+  const dateMatch = command.match(/^tanggal\s+(.+)$/i);
+  if (dateMatch?.[1]) {
+    return {
+      action: "patch",
+      patch: {
+        date: normalizeReceiptDate(dateMatch[1])
+      }
+    };
+  }
+
+  return null;
+}
+
+function applyTelegramReceiptDraftPatch(draft, patch) {
+  const nextPayload = {
+    ...draft.suggestion,
+    ...patch
+  };
+
+  if (patch.type && patch.type !== draft.suggestion.type) {
+    const nextType = patch.type;
+    const nextCategory = findCanonicalCategory(nextType, nextPayload.category);
+
+    if (!nextCategory) {
+      nextPayload.category =
+        inferTransactionCategory(nextType, `${nextPayload.description} ${nextPayload.notes}`) ||
+        (nextType === "income" ? "Hadiah" : "Belanja");
+    }
+  }
+
+  const nextSuggestion = sanitizeTransaction(nextPayload);
+
+  return {
+    ...draft,
+    suggestion: nextSuggestion,
+    expiresAt: Date.now() + TELEGRAM_RECEIPT_DRAFT_TTL_MS
+  };
+}
+
+async function saveTelegramReceiptDraftTransaction(userId, draft) {
+  let receiptPath = "";
+
+  try {
+    if (draft.receiptUpload) {
+      receiptPath = await saveReceiptUpload(userId, draft.receiptUpload);
+    }
+
+    return createTransactionForUser(
+      userId,
+      sanitizeTransaction({
+        ...draft.suggestion,
+        receiptPath
+      })
+    );
+  } catch (error) {
+    if (receiptPath) {
+      await removeReceiptFile(receiptPath);
+    }
+
+    throw error;
+  }
+}
+
 async function downloadTelegramPhotoUpload(message) {
   const photoList = Array.isArray(message?.photo) ? message.photo : [];
   const picked = photoList[photoList.length - 1];
@@ -1818,6 +1983,8 @@ function telegramHelpText() {
   return [
     "Bot Telegram Arunika membaca pesan teks biasa.",
     "Bot juga bisa menerima foto struk atau bukti transfer untuk dibacakan OCR.",
+    "Setelah OCR selesai, balas `simpan` untuk mencatat transaksi atau `batal` untuk membuang draft.",
+    "Jika tipe transaksi perlu dibetulkan, balas `tipe pemasukan` atau `tipe pengeluaran`.",
     "Kategori transaksi mengikuti pilihan utama di form web.",
     "Anda bisa langsung kirim:",
     "- kode tautan dari dashboard web untuk menghubungkan akun",
@@ -1863,7 +2030,12 @@ async function handleTelegramPhotoMessage(message) {
 
     const preferredType = getPreferredReceiptTypeFromText(message.caption || "");
     const suggestion = await analyzeReceipt(receiptUpload, preferredType);
-    await sendTelegramMessage(chatId, formatReceiptSuggestionForTelegram(suggestion));
+    setTelegramReceiptDraft(chatId, {
+      linkedUserId: linked.user.id,
+      receiptUpload,
+      suggestion
+    });
+    await sendTelegramMessage(chatId, formatTelegramReceiptDraftReply(suggestion));
   } catch (error) {
     await sendTelegramMessage(chatId, `Foto belum bisa dibaca: ${error.message || "Terjadi kesalahan saat OCR."}`);
   }
@@ -1878,6 +2050,7 @@ async function handleTelegramTextMessage(message) {
   }
 
   const linked = getTelegramLinkByChatId(chatId);
+  const receiptDraft = getTelegramReceiptDraft(chatId);
 
   if (/^\/start\b/i.test(text)) {
     const lines = [
@@ -1918,6 +2091,7 @@ async function handleTelegramTextMessage(message) {
 
   if (/^\/unlink\b/i.test(text)) {
     const unlinked = unlinkTelegramByChatId(chatId);
+    clearTelegramReceiptDraft(chatId);
     await sendTelegramMessage(
       chatId,
       unlinked
@@ -1931,6 +2105,62 @@ async function handleTelegramTextMessage(message) {
     await sendTelegramMessage(
       chatId,
       "Chat ini belum terhubung ke akun Arunika Finance. Masuk ke web app, buat kode Telegram, lalu kirim atau tempel kode tautan ke bot ini."
+    );
+    return;
+  }
+
+  const draftCommand = receiptDraft ? parseTelegramReceiptDraftCommand(text) : null;
+  if (draftCommand) {
+    if (receiptDraft.linkedUserId !== linked.user.id) {
+      clearTelegramReceiptDraft(chatId);
+      await sendTelegramMessage(chatId, "Draft struk sebelumnya sudah tidak berlaku. Silakan kirim foto lagi.");
+      return;
+    }
+
+    if (draftCommand.action === "cancel") {
+      clearTelegramReceiptDraft(chatId);
+      await sendTelegramMessage(chatId, "Draft hasil baca struk dibatalkan. Kirim foto baru kapan saja jika ingin mencoba lagi.");
+      return;
+    }
+
+    if (draftCommand.action === "save") {
+      try {
+        const transaction = await saveTelegramReceiptDraftTransaction(linked.user.id, receiptDraft);
+        clearTelegramReceiptDraft(chatId);
+        const summary = computeSummary(listTransactionsByUser(linked.user.id));
+        await sendTelegramMessage(
+          chatId,
+          [
+            "Transaksi dari hasil OCR berhasil disimpan.",
+            `${transaction.type === "income" ? "Pemasukan" : "Pengeluaran"} ${formatCurrency(transaction.amount)} untuk ${transaction.description}.`,
+            `Kategori: ${transaction.category}. Tanggal: ${transaction.date}.`,
+            `Saldo terbaru: ${formatCurrency(summary.balance)}.`
+          ].join(" ")
+        );
+      } catch (error) {
+        await sendTelegramMessage(chatId, `Draft belum bisa disimpan: ${error.message || "Terjadi kesalahan."}`);
+      }
+
+      return;
+    }
+
+    if (draftCommand.action === "patch") {
+      try {
+        const updatedDraft = applyTelegramReceiptDraftPatch(receiptDraft, draftCommand.patch);
+        setTelegramReceiptDraft(chatId, updatedDraft);
+        await sendTelegramMessage(chatId, formatTelegramReceiptDraftReply(updatedDraft.suggestion));
+      } catch (error) {
+        await sendTelegramMessage(chatId, `Perubahan draft belum bisa dipakai: ${error.message || "Format belum sesuai."}`);
+      }
+
+      return;
+    }
+  }
+
+  if (receiptDraft) {
+    await sendTelegramMessage(
+      chatId,
+      "Masih ada draft hasil OCR yang belum diputuskan. Balas `simpan`, `batal`, atau ubah dengan `tipe ...`, `kategori ...`, `deskripsi ...`, `nominal ...`, `tanggal ...`."
     );
     return;
   }
