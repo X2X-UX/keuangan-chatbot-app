@@ -295,11 +295,18 @@ textarea {
   max-width: 780px;
 }
 
+.hero-preamble {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
 .brand-lockup {
   display: inline-flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: 16px;
 }
 
 .brand-mark {
@@ -325,7 +332,7 @@ textarea {
 
 .brand-caption {
   font-size: 0.82rem;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: #52728f;
 }
@@ -343,6 +350,11 @@ textarea {
 .hero-copy h1 {
   font-size: clamp(2.4rem, 4vw, 4.4rem);
   line-height: 0.97;
+}
+
+.hero-lead {
+  max-width: 30ch;
+  font-size: clamp(1.08rem, 1.5vw, 1.26rem);
 }
 
 .hero-copy p,
@@ -385,6 +397,14 @@ th {
 
 .eyebrow {
   color: #2f4f73;
+}
+
+.hero-eyebrow {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(12, 74, 135, 0.08);
+  color: #33557c;
+  white-space: nowrap;
 }
 
 .status-chip {
@@ -1869,26 +1889,39 @@ tbody tr:hover {
 
 @media (max-width: 760px) {
   .shell {
-    padding: 20px 14px 36px;
+    padding: 16px 12px 32px;
   }
 
   .brand-lockup {
-    gap: 12px;
-    margin-bottom: 14px;
+    gap: 10px;
   }
 
   .brand-mark {
-    width: 50px;
-    height: 50px;
+    width: 42px;
+    height: 42px;
   }
 
   .brand-kicker {
-    font-size: 0.98rem;
+    font-size: 0.92rem;
   }
 
   .brand-caption {
-    font-size: 0.74rem;
-    letter-spacing: 0.05em;
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+  }
+
+  .hero-preamble {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .hero-eyebrow {
+    padding: 8px 11px;
+    white-space: normal;
+    font-size: 0.7rem;
+    letter-spacing: 0.11em;
   }
 
   .hero,
@@ -1904,11 +1937,48 @@ tbody tr:hover {
 
   .hero {
     flex-direction: column;
+    gap: 16px;
   }
 
   .hero-status {
     min-width: 0;
     width: 100%;
+    padding: 16px;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(2rem, 10vw, 2.8rem);
+    line-height: 0.98;
+    margin-bottom: 10px;
+  }
+
+  .hero-lead {
+    max-width: none;
+    font-size: 1rem;
+    line-height: 1.55;
+    margin-bottom: 0;
+  }
+
+  .status-chip {
+    padding: 8px 12px;
+    font-size: 0.72rem;
+  }
+
+  .session-panel {
+    gap: 14px;
+  }
+
+  .session-summary strong {
+    font-size: 0.95rem;
+  }
+
+  .session-summary span {
+    font-size: 0.88rem;
+  }
+
+  .logout-button {
+    min-height: 52px;
+    padding: 12px 16px;
   }
 
   .overview,
