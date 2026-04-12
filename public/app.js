@@ -809,7 +809,10 @@ function renderTransactionReceiptPanel() {
   if (hasUpload) {
     elements.transactionReceiptStatus.textContent = receiptState.upload.fileName;
     elements.transactionReceiptHint.textContent =
-      receiptState.analysisMessage || "Struk baru akan diunggah saat transaksi disimpan.";
+      receiptState.analysisMessage ||
+      (receiptState.upload.ocrOptimized
+        ? "Struk baru akan diunggah saat transaksi disimpan. Gambar juga sudah dioptimalkan otomatis untuk OCR."
+        : "Struk baru akan diunggah saat transaksi disimpan.");
     elements.transactionReceiptAnalyzeButton.textContent = "Baca struk";
     elements.transactionReceiptAnalyzeButton.disabled = false;
     elements.transactionReceiptAnalyzeButton.classList.remove("is-hidden");
@@ -852,6 +855,88 @@ async function readReceiptFileAsDataUrl(file) {
   });
 }
 
+function estimateDataUrlBytes(dataUrl) {
+  const base64 = String(dataUrl || "").split(",")[1] || "";
+  const paddingMatch = base64.match(/=*$/);
+  const padding = paddingMatch ? paddingMatch[0].length : 0;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+}
+
+async function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Gagal menyiapkan gambar struk untuk OCR."));
+    image.src = dataUrl;
+  });
+}
+
+async function optimizeReceiptDataUrlForOCR(dataUrl, options = {}) {
+  const maxBytes = Number(options.maxBytes) || 950 * 1024;
+  const maxDimension = Number(options.maxDimension) || 1600;
+  const originalBytes = estimateDataUrlBytes(dataUrl);
+  if (!dataUrl || originalBytes <= maxBytes) {
+    return {
+      dataUrl,
+      optimized: false
+    };
+  }
+
+  const image = await loadImageFromDataUrl(dataUrl);
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return {
+      dataUrl,
+      optimized: false
+    };
+  }
+
+  let width = image.naturalWidth || image.width;
+  let height = image.naturalHeight || image.height;
+  const dimensionRatio = Math.max(width / maxDimension, height / maxDimension, 1);
+  width = Math.max(1, Math.round(width / dimensionRatio));
+  height = Math.max(1, Math.round(height / dimensionRatio));
+
+  let bestCandidate = {
+    bytes: originalBytes,
+    dataUrl
+  };
+
+  for (let iteration = 0; iteration < 6; iteration += 1) {
+    canvas.width = width;
+    canvas.height = height;
+    context.clearRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    for (const quality of [0.82, 0.74, 0.66, 0.58, 0.5, 0.42]) {
+      const candidate = canvas.toDataURL("image/jpeg", quality);
+      const bytes = estimateDataUrlBytes(candidate);
+      if (bytes < bestCandidate.bytes) {
+        bestCandidate = {
+          bytes,
+          dataUrl: candidate
+        };
+      }
+
+      if (bytes <= maxBytes) {
+        return {
+          dataUrl: candidate,
+          optimized: true
+        };
+      }
+    }
+
+    width = Math.max(1, Math.round(width * 0.86));
+    height = Math.max(1, Math.round(height * 0.86));
+  }
+
+  return {
+    dataUrl: bestCandidate.dataUrl,
+    optimized: bestCandidate.dataUrl !== dataUrl
+  };
+}
+
 async function handleTransactionReceiptChange(event) {
   const file = event.target.files?.[0];
   if (!file) {
@@ -876,6 +961,7 @@ async function handleTransactionReceiptChange(event) {
   }
 
   const dataUrl = await readReceiptFileAsDataUrl(file);
+  const optimizedReceipt = await optimizeReceiptDataUrlForOCR(dataUrl);
   if (!state.transactionReceipt) {
     state.transactionReceipt = createTransactionReceiptState();
   }
@@ -884,7 +970,9 @@ async function handleTransactionReceiptChange(event) {
   setTransactionReceiptError("");
   state.transactionReceipt.upload = {
     dataUrl,
-    fileName: file.name
+    fileName: file.name,
+    ocrDataUrl: optimizedReceipt.dataUrl,
+    ocrOptimized: optimizedReceipt.optimized
   };
   state.transactionReceipt.analysisMessage = "";
   state.transactionReceipt.removeRequested = false;
@@ -1002,7 +1090,7 @@ async function handleTransactionReceiptAnalyze() {
       body: JSON.stringify({
         preferredType: elements.transactionType.value,
         receiptUpload: {
-          dataUrl: upload.dataUrl,
+          dataUrl: upload.ocrDataUrl || upload.dataUrl,
           fileName: upload.fileName
         }
       })
