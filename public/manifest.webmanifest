@@ -8,6 +8,34 @@
   "orientation": "portrait",
   "background_color": "#edf2f7",
   "theme_color": "#0c4a87",
+  "shortcuts": [
+    {
+      "name": "Scan Struk",
+      "short_name": "Scan Struk",
+      "description": "Buka langsung ke alur scan struk.",
+      "url": "/?shortcut=scan-receipt",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Input Manual",
+      "short_name": "Input Manual",
+      "description": "Buka langsung ke form input transaksi manual.",
+      "url": "/?shortcut=manual-entry",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",

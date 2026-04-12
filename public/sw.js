@@ -1,4 +1,4 @@
-const STATIC_CACHE = "arunika-static-v2";
+const STATIC_CACHE = "arunika-static-v3";
 
 const STATIC_ASSETS = [
   "/",
@@ -8,6 +8,8 @@ const STATIC_ASSETS = [
   "/transaction-categories.js",
   "/transaction-amount.js",
   "/manifest.webmanifest",
+  "/icons/arunika-mark.svg",
+  "/icons/favicon.svg",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/offline.html"

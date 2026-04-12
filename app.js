@@ -5,6 +5,7 @@ const state = {
   csvImport: null,
   editingTransactionId: null,
   health: null,
+  launchShortcut: null,
   summary: null,
   transactionEntryMethod: null,
   transactionEntryStep: "chooser",
@@ -58,6 +59,47 @@ const prefersReducedMotion =
   typeof window !== "undefined" &&
   typeof window.matchMedia === "function" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function getLaunchShortcutFromUrl() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const url = new URL(window.location.href);
+  const shortcut = url.searchParams.get("shortcut");
+
+  if (shortcut === "scan-receipt") {
+    return "scan";
+  }
+
+  if (shortcut === "manual-entry") {
+    return "manual";
+  }
+
+  return null;
+}
+
+function clearLaunchShortcutFromUrl() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  let hasChanges = false;
+
+  if (url.searchParams.has("shortcut")) {
+    url.searchParams.delete("shortcut");
+    hasChanges = true;
+  }
+
+  if (!hasChanges) {
+    return;
+  }
+
+  const nextSearch = url.searchParams.toString();
+  const nextUrl = `${url.pathname}${nextSearch ? `?${nextSearch}` : ""}${url.hash}`;
+  window.history.replaceState({}, document.title, nextUrl);
+}
 
 const elements = {
   appShell: document.getElementById("appShell"),
@@ -751,6 +793,29 @@ function showTransactionScanStage() {
   state.transactionEntryStep = "scan";
   renderTransactionEntryFlow();
   scrollTransactionFlowIntoView(elements.transactionScanStage);
+}
+
+function applyPendingLaunchShortcut() {
+  const shortcut = state.launchShortcut;
+  if (!shortcut || !state.user) {
+    return;
+  }
+
+  state.launchShortcut = null;
+  resetTransactionForm();
+  setTransactionReceiptError("");
+
+  if (shortcut === "scan") {
+    state.transactionEntryMethod = "scan";
+    showTransactionScanStage();
+  } else {
+    showTransactionReview({
+      focusField: elements.transactionForm.elements.description,
+      method: "manual"
+    });
+  }
+
+  clearLaunchShortcutFromUrl();
 }
 
 function createTransactionReceiptState() {
@@ -2388,6 +2453,7 @@ async function loadSession() {
     hideAuthGate();
     resetChat();
     await reloadDashboard();
+    applyPendingLaunchShortcut();
   } catch (error) {
     if (handleUnauthorized(error)) {
       return;
@@ -2426,6 +2492,7 @@ async function handleAuthSubmit(event) {
     resetTransactionForm();
     resetChat();
     await reloadDashboard();
+    applyPendingLaunchShortcut();
   } catch (error) {
     elements.authMessage.textContent = error.message;
   } finally {
@@ -2823,6 +2890,7 @@ async function registerServiceWorker() {
 }
 
 async function initializeApp() {
+  state.launchShortcut = getLaunchShortcutFromUrl();
   resetTransactionForm();
   resetImportState();
   setAuthMode("login");
