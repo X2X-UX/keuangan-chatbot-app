@@ -6,7 +6,12 @@ const state = {
   editingTransactionId: null,
   health: null,
   summary: null,
+  transactionEntryMethod: null,
+  transactionEntryStep: "chooser",
+  transactionReceiptAnalyzing: false,
+  transactionReceiptError: "",
   transactionReceipt: null,
+  transactionReviewVisited: false,
   telegramCommand: null,
   telegramStatus: null,
   transactions: [],
@@ -132,13 +137,35 @@ const elements = {
   transactionAmount: document.getElementById("transactionAmount"),
   transactionAmountHint: document.getElementById("transactionAmountHint"),
   transactionCancelButton: document.getElementById("transactionCancelButton"),
+  transactionDetailsSection: document.getElementById("transactionDetailsSection"),
+  transactionEntryChooser: document.getElementById("transactionEntryChooser"),
+  transactionFlowBackButton: document.getElementById("transactionFlowBackButton"),
+  transactionModeManualButton: document.getElementById("transactionModeManualButton"),
+  transactionModeScanButton: document.getElementById("transactionModeScanButton"),
   transactionReceiptFile: document.getElementById("transactionReceiptFile"),
   transactionReceiptHint: document.getElementById("transactionReceiptHint"),
   transactionReceiptLink: document.getElementById("transactionReceiptLink"),
   transactionReceiptAnalyzeButton: document.getElementById("transactionReceiptAnalyzeButton"),
+  transactionOCRError: document.getElementById("transactionOCRError"),
+  transactionOCRErrorManualButton: document.getElementById("transactionOCRErrorManualButton"),
+  transactionOCRErrorText: document.getElementById("transactionOCRErrorText"),
+  transactionOCRErrorTitle: document.getElementById("transactionOCRErrorTitle"),
+  transactionOCRRetryButton: document.getElementById("transactionOCRRetryButton"),
   transactionReceiptPanel: document.getElementById("transactionReceiptPanel"),
   transactionReceiptRemoveButton: document.getElementById("transactionReceiptRemoveButton"),
   transactionReceiptStatus: document.getElementById("transactionReceiptStatus"),
+  transactionOCRProcessing: document.getElementById("transactionOCRProcessing"),
+  transactionOCRText: document.getElementById("transactionOCRText"),
+  transactionOCRTitle: document.getElementById("transactionOCRTitle"),
+  transactionReviewHint: document.getElementById("transactionReviewHint"),
+  transactionReviewManageButton: document.getElementById("transactionReviewManageButton"),
+  transactionReviewReceiptImage: document.getElementById("transactionReviewReceiptImage"),
+  transactionReviewReceiptLink: document.getElementById("transactionReviewReceiptLink"),
+  transactionReviewStatus: document.getElementById("transactionReviewStatus"),
+  transactionScanManualButton: document.getElementById("transactionScanManualButton"),
+  transactionScanEmptyState: document.getElementById("transactionScanEmptyState"),
+  transactionScanReviewButton: document.getElementById("transactionScanReviewButton"),
+  transactionScanStage: document.getElementById("transactionScanStage"),
   transactionTableBody: document.getElementById("transactionTableBody"),
   transactionFormTitle: document.getElementById("transactionFormTitle"),
   transactionSubmitButton: document.getElementById("transactionSubmitButton"),
@@ -435,8 +462,203 @@ function setTransactionFormMode(editing) {
   elements.transactionCancelButton.classList.toggle("is-hidden", !isEditing);
 }
 
+function getActiveTransactionReceiptPreview() {
+  const receiptState = state.transactionReceipt || createTransactionReceiptState();
+
+  if (receiptState.upload?.dataUrl) {
+    return {
+      label: receiptState.upload.fileName || "Struk baru",
+      url: receiptState.upload.dataUrl
+    };
+  }
+
+  if (receiptState.hasExisting && !receiptState.removeRequested && receiptState.existingUrl) {
+    return {
+      label: "Struk tersimpan",
+      url: receiptState.existingUrl
+    };
+  }
+
+  return null;
+}
+
+function renderTransactionReviewBanner() {
+  const preview = getActiveTransactionReceiptPreview();
+  const receiptState = state.transactionReceipt || createTransactionReceiptState();
+  const hintFromAI = receiptState.analysisMessage || "";
+
+  if (preview) {
+    elements.transactionReviewStatus.textContent = preview.label;
+    elements.transactionReviewHint.textContent =
+      hintFromAI ||
+      (receiptState.upload
+        ? "Hasil scan siap diperiksa. Edit detail transaksi sebelum disimpan."
+        : "Struk tersimpan dan bisa dibuka kembali kapan saja.");
+    elements.transactionReviewManageButton.textContent = "Kelola struk";
+    elements.transactionReviewReceiptLink.href = preview.url;
+    elements.transactionReviewReceiptLink.classList.remove("is-hidden");
+    elements.transactionReviewReceiptImage.src = preview.url;
+    elements.transactionReviewReceiptImage.alt = `Preview ${preview.label}`;
+    return;
+  }
+
+  elements.transactionReviewStatus.textContent = "Input manual aktif";
+  elements.transactionReviewHint.textContent = "Isi detail inti dulu. Anda tetap bisa menambahkan struk kapan saja.";
+  elements.transactionReviewManageButton.textContent = "Scan struk";
+  elements.transactionReviewReceiptLink.classList.add("is-hidden");
+  elements.transactionReviewReceiptLink.removeAttribute("href");
+  elements.transactionReviewReceiptImage.removeAttribute("src");
+}
+
+function renderTransactionOCRState() {
+  const isAnalyzing = state.transactionReceiptAnalyzing === true;
+  const hasPreview = Boolean(getActiveTransactionReceiptPreview());
+
+  elements.transactionOCRProcessing.classList.toggle("is-hidden", !isAnalyzing);
+  elements.transactionOCRTitle.textContent = isAnalyzing ? "Sedang membaca struk" : "Pembacaan struk selesai";
+  elements.transactionOCRText.textContent = isAnalyzing
+    ? "OCR sedang memeriksa gambar, mengenali total, tanggal, dan detail transaksi."
+    : "Hasil pembacaan sudah siap ditinjau di form review.";
+
+  elements.transactionReceiptFile.disabled = isAnalyzing;
+  elements.transactionFlowBackButton.disabled = isAnalyzing;
+  elements.transactionScanManualButton.disabled = isAnalyzing;
+  elements.transactionReceiptRemoveButton.disabled = isAnalyzing;
+
+  if (elements.transactionReceiptAnalyzeButton.classList.contains("is-hidden")) {
+    return;
+  }
+
+  elements.transactionReceiptAnalyzeButton.disabled = isAnalyzing || !hasPreview;
+  elements.transactionReceiptAnalyzeButton.textContent = isAnalyzing ? "Membaca struk..." : "Baca struk";
+}
+
+function setTransactionReceiptError(message = "") {
+  state.transactionReceiptError = String(message || "").trim();
+}
+
+function getFriendlyTransactionReceiptError(message = "") {
+  const raw = String(message || "").trim();
+  const lower = raw.toLowerCase();
+
+  if (!raw) {
+    return "OCR belum berhasil membaca struk ini. Coba foto ulang dengan pencahayaan yang lebih jelas.";
+  }
+
+  if (/1 mb|ukuran gambar|maksimal 1 mb|kompres/i.test(raw)) {
+    return "Ukuran gambar masih terlalu besar untuk dibaca AI. Kompres atau ambil ulang foto dengan resolusi lebih ringan.";
+  }
+
+  if (/png|jpg|jpeg|webp|format/i.test(raw)) {
+    return "Format file belum cocok. Gunakan PNG, JPG, atau WEBP lalu coba lagi.";
+  }
+
+  if (/belum aktif|api[_ ]?key|fitur baca struk/i.test(lower)) {
+    return "Layanan baca struk belum aktif di server. Anda masih bisa lanjut isi transaksi secara manual.";
+  }
+
+  if (/quota|billing|habis/i.test(lower)) {
+    return "Kuota layanan AI sedang habis. Coba lagi nanti atau lanjut isi transaksi manual.";
+  }
+
+  if (/timeout|timed out|gagal menghubungi|network|fetch failed|socket|gateway|503|504|429/i.test(lower)) {
+    return "Layanan OCR sedang lambat atau sibuk. Tunggu sebentar lalu coba lagi.";
+  }
+
+  if (/belum bisa membaca|belum berhasil dibaca|parsedtext|tidak terbaca|tidak terbaca jelas|respons ai untuk struk kosong|json/i.test(lower)) {
+    return "Teks pada struk belum terbaca dengan jelas. Coba foto ulang dengan cahaya lebih terang dan posisi lebih tegak.";
+  }
+
+  return raw;
+}
+
+function renderTransactionOCRError() {
+  const hasError = Boolean(state.transactionReceiptError);
+  const isAnalyzing = state.transactionReceiptAnalyzing === true;
+
+  elements.transactionOCRError.classList.toggle("is-hidden", !hasError);
+  elements.transactionOCRErrorTitle.textContent = "Struk belum bisa dibaca";
+  elements.transactionOCRErrorText.textContent =
+    state.transactionReceiptError || "Coba foto ulang dengan pencahayaan yang lebih jelas atau lanjut isi manual.";
+  elements.transactionOCRRetryButton.disabled = isAnalyzing;
+  elements.transactionOCRErrorManualButton.disabled = isAnalyzing;
+}
+
+function renderTransactionEntryFlow() {
+  const isEditing = Boolean(state.editingTransactionId);
+  const step = isEditing
+    ? state.transactionEntryStep === "scan"
+      ? "scan"
+      : "review"
+    : state.transactionEntryStep || "chooser";
+  const hasPreview = Boolean(getActiveTransactionReceiptPreview());
+  const canReturnToReview = state.transactionReviewVisited || isEditing;
+
+  elements.transactionEntryChooser.classList.toggle("is-hidden", step !== "chooser" || isEditing);
+  elements.transactionScanStage.classList.toggle("is-hidden", step !== "scan");
+  elements.transactionDetailsSection.classList.toggle("is-hidden", step !== "review");
+  elements.transactionScanEmptyState.classList.toggle("is-hidden", hasPreview);
+  elements.transactionScanReviewButton.disabled = !hasPreview || state.transactionReceiptAnalyzing;
+  elements.transactionScanReviewButton.textContent = hasPreview ? "Lanjut ke review" : "Pilih foto dulu";
+  elements.transactionFlowBackButton.textContent = canReturnToReview ? "Kembali ke detail" : "Ganti metode";
+  elements.transactionScanManualButton.textContent = hasPreview
+    ? "Lanjut tanpa AI"
+    : canReturnToReview
+      ? "Isi manual di form"
+      : "Input manual";
+  renderTransactionOCRState();
+  renderTransactionOCRError();
+  renderTransactionReviewBanner();
+}
+
+function scrollTransactionFlowIntoView(target) {
+  if (!target) {
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    target.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "start"
+    });
+  });
+}
+
+function showTransactionReview(options = {}) {
+  state.transactionEntryMethod = options.method || state.transactionEntryMethod || "manual";
+  state.transactionEntryStep = "review";
+  state.transactionReviewVisited = true;
+  renderTransactionEntryFlow();
+  scrollTransactionFlowIntoView(elements.transactionDetailsSection);
+
+  if (options.focusField) {
+    requestAnimationFrame(() => {
+      options.focusField.focus();
+    });
+  }
+}
+
+function showTransactionChooser() {
+  state.transactionEntryMethod = null;
+  state.transactionEntryStep = "chooser";
+  state.transactionReviewVisited = false;
+  renderTransactionEntryFlow();
+  scrollTransactionFlowIntoView(elements.transactionEntryChooser);
+}
+
+function showTransactionScanStage() {
+  if (!state.transactionEntryMethod) {
+    state.transactionEntryMethod = "scan";
+  }
+
+  state.transactionEntryStep = "scan";
+  renderTransactionEntryFlow();
+  scrollTransactionFlowIntoView(elements.transactionScanStage);
+}
+
 function createTransactionReceiptState() {
   return {
+    analysisMessage: "",
     existingUrl: "",
     hasExisting: false,
     removeRequested: false,
@@ -450,6 +672,8 @@ function getTransactionReceiptUrl(transactionId) {
 
 function resetTransactionReceiptState(transaction = null) {
   state.transactionReceipt = createTransactionReceiptState();
+  state.transactionReceiptAnalyzing = false;
+  state.transactionReceiptError = "";
 
   if (transaction?.id && transaction.receiptPath) {
     state.transactionReceipt.existingUrl = getTransactionReceiptUrl(transaction.id);
@@ -477,12 +701,14 @@ function renderTransactionReceiptPanel() {
   elements.transactionReceiptLink.removeAttribute("href");
 
   if (!showPanel) {
+    renderTransactionEntryFlow();
     return;
   }
 
   if (hasUpload) {
     elements.transactionReceiptStatus.textContent = receiptState.upload.fileName;
-    elements.transactionReceiptHint.textContent = "Struk baru akan diunggah saat transaksi disimpan.";
+    elements.transactionReceiptHint.textContent =
+      receiptState.analysisMessage || "Struk baru akan diunggah saat transaksi disimpan.";
     elements.transactionReceiptAnalyzeButton.textContent = "Baca struk";
     elements.transactionReceiptAnalyzeButton.disabled = false;
     elements.transactionReceiptAnalyzeButton.classList.remove("is-hidden");
@@ -492,6 +718,7 @@ function renderTransactionReceiptPanel() {
     elements.transactionReceiptLink.classList.add("receipt-link");
     elements.transactionReceiptRemoveButton.textContent = "Batalkan struk";
     elements.transactionReceiptRemoveButton.classList.remove("is-hidden");
+    renderTransactionEntryFlow();
     return;
   }
 
@@ -500,6 +727,7 @@ function renderTransactionReceiptPanel() {
     elements.transactionReceiptHint.textContent = "Simpan perubahan transaksi untuk menghapus struk yang tersimpan.";
     elements.transactionReceiptRemoveButton.textContent = "Batalkan hapus";
     elements.transactionReceiptRemoveButton.classList.remove("is-hidden");
+    renderTransactionEntryFlow();
     return;
   }
 
@@ -511,6 +739,7 @@ function renderTransactionReceiptPanel() {
   elements.transactionReceiptLink.classList.add("receipt-link");
   elements.transactionReceiptRemoveButton.textContent = "Hapus struk";
   elements.transactionReceiptRemoveButton.classList.remove("is-hidden");
+  renderTransactionEntryFlow();
 }
 
 async function readReceiptFileAsDataUrl(file) {
@@ -550,10 +779,13 @@ async function handleTransactionReceiptChange(event) {
     state.transactionReceipt = createTransactionReceiptState();
   }
 
+  state.transactionReceiptAnalyzing = false;
+  setTransactionReceiptError("");
   state.transactionReceipt.upload = {
     dataUrl,
     fileName: file.name
   };
+  state.transactionReceipt.analysisMessage = "";
   state.transactionReceipt.removeRequested = false;
   renderTransactionReceiptPanel();
 }
@@ -563,14 +795,20 @@ function handleTransactionReceiptRemove() {
     state.transactionReceipt = createTransactionReceiptState();
   }
 
+  state.transactionReceiptAnalyzing = false;
+  setTransactionReceiptError("");
   if (state.transactionReceipt.upload) {
     state.transactionReceipt.upload = null;
+    state.transactionReceipt.analysisMessage = "";
     if (!state.transactionReceipt.hasExisting) {
       resetTransactionReceiptState();
       return;
     }
   } else if (state.transactionReceipt.hasExisting) {
     state.transactionReceipt.removeRequested = !state.transactionReceipt.removeRequested;
+    if (state.transactionReceipt.removeRequested) {
+      state.transactionReceipt.analysisMessage = "";
+    }
   }
 
   if (elements.transactionReceiptFile) {
@@ -641,15 +879,15 @@ async function handleTransactionReceiptAnalyze() {
 
   const upload = state.transactionReceipt?.upload;
   if (!upload) {
-    window.alert("Unggah struk baru terlebih dahulu sebelum menjalankan AI.");
+    setTransactionReceiptError(getFriendlyTransactionReceiptError("Unggah struk baru terlebih dahulu sebelum menjalankan pembacaan AI."));
+    renderTransactionEntryFlow();
     return;
   }
 
-  const button = elements.transactionReceiptAnalyzeButton;
-
   try {
-    button.disabled = true;
-    button.textContent = "Membaca struk...";
+    setTransactionReceiptError("");
+    state.transactionReceiptAnalyzing = true;
+    renderTransactionEntryFlow();
 
     const payload = await request("/api/transactions/receipt-analyze", {
       method: "POST",
@@ -666,20 +904,38 @@ async function handleTransactionReceiptAnalyze() {
     });
 
     applyReceiptSuggestion(payload.suggestion);
-    elements.transactionReceiptHint.textContent =
+    state.transactionReceipt.analysisMessage =
       payload.message || "Form sudah diisi dari struk. Mohon cek kembali sebelum menyimpan transaksi.";
+    setTransactionReceiptError("");
+    elements.transactionReceiptHint.textContent = state.transactionReceipt.analysisMessage;
+    state.transactionReceiptAnalyzing = false;
+    showTransactionReview({
+      focusField: elements.transactionForm.elements.description,
+      method: "scan"
+    });
   } catch (error) {
-    if (!handleUnauthorized(error)) {
-      window.alert(error.message);
+    state.transactionReceiptAnalyzing = false;
+    const wasUnauthorized = handleUnauthorized(error);
+    setTransactionReceiptError(
+      wasUnauthorized
+        ? ""
+        : getFriendlyTransactionReceiptError(error.message)
+    );
+    renderTransactionEntryFlow();
+    if (!wasUnauthorized) {
+      scrollTransactionFlowIntoView(elements.transactionOCRError);
     }
   } finally {
-    button.disabled = false;
-    button.textContent = "Baca struk";
+    state.transactionReceiptAnalyzing = false;
+    renderTransactionEntryFlow();
   }
 }
 
 function resetTransactionForm() {
   state.editingTransactionId = null;
+  state.transactionEntryMethod = null;
+  state.transactionEntryStep = "chooser";
+  state.transactionReviewVisited = false;
   elements.transactionForm.reset();
   elements.transactionForm.date.value = todayInputValue();
   syncTransactionCategoryOptions();
@@ -1340,6 +1596,9 @@ function populateTransactionForm(transaction) {
   }
 
   state.editingTransactionId = transaction.id;
+  state.transactionEntryMethod = transaction.receiptPath ? "scan" : "manual";
+  state.transactionEntryStep = "review";
+  state.transactionReviewVisited = true;
   elements.transactionType.value = transaction.type;
   syncTransactionCategoryOptions(transaction.category);
   elements.transactionForm.elements.description.value = transaction.description || "";
@@ -2248,6 +2507,57 @@ function bindEvents() {
   elements.telegramUnlinkButton.addEventListener("click", handleTelegramUnlink);
   elements.transactionForm.addEventListener("submit", handleTransactionSubmit);
   elements.transactionCancelButton.addEventListener("click", resetTransactionForm);
+  elements.transactionModeScanButton.addEventListener("click", () => {
+    setTransactionReceiptError("");
+    state.transactionEntryMethod = "scan";
+    showTransactionScanStage();
+  });
+  elements.transactionModeManualButton.addEventListener("click", () => {
+    setTransactionReceiptError("");
+    showTransactionReview({
+      focusField: elements.transactionForm.elements.description,
+      method: "manual"
+    });
+  });
+  elements.transactionFlowBackButton.addEventListener("click", () => {
+    if (state.transactionReviewVisited || state.editingTransactionId) {
+      showTransactionReview({ method: state.transactionEntryMethod || "manual" });
+      return;
+    }
+
+    showTransactionChooser();
+  });
+  elements.transactionScanReviewButton.addEventListener("click", () => {
+    setTransactionReceiptError("");
+    showTransactionReview({
+      focusField: elements.transactionForm.elements.description,
+      method: state.transactionEntryMethod || "scan"
+    });
+  });
+  elements.transactionScanManualButton.addEventListener("click", () => {
+    setTransactionReceiptError("");
+    showTransactionReview({
+      focusField: elements.transactionForm.elements.description,
+      method: getActiveTransactionReceiptPreview() ? "scan" : "manual"
+    });
+  });
+  elements.transactionReviewManageButton.addEventListener("click", () => {
+    setTransactionReceiptError("");
+    state.transactionEntryMethod = "scan";
+    showTransactionScanStage();
+  });
+  elements.transactionOCRRetryButton.addEventListener("click", () => {
+    handleTransactionReceiptAnalyze().catch((error) => {
+      window.alert(error.message);
+    });
+  });
+  elements.transactionOCRErrorManualButton.addEventListener("click", () => {
+    setTransactionReceiptError("");
+    showTransactionReview({
+      focusField: elements.transactionForm.elements.description,
+      method: getActiveTransactionReceiptPreview() ? "scan" : "manual"
+    });
+  });
   elements.transactionReceiptFile.addEventListener("change", (event) => {
     handleTransactionReceiptChange(event).catch((error) => {
       window.alert(error.message);

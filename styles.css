@@ -158,6 +158,19 @@ textarea {
   }
 }
 
+@keyframes receipt-ocr-bounce {
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: scaleY(0.45);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
 .shell.is-locked {
   filter: blur(4px);
   pointer-events: none;
@@ -722,6 +735,359 @@ th {
 
 .split-heading {
   align-items: center;
+}
+
+.transaction-form-shell {
+  display: grid;
+  gap: 20px;
+}
+
+.transaction-entry-chooser {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.entry-method-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(12, 74, 135, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(247, 250, 255, 0.96)),
+    var(--surface-strong);
+  box-shadow: 0 14px 28px rgba(11, 34, 63, 0.06);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.entry-method-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(12, 74, 135, 0.28);
+  box-shadow: 0 18px 34px rgba(11, 34, 63, 0.1);
+}
+
+.entry-method-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  color: var(--primary);
+  background: rgba(12, 74, 135, 0.1);
+}
+
+.entry-method-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.entry-method-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.entry-method-copy strong {
+  font-size: 1rem;
+  color: var(--primary-strong);
+  font-family: var(--font-display);
+}
+
+.entry-method-copy span:last-child {
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: 0.92rem;
+}
+
+.transaction-stage,
+.transaction-details-section {
+  display: grid;
+  gap: 18px;
+}
+
+.transaction-stage-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.transaction-stage-head h3 {
+  margin: 6px 0 6px;
+  color: var(--primary-strong);
+  font-family: var(--font-display);
+}
+
+.transaction-stage-head p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.transaction-scan-card {
+  display: grid;
+  gap: 14px;
+}
+
+.transaction-scan-empty {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(12, 74, 135, 0.05);
+  border: 1px solid rgba(12, 74, 135, 0.09);
+}
+
+.transaction-scan-empty strong {
+  color: var(--primary-strong);
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+
+.transaction-scan-empty p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.transaction-scan-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.transaction-scan-checklist span {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(12, 74, 135, 0.08);
+  color: var(--primary);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.transaction-scan-upload {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  padding: 20px;
+  border-radius: 22px;
+  border: 1px dashed rgba(12, 74, 135, 0.24);
+  background:
+    radial-gradient(circle at top right, rgba(14, 139, 118, 0.08), transparent 36%),
+    rgba(12, 74, 135, 0.04);
+  cursor: pointer;
+}
+
+.transaction-scan-upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.transaction-scan-upload-label {
+  display: inline-flex;
+  width: fit-content;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(12, 74, 135, 0.1);
+  color: var(--primary);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.transaction-scan-upload strong {
+  color: var(--primary-strong);
+  font-family: var(--font-display);
+  font-size: 1.04rem;
+}
+
+.transaction-scan-upload small {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.transaction-ocr-state {
+  display: grid;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(12, 74, 135, 0.12);
+  background:
+    radial-gradient(circle at top right, rgba(14, 139, 118, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(242, 248, 255, 0.96));
+  box-shadow: 0 14px 28px rgba(11, 34, 63, 0.08);
+}
+
+.transaction-ocr-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.transaction-ocr-equalizer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  width: 34px;
+  height: 34px;
+}
+
+.transaction-ocr-equalizer span {
+  width: 5px;
+  height: 100%;
+  border-radius: 999px;
+  transform-origin: center bottom;
+  background: linear-gradient(180deg, var(--accent), var(--primary));
+  animation: receipt-ocr-bounce 1.05s ease-in-out infinite;
+}
+
+.transaction-ocr-equalizer span:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.transaction-ocr-equalizer span:nth-child(3) {
+  animation-delay: 0.28s;
+}
+
+.transaction-ocr-equalizer span:nth-child(4) {
+  animation-delay: 0.42s;
+}
+
+.transaction-ocr-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.transaction-ocr-copy strong {
+  color: var(--primary-strong);
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+
+.transaction-ocr-copy p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.transaction-ocr-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.transaction-ocr-steps span {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(12, 74, 135, 0.08);
+  color: var(--primary);
+  font-size: 0.79rem;
+  font-weight: 700;
+}
+
+.transaction-ocr-steps span.is-active {
+  background: rgba(14, 139, 118, 0.12);
+  color: var(--accent);
+}
+
+.transaction-ocr-error {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(180, 35, 24, 0.14);
+  background:
+    radial-gradient(circle at top right, rgba(180, 35, 24, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 244, 242, 0.96));
+}
+
+.transaction-ocr-error strong {
+  color: var(--danger);
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+
+.transaction-ocr-error p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.transaction-ocr-error-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.transaction-stage-actions,
+.transaction-review-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.transaction-review-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(12, 74, 135, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(245, 249, 255, 0.94)),
+    var(--surface-strong);
+}
+
+.transaction-review-thumb {
+  flex: 0 0 auto;
+  display: inline-flex;
+  width: 68px;
+  height: 68px;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(14, 139, 118, 0.14);
+  box-shadow: 0 12px 24px rgba(11, 34, 63, 0.08);
+}
+
+.transaction-review-thumb-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.transaction-review-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.transaction-review-copy strong {
+  color: var(--primary-strong);
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+
+.transaction-review-copy span:last-child {
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: 0.9rem;
 }
 
 .transaction-form {
@@ -1424,6 +1790,7 @@ tbody tr:hover {
   }
 
   .overview,
+  .transaction-entry-chooser,
   .transaction-form,
   .import-mapping-grid {
     grid-template-columns: 1fr;
@@ -1497,6 +1864,7 @@ tbody tr:hover {
   .section-heading,
   .split-heading,
   .session-panel,
+  .transaction-stage-head,
   .transaction-form-actions {
     flex-direction: column;
     align-items: stretch;
@@ -1509,6 +1877,9 @@ tbody tr:hover {
   .compact-toggle,
   .session-panel .secondary-button,
   .telegram-actions .secondary-button,
+  .transaction-stage-actions .primary-button,
+  .transaction-stage-actions .secondary-button,
+  .transaction-review-actions .secondary-button,
   .transaction-form-actions .primary-button,
   .transaction-form-actions .secondary-button,
   .chat-form .primary-button {
@@ -1537,6 +1908,48 @@ tbody tr:hover {
 
   .receipt-actions {
     justify-content: stretch;
+  }
+
+  .transaction-review-banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .transaction-review-thumb {
+    width: 100%;
+    height: 164px;
+  }
+
+  .transaction-scan-checklist {
+    flex-direction: column;
+  }
+
+  .transaction-ocr-head,
+  .transaction-ocr-steps,
+  .transaction-ocr-error-actions {
+    align-items: stretch;
+  }
+
+  .transaction-ocr-head {
+    flex-direction: column;
+  }
+
+  .transaction-form {
+    gap: 14px;
+    padding-bottom: 104px;
+  }
+
+  .transaction-form-actions {
+    position: sticky;
+    bottom: 10px;
+    z-index: 2;
+    padding: 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    border-radius: 18px;
+    background: rgba(248, 250, 252, 0.96);
+    border: 1px solid rgba(12, 74, 135, 0.1);
+    box-shadow: 0 12px 28px rgba(11, 34, 63, 0.08);
+    backdrop-filter: blur(10px);
   }
 
   .chat-messages {

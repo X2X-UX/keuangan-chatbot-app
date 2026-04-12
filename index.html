@@ -213,69 +213,179 @@
               </div>
             </div>
 
-            <form id="transactionForm" class="transaction-form">
-              <label>
-                <span>Tipe</span>
-                <select id="transactionType" name="type" required>
-                  <option value="income">Pemasukan</option>
-                  <option value="expense">Pengeluaran</option>
-                </select>
-              </label>
-              <label>
-                <span>Deskripsi transaksi</span>
-                <input type="text" name="description" placeholder="Contoh: Bayar listrik" required />
-              </label>
-              <label>
-                <span>Nominal</span>
-                <input
-                  id="transactionAmount"
-                  type="text"
-                  name="amount"
-                  inputmode="decimal"
-                  autocomplete="off"
-                  placeholder="Contoh: 500000, 15.000, 15rb, 1,5jt"
-                  required
-                />
-                <small id="transactionAmountHint" class="field-hint">
-                  Bisa isi nominal fleksibel seperti `Rp15.000`, `15rb`, atau `1,5jt`.
-                </small>
-              </label>
-              <label>
-                <span>Kategori transaksi</span>
-                <select id="transactionCategory" name="category" required></select>
-              </label>
-              <label>
-                <span>Tanggal</span>
-                <input type="date" name="date" required />
-              </label>
-              <label class="full-span">
-                <span>Catatan</span>
-                <textarea name="notes" rows="3" placeholder="Tambahan informasi jika perlu"></textarea>
-              </label>
-              <div class="receipt-field full-span">
-                <label>
-                  <span>Upload struk</span>
-                  <input id="transactionReceiptFile" type="file" accept="image/png,image/jpeg,image/webp" />
-                  <small class="field-hint">
-                    Unggah foto struk PNG, JPG, atau WEBP. Maksimal 2 MB.
-                  </small>
-                </label>
-                <div id="transactionReceiptPanel" class="receipt-panel is-hidden">
-                  <div class="receipt-meta">
-                    <strong id="transactionReceiptStatus">Belum ada struk</strong>
-                    <span id="transactionReceiptHint">Struk akan membantu Anda melacak bukti transaksi.</span>
+            <form id="transactionForm" class="transaction-form-shell">
+              <section id="transactionEntryChooser" class="transaction-entry-chooser">
+                <button id="transactionModeScanButton" class="entry-method-card" type="button">
+                  <span class="entry-method-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h2l1.2 1.6h4.6L15.5 5h2A2.5 2.5 0 0 1 20 7.5v9A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9Z"></path>
+                      <circle cx="12" cy="12" r="3.2"></circle>
+                    </svg>
+                  </span>
+                  <span class="entry-method-copy">
+                    <strong>Scan Struk</strong>
+                    <span>Upload dulu, baca dengan AI, lalu review hasil sebelum simpan.</span>
+                  </span>
+                </button>
+                <button id="transactionModeManualButton" class="entry-method-card" type="button">
+                  <span class="entry-method-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M7 4.5h10A2.5 2.5 0 0 1 19.5 7v10A2.5 2.5 0 0 1 17 19.5H7A2.5 2.5 0 0 1 4.5 17V7A2.5 2.5 0 0 1 7 4.5Z"></path>
+                      <path d="M8 9h8"></path>
+                      <path d="M8 12h8"></path>
+                      <path d="M8 15h5"></path>
+                    </svg>
+                  </span>
+                  <span class="entry-method-copy">
+                    <strong>Input Manual</strong>
+                    <span>Isi field inti langsung tanpa kamera atau upload struk.</span>
+                  </span>
+                </button>
+              </section>
+
+              <section id="transactionScanStage" class="transaction-stage transaction-scan-stage is-hidden">
+                <div class="transaction-stage-head">
+                  <div>
+                    <span class="eyebrow">Step 1</span>
+                    <h3>Scan struk terlebih dahulu</h3>
+                    <p>Fokuskan user ke foto struk, lalu baru pindah ke review data hasil ekstraksi.</p>
                   </div>
-                  <div class="receipt-actions">
-                    <button id="transactionReceiptAnalyzeButton" class="secondary-button is-hidden" type="button">Baca struk</button>
-                    <a id="transactionReceiptLink" class="secondary-button is-hidden" href="#" target="_blank" rel="noreferrer">Buka struk</a>
-                    <button id="transactionReceiptRemoveButton" class="secondary-button is-hidden" type="button">Hapus struk</button>
+                  <button id="transactionFlowBackButton" class="secondary-button" type="button">Ganti metode</button>
+                </div>
+
+                <div class="transaction-scan-card">
+                  <label class="transaction-scan-upload" for="transactionReceiptFile">
+                    <input id="transactionReceiptFile" type="file" accept="image/png,image/jpeg,image/webp" />
+                    <span class="transaction-scan-upload-label">Pilih foto struk</span>
+                    <strong>PNG, JPG, atau WEBP hingga 2 MB</strong>
+                    <small>Pastikan total dan tanggal terlihat jelas agar hasil AI lebih akurat.</small>
+                  </label>
+
+                  <div id="transactionScanEmptyState" class="transaction-scan-empty">
+                    <strong>Belum ada foto struk</strong>
+                    <p>Mulai dari upload dulu, lalu cek hasil OCR di layar review sebelum transaksi disimpan.</p>
+                    <div class="transaction-scan-checklist">
+                      <span>Total belanja terlihat jelas</span>
+                      <span>Tanggal transaksi terbaca</span>
+                      <span>Pencahayaan cukup terang</span>
+                    </div>
+                  </div>
+
+                  <div id="transactionReceiptPanel" class="receipt-panel is-hidden">
+                    <div class="receipt-meta">
+                      <strong id="transactionReceiptStatus">Belum ada struk</strong>
+                      <span id="transactionReceiptHint">Struk akan membantu Anda melacak bukti transaksi.</span>
+                    </div>
+                    <div class="receipt-actions">
+                      <button id="transactionReceiptAnalyzeButton" class="secondary-button is-hidden" type="button">Baca struk</button>
+                      <a id="transactionReceiptLink" class="secondary-button is-hidden" href="#" target="_blank" rel="noreferrer">Buka struk</a>
+                      <button id="transactionReceiptRemoveButton" class="secondary-button is-hidden" type="button">Hapus struk</button>
+                    </div>
+                  </div>
+
+                  <div id="transactionOCRProcessing" class="transaction-ocr-state is-hidden" aria-live="polite">
+                    <div class="transaction-ocr-head">
+                      <div class="transaction-ocr-equalizer" aria-hidden="true">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </div>
+                      <div class="transaction-ocr-copy">
+                        <strong id="transactionOCRTitle">Sedang membaca struk</strong>
+                        <p id="transactionOCRText">OCR sedang memeriksa gambar, mengenali total, tanggal, dan detail transaksi.</p>
+                      </div>
+                    </div>
+                    <div class="transaction-ocr-steps" aria-hidden="true">
+                      <span class="is-active">Memeriksa gambar</span>
+                      <span class="is-active">Membaca teks</span>
+                      <span class="is-active">Menyiapkan form review</span>
+                    </div>
+                  </div>
+
+                  <div id="transactionOCRError" class="transaction-ocr-error is-hidden" aria-live="polite">
+                    <strong id="transactionOCRErrorTitle">Struk belum bisa dibaca</strong>
+                    <p id="transactionOCRErrorText">Coba foto ulang dengan pencahayaan yang lebih jelas atau lanjut isi manual.</p>
+                    <div class="transaction-ocr-error-actions">
+                      <button id="transactionOCRRetryButton" class="secondary-button" type="button">Coba lagi</button>
+                      <button id="transactionOCRErrorManualButton" class="secondary-button" type="button">Isi manual</button>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div class="transaction-form-actions full-span">
-                <button id="transactionSubmitButton" class="primary-button" type="submit">Simpan transaksi</button>
-                <button id="transactionCancelButton" class="secondary-button is-hidden" type="button">Batal edit</button>
-              </div>
+
+                <div class="transaction-stage-actions">
+                  <button id="transactionScanReviewButton" class="primary-button" type="button" disabled>Lanjut ke review</button>
+                  <button id="transactionScanManualButton" class="secondary-button" type="button">Isi manual</button>
+                </div>
+              </section>
+
+              <section id="transactionDetailsSection" class="transaction-details-section is-hidden">
+                <div id="transactionReviewBanner" class="transaction-review-banner">
+                  <a
+                    id="transactionReviewReceiptLink"
+                    class="transaction-review-thumb is-hidden"
+                    href="#"
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Buka preview struk"
+                  >
+                    <img id="transactionReviewReceiptImage" class="transaction-review-thumb-image" alt="Preview struk transaksi" />
+                  </a>
+                  <div class="transaction-review-copy">
+                    <span class="eyebrow">Step 2</span>
+                    <strong id="transactionReviewStatus">Periksa detail transaksi</strong>
+                    <span id="transactionReviewHint">Edit jika ada data yang kurang tepat sebelum disimpan.</span>
+                  </div>
+                  <div class="transaction-review-actions">
+                    <button id="transactionReviewManageButton" class="secondary-button" type="button">Kelola struk</button>
+                  </div>
+                </div>
+
+                <div class="transaction-form">
+                  <label>
+                    <span>Tipe</span>
+                    <select id="transactionType" name="type" required>
+                      <option value="income">Pemasukan</option>
+                      <option value="expense">Pengeluaran</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Deskripsi transaksi</span>
+                    <input type="text" name="description" placeholder="Contoh: Bayar listrik" required />
+                  </label>
+                  <label>
+                    <span>Nominal</span>
+                    <input
+                      id="transactionAmount"
+                      type="text"
+                      name="amount"
+                      inputmode="decimal"
+                      autocomplete="off"
+                      placeholder="Contoh: 500000, 15.000, 15rb, 1,5jt"
+                      required
+                    />
+                    <small id="transactionAmountHint" class="field-hint">
+                      Bisa isi nominal fleksibel seperti `Rp15.000`, `15rb`, atau `1,5jt`.
+                    </small>
+                  </label>
+                  <label>
+                    <span>Kategori transaksi</span>
+                    <select id="transactionCategory" name="category" required></select>
+                  </label>
+                  <label>
+                    <span>Tanggal</span>
+                    <input type="date" name="date" required />
+                  </label>
+                  <label class="full-span">
+                    <span>Catatan</span>
+                    <textarea name="notes" rows="3" placeholder="Tambahan informasi jika perlu"></textarea>
+                  </label>
+                  <div class="transaction-form-actions full-span">
+                    <button id="transactionSubmitButton" class="primary-button" type="submit">Simpan transaksi</button>
+                    <button id="transactionCancelButton" class="secondary-button is-hidden" type="button">Batal edit</button>
+                  </div>
+                </div>
+              </section>
             </form>
           </article>
 
