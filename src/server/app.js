@@ -23,7 +23,7 @@ const {
   unlinkTelegramByChatId,
   unlinkTelegramByUserId,
   updateTransactionForUser
-} = require("../../database.next");
+} = require("./data/database");
 const {
   findCanonicalCategory,
   formatTransactionCategoryList,

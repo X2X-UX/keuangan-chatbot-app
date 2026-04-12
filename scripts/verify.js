@@ -14,6 +14,7 @@ const FILES_TO_CHECK = [
   "src/server/auth/session.js",
   "src/server/app.js",
   "src/server/http.js",
+  "src/server/data/database.js",
   "src/server/routes/auth.js",
   "src/server/routes/chat.js",
   "src/server/index.js",
