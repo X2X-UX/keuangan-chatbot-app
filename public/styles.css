@@ -877,7 +877,7 @@ th {
 .transaction-scan-upload {
   position: relative;
   display: grid;
-  gap: 6px;
+  gap: 10px;
   padding: 20px;
   border-radius: 22px;
   border: 1px dashed rgba(12, 74, 135, 0.24);
@@ -891,7 +891,7 @@ th {
   position: absolute;
   inset: 0;
   opacity: 0;
-  cursor: pointer;
+  pointer-events: none;
 }
 
 .transaction-scan-upload-label {
@@ -916,6 +916,13 @@ th {
 .transaction-scan-upload small {
   color: var(--muted);
   line-height: 1.55;
+}
+
+.transaction-scan-upload-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
 }
 
 .transaction-ocr-state {
@@ -1926,7 +1933,8 @@ tbody tr:hover {
 
   .transaction-ocr-head,
   .transaction-ocr-steps,
-  .transaction-ocr-error-actions {
+  .transaction-ocr-error-actions,
+  .transaction-scan-upload-actions {
     align-items: stretch;
   }
 

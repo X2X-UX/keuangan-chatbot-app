@@ -254,12 +254,17 @@
                 </div>
 
                 <div class="transaction-scan-card">
-                  <label class="transaction-scan-upload" for="transactionReceiptFile">
+                  <div class="transaction-scan-upload">
+                    <input id="transactionReceiptCameraInput" type="file" accept="image/png,image/jpeg,image/webp" capture="environment" />
                     <input id="transactionReceiptFile" type="file" accept="image/png,image/jpeg,image/webp" />
                     <span class="transaction-scan-upload-label">Pilih foto struk</span>
-                    <strong>PNG, JPG, atau WEBP hingga 2 MB</strong>
+                    <strong>Ambil foto langsung atau pilih dari galeri</strong>
                     <small>Pastikan total dan tanggal terlihat jelas agar hasil AI lebih akurat.</small>
-                  </label>
+                    <div class="transaction-scan-upload-actions">
+                      <button id="transactionReceiptCameraButton" class="primary-button" type="button">Ambil Foto Struk</button>
+                      <button id="transactionReceiptGalleryButton" class="secondary-button" type="button">Pilih dari Galeri</button>
+                    </div>
+                  </div>
 
                   <div id="transactionScanEmptyState" class="transaction-scan-empty">
                     <strong>Belum ada foto struk</strong>

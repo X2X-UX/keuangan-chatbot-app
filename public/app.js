@@ -142,7 +142,10 @@ const elements = {
   transactionFlowBackButton: document.getElementById("transactionFlowBackButton"),
   transactionModeManualButton: document.getElementById("transactionModeManualButton"),
   transactionModeScanButton: document.getElementById("transactionModeScanButton"),
+  transactionReceiptCameraButton: document.getElementById("transactionReceiptCameraButton"),
+  transactionReceiptCameraInput: document.getElementById("transactionReceiptCameraInput"),
   transactionReceiptFile: document.getElementById("transactionReceiptFile"),
+  transactionReceiptGalleryButton: document.getElementById("transactionReceiptGalleryButton"),
   transactionReceiptHint: document.getElementById("transactionReceiptHint"),
   transactionReceiptLink: document.getElementById("transactionReceiptLink"),
   transactionReceiptAnalyzeButton: document.getElementById("transactionReceiptAnalyzeButton"),
@@ -520,7 +523,10 @@ function renderTransactionOCRState() {
     ? "OCR sedang memeriksa gambar, mengenali total, tanggal, dan detail transaksi."
     : "Hasil pembacaan sudah siap ditinjau di form review.";
 
+  elements.transactionReceiptCameraInput.disabled = isAnalyzing;
   elements.transactionReceiptFile.disabled = isAnalyzing;
+  elements.transactionReceiptCameraButton.disabled = isAnalyzing;
+  elements.transactionReceiptGalleryButton.disabled = isAnalyzing;
   elements.transactionFlowBackButton.disabled = isAnalyzing;
   elements.transactionScanManualButton.disabled = isAnalyzing;
   elements.transactionReceiptRemoveButton.disabled = isAnalyzing;
@@ -624,6 +630,19 @@ function scrollTransactionFlowIntoView(target) {
   });
 }
 
+function openTransactionReceiptPicker(mode = "gallery") {
+  const target =
+    mode === "camera"
+      ? elements.transactionReceiptCameraInput || elements.transactionReceiptFile
+      : elements.transactionReceiptFile;
+
+  if (!target || target.disabled) {
+    return;
+  }
+
+  target.click();
+}
+
 function showTransactionReview(options = {}) {
   state.transactionEntryMethod = options.method || state.transactionEntryMethod || "manual";
   state.transactionEntryStep = "review";
@@ -678,6 +697,10 @@ function resetTransactionReceiptState(transaction = null) {
   if (transaction?.id && transaction.receiptPath) {
     state.transactionReceipt.existingUrl = getTransactionReceiptUrl(transaction.id);
     state.transactionReceipt.hasExisting = true;
+  }
+
+  if (elements.transactionReceiptCameraInput) {
+    elements.transactionReceiptCameraInput.value = "";
   }
 
   if (elements.transactionReceiptFile) {
@@ -813,6 +836,10 @@ function handleTransactionReceiptRemove() {
 
   if (elements.transactionReceiptFile) {
     elements.transactionReceiptFile.value = "";
+  }
+
+  if (elements.transactionReceiptCameraInput) {
+    elements.transactionReceiptCameraInput.value = "";
   }
 
   renderTransactionReceiptPanel();
@@ -2546,6 +2573,14 @@ function bindEvents() {
     state.transactionEntryMethod = "scan";
     showTransactionScanStage();
   });
+  elements.transactionReceiptCameraButton.addEventListener("click", () => {
+    setTransactionReceiptError("");
+    openTransactionReceiptPicker("camera");
+  });
+  elements.transactionReceiptGalleryButton.addEventListener("click", () => {
+    setTransactionReceiptError("");
+    openTransactionReceiptPicker("gallery");
+  });
   elements.transactionOCRRetryButton.addEventListener("click", () => {
     handleTransactionReceiptAnalyze().catch((error) => {
       window.alert(error.message);
@@ -2559,6 +2594,11 @@ function bindEvents() {
     });
   });
   elements.transactionReceiptFile.addEventListener("change", (event) => {
+    handleTransactionReceiptChange(event).catch((error) => {
+      window.alert(error.message);
+    });
+  });
+  elements.transactionReceiptCameraInput.addEventListener("change", (event) => {
     handleTransactionReceiptChange(event).catch((error) => {
       window.alert(error.message);
     });
