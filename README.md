@@ -32,6 +32,7 @@ npm.cmd start
 
 Catatan:
 - Saat `npm start` atau `npm run dev`, source frontend di `src/client/` otomatis dirakit lalu disinkronkan ke root assets (`index.html`, `styles.css`, `app.js`, dst.) dan ke folder `public/`.
+- Tailwind CSS sekarang ikut dikompilasi saat proses sinkronisasi frontend. Source utility/framework ada di `src/client/styles.tailwind.css`, lalu hasilnya digabung ke `styles.css` final.
 - Backend menerapkan header keamanan HTTP, rate limit API, serta validasi origin untuk endpoint mutasi.
 - Sebelum push ke GitHub, jalankan verifikasi cepat:
 
@@ -50,6 +51,7 @@ src/
   client/
     index.html
     styles.css
+    styles.tailwind.css
     transaction-categories.js
     transaction-amount.js
     app/
@@ -69,6 +71,7 @@ src/
 
 Catatan struktur:
 - `src/client/` adalah source of truth frontend.
+- `src/client/styles.tailwind.css` adalah layer framework UI, sementara `src/client/styles.css` tetap memuat styling custom dan komponen yang belum dimigrasikan.
 - `src/server/` adalah source of truth backend.
 - File legacy seperti `server.js`, `server.next.js`, `database.js`, dan `database.next.js` sekarang hanya wrapper kompatibilitas.
 - Root `app.js` dan asset frontend root lain adalah output sinkronisasi dari `src/client/`.
@@ -187,5 +190,5 @@ Catatan penting deploy:
 
 ## Catatan teknis
 
-- Proyek dibuat tanpa dependensi eksternal agar ringan.
+- Frontend sekarang memakai Tailwind CSS secara bertahap melalui pipeline `sync-public`, tanpa mengubah endpoint atau arsitektur backend yang sudah ada.
 - Backend menggunakan `node:sqlite` bawaan Node.js (masih experimental di Node 22).

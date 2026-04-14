@@ -5,6 +5,7 @@
   "main": "src/server/index.js",
   "scripts": {
     "preflight": "node scripts/preflight.js",
+    "build:tailwind": "tailwindcss -c tailwind.config.js -i src/client/styles.tailwind.css -o src/client/.generated/tailwind.css --minify",
     "sync:public": "node scripts/sync-public.js",
     "test:light": "node scripts/test-modules.js",
     "test:routes": "node scripts/test-routes.js",
@@ -16,5 +17,10 @@
     "dev": "node src/server/index.js",
     "telegram:webhook": "node register-telegram-webhook.js"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17"
+  }
 }

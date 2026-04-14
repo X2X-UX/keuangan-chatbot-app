@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: "Aptos", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  }
+
+  body {
+    @apply bg-brand-soft text-brand-ink antialiased;
+  }
+}
+
+@layer components {
+  .tw-surface-card {
+    @apply rounded-[24px] border border-white/90 bg-white/90 shadow-card backdrop-blur;
+  }
+
+  .tw-section-chip {
+    @apply inline-flex items-center rounded-full bg-slate-100 px-3 py-2 text-[0.72rem] font-bold uppercase tracking-[0.14em] text-slate-600;
+  }
+
+  .tw-action-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-gradient-to-br from-brand-primary to-blue-700 px-4 py-3 font-semibold text-white shadow-soft transition hover:-translate-y-0.5;
+  }
+
+  .tw-action-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 font-semibold text-brand-ink transition hover:-translate-y-0.5 hover:border-slate-300;
+  }
+
+  .tw-metric-card {
+    @apply rounded-3xl border border-white/90 bg-white/90 p-5 shadow-card backdrop-blur;
+  }
+}

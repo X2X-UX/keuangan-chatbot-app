@@ -2,6 +2,7 @@
 .env.*
 !.env.example
 node_modules/
+src/client/.generated/
 *.log
 data/*.sqlite
 data/*.sqlite-*

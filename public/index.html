@@ -18,15 +18,15 @@
     <div class="backdrop backdrop-two"></div>
 
     <section id="authGate" class="auth-gate">
-      <div class="auth-card card">
-        <span class="eyebrow">Akses Aman</span>
+      <div class="auth-card card tw-surface-card max-w-[470px] p-8 sm:p-10">
+        <span class="eyebrow tw-section-chip">Akses Aman</span>
         <h2 id="authTitle">Masuk ke Arunika Finance</h2>
         <p id="authSubtitle">
           Masuk untuk mengakses dashboard keuangan pribadi. Data transaksi setiap akun akan
           dipisahkan otomatis di sistem.
         </p>
 
-        <div class="auth-tabs">
+        <div class="auth-tabs grid gap-3 sm:grid-cols-2">
           <button id="loginTabButton" class="auth-tab is-active" type="button">Login</button>
           <button id="registerTabButton" class="auth-tab" type="button">Daftar</button>
         </div>
@@ -61,7 +61,7 @@
               </button>
             </div>
           </label>
-          <button id="authSubmitButton" class="primary-button" type="submit">Masuk</button>
+          <button id="authSubmitButton" class="primary-button tw-action-primary" type="submit">Masuk</button>
         </form>
 
         <p id="authMessage" class="auth-message"></p>
@@ -72,26 +72,26 @@
     </section>
 
     <main id="appShell" class="shell">
-      <section class="hero card">
-        <div class="hero-copy">
-          <div class="hero-preamble">
-            <div class="brand-lockup">
+      <section class="hero card tw-surface-card flex flex-col gap-6 p-5 md:flex-row md:items-start md:justify-between md:p-8">
+        <div class="hero-copy max-w-3xl">
+          <div class="hero-preamble flex flex-col items-start gap-3 md:flex-row md:items-end md:justify-between">
+            <div class="brand-lockup inline-flex items-center gap-3">
               <img class="brand-mark" src="/icons/arunika-mark.svg" alt="Logo Arunika Finance" />
               <div class="brand-text">
                 <span class="brand-kicker">Arunika Finance</span>
                 <span class="brand-caption">Personal finance tracker</span>
               </div>
             </div>
-            <span class="eyebrow hero-eyebrow">Cashflow, Receipts, and Insights</span>
+            <span class="eyebrow hero-eyebrow tw-section-chip">Cashflow, Receipts, and Insights</span>
           </div>
-          <h1>Arunika Finance</h1>
-          <p class="hero-lead">
+          <h1 class="max-w-[12ch]">Arunika Finance</h1>
+          <p class="hero-lead max-w-[32ch] text-balance">
             Platform keuangan online untuk mencatat arus kas, menganalisis pola pengeluaran,
             dan berdiskusi dengan asisten keuangan berbasis data transaksi Anda.
           </p>
         </div>
 
-        <div class="hero-status">
+        <div class="hero-status w-full md:max-w-[320px]">
           <span class="status-chip" id="chatModeChip">Memuat mode chatbot...</span>
           <p id="heroSummaryText">Masuk ke akun untuk memuat ringkasan keuangan terbaru.</p>
 
@@ -100,7 +100,7 @@
               <strong id="sessionName">Belum masuk</strong>
               <span id="sessionEmail">Gunakan akun demo atau daftar akun baru.</span>
             </div>
-            <button id="logoutButton" class="secondary-button logout-button is-hidden" type="button">
+            <button id="logoutButton" class="secondary-button logout-button tw-action-secondary is-hidden" type="button">
               <span class="logout-button-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M14 16.5 19 12l-5-4.5"></path>
@@ -114,8 +114,8 @@
         </div>
       </section>
 
-      <section class="overview">
-        <article class="metric card">
+      <section class="overview grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <article class="metric card tw-metric-card">
           <div class="metric-head">
             <span class="metric-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -130,7 +130,7 @@
           <strong class="metric-value" id="balanceValue">Rp0</strong>
           <span class="metric-foot" id="balanceFoot">Menunggu data transaksi</span>
         </article>
-        <article class="metric card">
+        <article class="metric card tw-metric-card">
           <div class="metric-head">
             <span class="metric-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -143,7 +143,7 @@
           <strong class="metric-value" id="incomeValue">Rp0</strong>
           <span class="metric-foot" id="incomeFoot">0 kategori income</span>
         </article>
-        <article class="metric card">
+        <article class="metric card tw-metric-card">
           <div class="metric-head">
             <span class="metric-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -156,7 +156,7 @@
           <strong class="metric-value" id="expenseValue">Rp0</strong>
           <span class="metric-foot" id="expenseFoot">0 kategori expense</span>
         </article>
-        <article class="metric card">
+        <article class="metric card tw-metric-card">
           <div class="metric-head">
             <span class="metric-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
