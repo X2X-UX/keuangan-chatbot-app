@@ -8,11 +8,12 @@ function createTelegramService({
   buildChatReply,
   computeSummary,
   createTransactionForUser,
-  drafts,
+  deleteTelegramReceiptDraft,
   draftTtlMs,
   findCanonicalCategory,
   formatCurrency,
   formatReceiptSuggestionForTelegram,
+  getTelegramReceiptDraft,
   getTelegramLinkByChatId,
   getTelegramLinkByUserId,
   inferTransactionCategory,
@@ -22,6 +23,7 @@ function createTelegramService({
   normalizeReceiptDate,
   receiptAnalyzer,
   removeReceiptFile,
+  saveTelegramReceiptDraft,
   saveReceiptUpload,
   sanitizeText,
   sanitizeTransaction,
@@ -164,32 +166,18 @@ function createTelegramService({
     return "";
   }
 
-  function cleanupExpiredTelegramReceiptDrafts() {
-    const now = Date.now();
-
-    for (const [chatId, draft] of drafts.entries()) {
-      if (!draft || Number(draft.expiresAt || 0) <= now) {
-        drafts.delete(chatId);
-      }
-    }
-  }
-
   function setTelegramReceiptDraft(chatId, draft) {
-    cleanupExpiredTelegramReceiptDrafts();
-    drafts.set(String(chatId), {
+    const nextDraft = {
       ...draft,
       createdAt: Date.now(),
       expiresAt: Date.now() + draftTtlMs
-    });
-  }
-
-  function getTelegramReceiptDraft(chatId) {
-    cleanupExpiredTelegramReceiptDrafts();
-    return drafts.get(String(chatId)) || null;
+    };
+    saveTelegramReceiptDraft(String(chatId), nextDraft);
+    return nextDraft;
   }
 
   function clearTelegramReceiptDraft(chatId) {
-    drafts.delete(String(chatId));
+    deleteTelegramReceiptDraft(String(chatId));
   }
 
   function formatTelegramReceiptDraftReply(draft) {

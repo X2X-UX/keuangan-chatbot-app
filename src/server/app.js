@@ -11,8 +11,10 @@ const {
   createSession,
   createTransactionForUser,
   createUser,
+  deleteTelegramReceiptDraft,
   deleteSession,
   deleteTransactionForUser,
+  getTelegramReceiptDraft,
   getSessionWithUser,
   getTransactionByIdForUser,
   getTelegramLinkByChatId,
@@ -20,6 +22,7 @@ const {
   initializeDatabase,
   linkTelegramChatByCode,
   listTransactionsByUser,
+  saveTelegramReceiptDraft,
   unlinkTelegramByChatId,
   unlinkTelegramByUserId,
   updateTransactionForUser
@@ -69,7 +72,6 @@ const ALLOWED_ORIGINS = buildAllowedOrigins({
   URLClass: URL
 });
 const RATE_LIMIT_STORE = new Map();
-const TELEGRAM_RECEIPT_DRAFTS = new Map();
 const LOGGER = createLogger({
   nodeEnv: process.env.NODE_ENV,
   serviceName: "arunika-finance"
@@ -601,11 +603,12 @@ const {
   buildChatReply,
   computeSummary,
   createTransactionForUser,
-  drafts: TELEGRAM_RECEIPT_DRAFTS,
+  deleteTelegramReceiptDraft,
   draftTtlMs: TELEGRAM_RECEIPT_DRAFT_TTL_MS,
   findCanonicalCategory,
   formatCurrency,
   formatReceiptSuggestionForTelegram,
+  getTelegramReceiptDraft,
   getTelegramLinkByChatId,
   getTelegramLinkByUserId,
   inferTransactionCategory,
@@ -614,6 +617,7 @@ const {
   mimeTypes: MIME_TYPES,
   normalizeReceiptDate,
   removeReceiptFile,
+  saveTelegramReceiptDraft,
   sanitizeText,
   sanitizeTransaction,
   saveReceiptUpload,

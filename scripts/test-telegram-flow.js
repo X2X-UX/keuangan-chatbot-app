@@ -25,6 +25,20 @@ async function run() {
   const answeredCallbacks = [];
   const linkedUser = { id: "user-1", email: "telegram@example.com" };
 
+  function saveTelegramReceiptDraft(chatId, draft) {
+    drafts.set(String(chatId), {
+      ...draft
+    });
+  }
+
+  function getTelegramReceiptDraft(chatId) {
+    return drafts.get(String(chatId)) || null;
+  }
+
+  function deleteTelegramReceiptDraft(chatId) {
+    drafts.delete(String(chatId));
+  }
+
   global.fetch = async (url, options = {}) => {
     const normalizedUrl = String(url);
 
@@ -107,7 +121,7 @@ async function run() {
       storedTransactions.push(transaction);
       return transaction;
     },
-    drafts,
+    deleteTelegramReceiptDraft,
     draftTtlMs: 60_000,
     findCanonicalCategory,
     formatCurrency: (value) =>
@@ -125,6 +139,7 @@ async function run() {
         `- Kategori: ${suggestion.category}`,
         `- Catatan: ${suggestion.notes}`
       ].join("\n"),
+    getTelegramReceiptDraft,
     getTelegramLinkByChatId: (chatId) =>
       String(chatId) === "123"
         ? {
@@ -140,6 +155,7 @@ async function run() {
     },
     normalizeReceiptDate: (value) => String(value),
     removeReceiptFile: async () => {},
+    saveTelegramReceiptDraft,
     sanitizeText,
     sanitizeTransaction,
     saveReceiptUpload: async () => "receipts/test-receipt.jpg",

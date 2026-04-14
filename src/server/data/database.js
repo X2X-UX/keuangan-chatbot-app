@@ -75,9 +75,20 @@ function initializeDatabase() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS telegram_receipt_drafts (
+      chat_id TEXT PRIMARY KEY,
+      linked_user_id TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      FOREIGN KEY (linked_user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON transactions(user_id, date DESC);
     CREATE INDEX IF NOT EXISTS idx_telegram_link_codes_user_id ON telegram_link_codes(user_id);
+    CREATE INDEX IF NOT EXISTS idx_telegram_receipt_drafts_user_id ON telegram_receipt_drafts(linked_user_id);
+    CREATE INDEX IF NOT EXISTS idx_telegram_receipt_drafts_expires_at ON telegram_receipt_drafts(expires_at);
   `);
 
   ensureTransactionReceiptColumn(db);
@@ -159,6 +170,53 @@ function sanitizeTelegramLink(row) {
     linkedAt: row.linked_at,
     username: row.username
   };
+}
+
+function serializeTelegramReceiptDraft(draft) {
+  if (!draft || typeof draft !== "object") {
+    return "{}";
+  }
+
+  const payload = {
+    ...draft,
+    receiptUpload: draft.receiptUpload
+      ? {
+          bufferBase64: Buffer.isBuffer(draft.receiptUpload.buffer)
+            ? draft.receiptUpload.buffer.toString("base64")
+            : String(draft.receiptUpload.bufferBase64 || ""),
+          fileName: String(draft.receiptUpload.fileName || ""),
+          mimeType: String(draft.receiptUpload.mimeType || "")
+        }
+      : null
+  };
+
+  return JSON.stringify(payload);
+}
+
+function deserializeTelegramReceiptDraft(payloadJson) {
+  if (!payloadJson) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(payloadJson);
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    return {
+      ...parsed,
+      receiptUpload: parsed.receiptUpload
+        ? {
+            buffer: Buffer.from(String(parsed.receiptUpload.bufferBase64 || ""), "base64"),
+            fileName: String(parsed.receiptUpload.fileName || ""),
+            mimeType: String(parsed.receiptUpload.mimeType || "")
+          }
+        : null
+    };
+  } catch {
+    return null;
+  }
 }
 
 function getUserByEmail(email) {
@@ -470,6 +528,86 @@ function cleanupExpiredTelegramLinkCodes() {
   database.prepare("DELETE FROM telegram_link_codes WHERE expires_at <= ?").run(new Date().toISOString());
 }
 
+function cleanupExpiredTelegramReceiptDrafts() {
+  const database = getDatabase();
+  database.prepare("DELETE FROM telegram_receipt_drafts WHERE expires_at <= ?").run(new Date().toISOString());
+}
+
+function saveTelegramReceiptDraft(chatId, draft) {
+  const database = getDatabase();
+  const cleanChatId = String(chatId || "").trim();
+  const linkedUserId = String(draft?.linkedUserId || "").trim();
+  const createdAt = new Date(Number(draft?.createdAt || Date.now())).toISOString();
+  const expiresAt = new Date(Number(draft?.expiresAt || Date.now())).toISOString();
+
+  if (!cleanChatId || !linkedUserId) {
+    throw new Error("Draft Telegram tidak valid.");
+  }
+
+  database
+    .prepare(
+      `
+        INSERT INTO telegram_receipt_drafts (
+          chat_id,
+          linked_user_id,
+          payload_json,
+          created_at,
+          expires_at
+        )
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(chat_id) DO UPDATE SET
+          linked_user_id = excluded.linked_user_id,
+          payload_json = excluded.payload_json,
+          created_at = excluded.created_at,
+          expires_at = excluded.expires_at
+      `
+    )
+    .run(cleanChatId, linkedUserId, serializeTelegramReceiptDraft(draft), createdAt, expiresAt);
+}
+
+function getTelegramReceiptDraft(chatId) {
+  cleanupExpiredTelegramReceiptDrafts();
+
+  const database = getDatabase();
+  const row = database
+    .prepare(
+      `
+        SELECT
+          chat_id,
+          linked_user_id,
+          payload_json,
+          created_at,
+          expires_at
+        FROM telegram_receipt_drafts
+        WHERE chat_id = ?
+      `
+    )
+    .get(String(chatId || "").trim());
+
+  if (!row) {
+    return null;
+  }
+
+  const draft = deserializeTelegramReceiptDraft(row.payload_json);
+  if (!draft) {
+    deleteTelegramReceiptDraft(chatId);
+    return null;
+  }
+
+  return {
+    ...draft,
+    createdAt: new Date(row.created_at).getTime(),
+    expiresAt: new Date(row.expires_at).getTime(),
+    linkedUserId: row.linked_user_id
+  };
+}
+
+function deleteTelegramReceiptDraft(chatId) {
+  const database = getDatabase();
+  const result = database.prepare("DELETE FROM telegram_receipt_drafts WHERE chat_id = ?").run(String(chatId || "").trim());
+  return result.changes > 0;
+}
+
 function generateTelegramLinkCode(userId) {
   const database = getDatabase();
   cleanupExpiredTelegramLinkCodes();
@@ -667,12 +805,14 @@ module.exports = {
   TELEGRAM_LINK_CODE_TTL_SECONDS,
   authenticateUser,
   closeDatabase,
+  deleteTelegramReceiptDraft,
   createSession,
   createTelegramLinkCode: generateTelegramLinkCode,
   createTransactionForUser,
   createUser,
   deleteSession,
   deleteTransactionForUser,
+  getTelegramReceiptDraft,
   getSessionWithUser,
   getTelegramLinkByChatId,
   getTelegramLinkByUserId,
@@ -680,6 +820,7 @@ module.exports = {
   getTransactionByIdForUser,
   linkTelegramChatByCode,
   listTransactionsByUser,
+  saveTelegramReceiptDraft,
   unlinkTelegramByChatId,
   unlinkTelegramByUserId,
   updateTransactionForUser
