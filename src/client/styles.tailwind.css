@@ -64,4 +64,40 @@
   .tw-sidebar-card {
     @apply rounded-[24px] border border-white/90 bg-white/90 p-5 shadow-card backdrop-blur md:p-6;
   }
+
+  .tw-filter-bar {
+    @apply flex flex-col gap-3 md:flex-row md:items-center;
+  }
+
+  .tw-table-shell {
+    @apply overflow-hidden rounded-2xl border border-slate-200 bg-white;
+  }
+
+  .tw-prompt-list {
+    @apply flex flex-wrap gap-3;
+  }
+
+  .tw-prompt-button {
+    @apply inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-brand-primary transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white;
+  }
+
+  .tw-chat-log {
+    @apply grid min-h-[320px] gap-3 rounded-3xl border border-slate-200 bg-slate-50/80 p-3 shadow-soft md:max-h-[560px];
+  }
+
+  .tw-chat-composer {
+    @apply grid gap-3 rounded-3xl border border-slate-200 bg-slate-50/80 p-4 shadow-soft;
+  }
+
+  .tw-chat-bubble {
+    @apply grid gap-2 rounded-2xl px-4 py-3 shadow-soft;
+  }
+
+  .tw-chat-bubble-user {
+    @apply ml-auto max-w-[92%] rounded-br-md bg-gradient-to-br from-brand-primary to-blue-700 text-white;
+  }
+
+  .tw-chat-bubble-assistant {
+    @apply max-w-[92%] rounded-bl-md border border-slate-200 bg-white text-brand-ink;
+  }
 }

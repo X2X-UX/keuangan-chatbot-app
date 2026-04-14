@@ -593,7 +593,7 @@
                 </div>
               </div>
 
-              <div class="filters">
+              <div class="filters tw-filter-bar">
                 <input id="searchInput" type="search" placeholder="Cari deskripsi atau kategori..." />
                 <select id="typeFilter">
                   <option value="all">Semua tipe</option>
@@ -603,7 +603,7 @@
               </div>
             </div>
 
-            <div class="table-wrap">
+            <div class="table-wrap tw-table-shell">
               <table>
                 <thead>
                   <tr>
@@ -671,15 +671,15 @@
               </div>
             </div>
 
-            <div class="quick-prompts" id="quickPrompts">
-              <button type="button" data-prompt="Buat ringkasan keuangan saya.">Ringkasan keuangan</button>
-              <button type="button" data-prompt="Pengeluaran terbesar saya apa?">Pengeluaran terbesar</button>
-              <button type="button" data-prompt="Beri saran supaya saya lebih hemat.">Rekomendasi penghematan</button>
+            <div class="quick-prompts tw-prompt-list" id="quickPrompts">
+              <button class="tw-prompt-button" type="button" data-prompt="Buat ringkasan keuangan saya.">Ringkasan keuangan</button>
+              <button class="tw-prompt-button" type="button" data-prompt="Pengeluaran terbesar saya apa?">Pengeluaran terbesar</button>
+              <button class="tw-prompt-button" type="button" data-prompt="Beri saran supaya saya lebih hemat.">Rekomendasi penghematan</button>
             </div>
 
-            <div id="chatMessages" class="chat-messages"></div>
+            <div id="chatMessages" class="chat-messages tw-chat-log"></div>
 
-            <form id="chatForm" class="chat-form">
+            <form id="chatForm" class="chat-form tw-chat-composer">
               <textarea
                 id="chatInput"
                 rows="3"
@@ -713,7 +713,7 @@
     </main>
 
     <template id="chatBubbleTemplate">
-      <div class="chat-bubble">
+      <div class="chat-bubble tw-chat-bubble">
         <span class="chat-role"></span>
         <p class="chat-text"></p>
       </div>
