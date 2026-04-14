@@ -69,6 +69,10 @@
     @apply flex flex-col gap-3 md:flex-row md:items-center;
   }
 
+  .tw-input-shell {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-brand-ink shadow-soft transition focus:border-brand-primary/40 focus:outline-none focus:ring-4 focus:ring-brand-primary/10;
+  }
+
   .tw-table-shell {
     @apply overflow-hidden rounded-2xl border border-slate-200 bg-white;
   }
@@ -99,5 +103,9 @@
 
   .tw-chat-bubble-assistant {
     @apply max-w-[92%] rounded-bl-md border border-slate-200 bg-white text-brand-ink;
+  }
+
+  .tw-mobile-safe-actions {
+    @apply gap-3;
   }
 }

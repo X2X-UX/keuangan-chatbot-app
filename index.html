@@ -433,7 +433,7 @@
                     </span>
                     <textarea name="notes" rows="3" placeholder="Tambahan informasi jika perlu"></textarea>
                   </label>
-                  <div class="transaction-form-actions full-span tw-full-span tw-split-actions">
+                  <div class="transaction-form-actions full-span tw-full-span tw-split-actions tw-mobile-safe-actions">
                     <button id="transactionSubmitButton" class="primary-button tw-action-primary" type="submit">Simpan transaksi</button>
                     <button id="transactionCancelButton" class="secondary-button tw-action-secondary is-hidden" type="button">Batal edit</button>
                   </div>
@@ -594,8 +594,8 @@
               </div>
 
               <div class="filters tw-filter-bar">
-                <input id="searchInput" type="search" placeholder="Cari deskripsi atau kategori..." />
-                <select id="typeFilter">
+                <input id="searchInput" class="tw-input-shell" type="search" placeholder="Cari deskripsi atau kategori..." />
+                <select id="typeFilter" class="tw-input-shell">
                   <option value="all">Semua tipe</option>
                   <option value="income">Pemasukan</option>
                   <option value="expense">Pengeluaran</option>
@@ -681,6 +681,7 @@
 
             <form id="chatForm" class="chat-form tw-chat-composer">
               <textarea
+                class="tw-input-shell min-h-[104px] resize-y"
                 id="chatInput"
                 rows="3"
                 placeholder="Tanyakan kondisi keuangan Anda..."

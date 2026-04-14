@@ -5,6 +5,7 @@ function appendChatMessage(role, content) {
   const text = fragment.querySelector(".chat-text");
 
   bubble.classList.add(role);
+  bubble.classList.add(role === "assistant" ? "tw-chat-bubble-assistant" : "tw-chat-bubble-user");
   roleLabel.textContent = role === "assistant" ? "Asisten" : "Anda";
   text.textContent = content;
   elements.chatMessages.appendChild(fragment);
