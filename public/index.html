@@ -224,8 +224,8 @@
 
       <section class="workspace">
         <div class="left-column">
-          <article class="card form-card">
-            <div class="section-heading">
+          <article class="card form-card tw-panel-card">
+            <div class="section-heading tw-section-heading">
               <div class="section-title">
                 <span class="section-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -240,8 +240,8 @@
               </div>
             </div>
 
-            <form id="transactionForm" class="transaction-form-shell">
-              <section id="transactionEntryChooser" class="transaction-entry-chooser">
+            <form id="transactionForm" class="transaction-form-shell tw-flow-section">
+              <section id="transactionEntryChooser" class="transaction-entry-chooser grid gap-4 md:grid-cols-2">
                 <button id="transactionModeScanButton" class="entry-method-card" type="button">
                   <span class="entry-method-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -270,30 +270,30 @@
                 </button>
               </section>
 
-              <section id="transactionScanStage" class="transaction-stage transaction-scan-stage is-hidden">
-                <div class="transaction-stage-head">
+              <section id="transactionScanStage" class="transaction-stage transaction-scan-stage tw-flow-section is-hidden">
+                <div class="transaction-stage-head flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
-                    <span class="eyebrow">Step 1</span>
+                    <span class="eyebrow tw-section-chip">Step 1</span>
                     <h3>Scan struk terlebih dahulu</h3>
                     <p>Fokuskan user ke foto struk, lalu baru pindah ke review data hasil ekstraksi.</p>
                   </div>
-                  <button id="transactionFlowBackButton" class="secondary-button" type="button">Ganti metode</button>
+                  <button id="transactionFlowBackButton" class="secondary-button tw-action-secondary" type="button">Ganti metode</button>
                 </div>
 
-                <div class="transaction-scan-card">
-                  <div class="transaction-scan-upload">
+                <div class="transaction-scan-card tw-flow-section">
+                  <div class="transaction-scan-upload tw-soft-panel">
                     <input id="transactionReceiptCameraInput" type="file" accept="image/png,image/jpeg,image/webp" capture="environment" />
                     <input id="transactionReceiptFile" type="file" accept="image/png,image/jpeg,image/webp" />
                     <span class="transaction-scan-upload-label">Pilih foto struk</span>
                     <strong>Ambil foto langsung atau pilih dari galeri</strong>
                     <small>Pastikan total dan tanggal terlihat jelas agar hasil AI lebih akurat.</small>
                     <div class="transaction-scan-upload-actions">
-                      <button id="transactionReceiptCameraButton" class="primary-button" type="button">Ambil Foto Struk</button>
-                      <button id="transactionReceiptGalleryButton" class="secondary-button" type="button">Pilih dari Galeri</button>
+                      <button id="transactionReceiptCameraButton" class="primary-button tw-action-primary" type="button">Ambil Foto Struk</button>
+                      <button id="transactionReceiptGalleryButton" class="secondary-button tw-action-secondary" type="button">Pilih dari Galeri</button>
                     </div>
                   </div>
 
-                  <div id="transactionScanEmptyState" class="transaction-scan-empty">
+                  <div id="transactionScanEmptyState" class="transaction-scan-empty tw-soft-panel">
                     <strong>Belum ada foto struk</strong>
                     <p>Mulai dari upload dulu, lalu cek hasil OCR di layar review sebelum transaksi disimpan.</p>
                     <div class="transaction-scan-checklist">
@@ -303,19 +303,19 @@
                     </div>
                   </div>
 
-                  <div id="transactionReceiptPanel" class="receipt-panel is-hidden">
+                  <div id="transactionReceiptPanel" class="receipt-panel tw-soft-panel is-hidden">
                     <div class="receipt-meta">
                       <strong id="transactionReceiptStatus">Belum ada struk</strong>
                       <span id="transactionReceiptHint">Struk akan membantu Anda melacak bukti transaksi.</span>
                     </div>
                     <div class="receipt-actions">
-                      <button id="transactionReceiptAnalyzeButton" class="secondary-button is-hidden" type="button">Baca struk</button>
-                      <a id="transactionReceiptLink" class="secondary-button is-hidden" href="#" target="_blank" rel="noreferrer">Buka struk</a>
-                      <button id="transactionReceiptRemoveButton" class="secondary-button is-hidden" type="button">Hapus struk</button>
+                      <button id="transactionReceiptAnalyzeButton" class="secondary-button tw-action-secondary is-hidden" type="button">Baca struk</button>
+                      <a id="transactionReceiptLink" class="secondary-button tw-action-secondary is-hidden" href="#" target="_blank" rel="noreferrer">Buka struk</a>
+                      <button id="transactionReceiptRemoveButton" class="secondary-button tw-action-secondary is-hidden" type="button">Hapus struk</button>
                     </div>
                   </div>
 
-                  <div id="transactionOCRProcessing" class="transaction-ocr-state is-hidden" aria-live="polite">
+                  <div id="transactionOCRProcessing" class="transaction-ocr-state tw-soft-panel is-hidden" aria-live="polite">
                     <div class="transaction-ocr-head">
                       <div class="transaction-ocr-equalizer" aria-hidden="true">
                         <span></span>
@@ -335,24 +335,24 @@
                     </div>
                   </div>
 
-                  <div id="transactionOCRError" class="transaction-ocr-error is-hidden" aria-live="polite">
+                  <div id="transactionOCRError" class="transaction-ocr-error tw-soft-panel is-hidden" aria-live="polite">
                     <strong id="transactionOCRErrorTitle">Struk belum bisa dibaca</strong>
                     <p id="transactionOCRErrorText">Coba foto ulang dengan pencahayaan yang lebih jelas atau lanjut isi manual.</p>
                     <div class="transaction-ocr-error-actions">
-                      <button id="transactionOCRRetryButton" class="secondary-button" type="button">Coba lagi</button>
-                      <button id="transactionOCRErrorManualButton" class="secondary-button" type="button">Isi manual</button>
+                      <button id="transactionOCRRetryButton" class="secondary-button tw-action-secondary" type="button">Coba lagi</button>
+                      <button id="transactionOCRErrorManualButton" class="secondary-button tw-action-secondary" type="button">Isi manual</button>
                     </div>
                   </div>
                 </div>
 
-                <div class="transaction-stage-actions">
-                  <button id="transactionScanReviewButton" class="primary-button" type="button" disabled>Lanjut ke review</button>
-                  <button id="transactionScanManualButton" class="secondary-button" type="button">Isi manual</button>
+                <div class="transaction-stage-actions tw-split-actions">
+                  <button id="transactionScanReviewButton" class="primary-button tw-action-primary" type="button" disabled>Lanjut ke review</button>
+                  <button id="transactionScanManualButton" class="secondary-button tw-action-secondary" type="button">Isi manual</button>
                 </div>
               </section>
 
-              <section id="transactionDetailsSection" class="transaction-details-section is-hidden">
-                <div id="transactionReviewBanner" class="transaction-review-banner">
+              <section id="transactionDetailsSection" class="transaction-details-section tw-flow-section is-hidden">
+                <div id="transactionReviewBanner" class="transaction-review-banner tw-soft-panel">
                   <a
                     id="transactionReviewReceiptLink"
                     class="transaction-review-thumb is-hidden"
@@ -363,23 +363,23 @@
                   >
                     <img id="transactionReviewReceiptImage" class="transaction-review-thumb-image" alt="Preview struk transaksi" />
                   </a>
-                  <div class="transaction-review-copy">
-                    <span class="eyebrow">Step 2</span>
+                  <div class="transaction-review-copy flex-1">
+                    <span class="eyebrow tw-section-chip">Step 2</span>
                     <strong id="transactionReviewStatus">Periksa detail transaksi</strong>
                     <span id="transactionReviewHint">Edit jika ada data yang kurang tepat sebelum disimpan.</span>
                   </div>
                   <div class="transaction-review-actions">
-                    <button id="transactionReviewManageButton" class="secondary-button" type="button">Kelola struk</button>
+                    <button id="transactionReviewManageButton" class="secondary-button tw-action-secondary" type="button">Kelola struk</button>
                   </div>
                 </div>
 
-                <div id="transactionReviewSummary" class="transaction-review-summary">
+                <div id="transactionReviewSummary" class="transaction-review-summary tw-soft-panel">
                   <strong id="transactionReviewSummaryTitle">Cek field utama dulu</strong>
                   <p id="transactionReviewSummaryText">Pastikan deskripsi, nominal, tanggal, dan kategori sudah benar sebelum simpan.</p>
                 </div>
 
-                <div class="transaction-form">
-                  <label>
+                <div class="transaction-form tw-form-grid">
+                  <label class="tw-soft-panel">
                     <span class="transaction-field-head">
                       <span>Tipe</span>
                     </span>
@@ -388,14 +388,14 @@
                       <option value="expense">Pengeluaran</option>
                     </select>
                   </label>
-                  <label id="transactionFieldDescription" class="transaction-field transaction-field-priority">
+                  <label id="transactionFieldDescription" class="transaction-field transaction-field-priority tw-soft-panel">
                     <span class="transaction-field-head">
                       <span>Deskripsi transaksi</span>
                       <small id="transactionReviewChipDescription" class="transaction-review-chip is-hidden">Perlu diisi</small>
                     </span>
                     <input type="text" name="description" placeholder="Contoh: Bayar listrik" required />
                   </label>
-                  <label id="transactionFieldAmount" class="transaction-field transaction-field-priority">
+                  <label id="transactionFieldAmount" class="transaction-field transaction-field-priority tw-soft-panel">
                     <span class="transaction-field-head">
                       <span>Nominal</span>
                       <small id="transactionReviewChipAmount" class="transaction-review-chip is-hidden">Cek nominal</small>
@@ -413,37 +413,37 @@
                       Bisa isi nominal fleksibel seperti `Rp15.000`, `15rb`, atau `1,5jt`.
                     </small>
                   </label>
-                  <label id="transactionFieldCategory" class="transaction-field transaction-field-priority">
+                  <label id="transactionFieldCategory" class="transaction-field transaction-field-priority tw-soft-panel">
                     <span class="transaction-field-head">
                       <span>Kategori transaksi</span>
                       <small id="transactionReviewChipCategory" class="transaction-review-chip is-hidden">Pilih kategori</small>
                     </span>
                     <select id="transactionCategory" name="category" required></select>
                   </label>
-                  <label id="transactionFieldDate" class="transaction-field transaction-field-priority">
+                  <label id="transactionFieldDate" class="transaction-field transaction-field-priority tw-soft-panel">
                     <span class="transaction-field-head">
                       <span>Tanggal</span>
                       <small id="transactionReviewChipDate" class="transaction-review-chip is-hidden">Pilih tanggal</small>
                     </span>
                     <input type="date" name="date" required />
                   </label>
-                  <label class="full-span">
+                  <label class="full-span tw-full-span tw-soft-panel">
                     <span class="transaction-field-head">
                       <span>Catatan</span>
                     </span>
                     <textarea name="notes" rows="3" placeholder="Tambahan informasi jika perlu"></textarea>
                   </label>
-                  <div class="transaction-form-actions full-span">
-                    <button id="transactionSubmitButton" class="primary-button" type="submit">Simpan transaksi</button>
-                    <button id="transactionCancelButton" class="secondary-button is-hidden" type="button">Batal edit</button>
+                  <div class="transaction-form-actions full-span tw-full-span tw-split-actions">
+                    <button id="transactionSubmitButton" class="primary-button tw-action-primary" type="submit">Simpan transaksi</button>
+                    <button id="transactionCancelButton" class="secondary-button tw-action-secondary is-hidden" type="button">Batal edit</button>
                   </div>
                 </div>
               </section>
             </form>
           </article>
 
-          <article class="card import-card">
-            <div class="section-heading">
+          <article class="card import-card tw-panel-card">
+            <div class="section-heading tw-section-heading">
               <div class="section-title">
                 <span class="section-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -460,7 +460,7 @@
             </div>
 
             <form id="importForm" class="import-form">
-              <label class="full-span">
+              <label class="full-span tw-full-span">
                 <span>File CSV mutasi</span>
                 <input id="importFileInput" type="file" accept=".csv,text/csv" />
                 <small class="field-hint">
@@ -468,7 +468,7 @@
                 </small>
               </label>
 
-              <div id="importMappingSection" class="import-mapping is-hidden full-span">
+              <div id="importMappingSection" class="import-mapping tw-soft-panel is-hidden full-span tw-full-span">
                 <div class="import-meta">
                   <strong id="importFileName">Belum ada file</strong>
                   <span id="importMetaText">Unggah file untuk melihat mapping kolom.</span>
@@ -518,14 +518,14 @@
                 </div>
               </div>
 
-              <div class="import-form-actions full-span">
-                <button id="importPreviewButton" class="secondary-button" type="button" disabled>Lihat preview</button>
-                <button id="importSubmitButton" class="primary-button" type="submit" disabled>Import ke transaksi</button>
+              <div class="import-form-actions full-span tw-full-span tw-split-actions">
+                <button id="importPreviewButton" class="secondary-button tw-action-secondary" type="button" disabled>Lihat preview</button>
+                <button id="importSubmitButton" class="primary-button tw-action-primary" type="submit" disabled>Import ke transaksi</button>
               </div>
 
-              <p id="importMessage" class="import-message full-span"></p>
+              <p id="importMessage" class="import-message full-span tw-full-span"></p>
 
-              <div id="importPreviewSection" class="import-preview is-hidden full-span">
+              <div id="importPreviewSection" class="import-preview tw-soft-panel is-hidden full-span tw-full-span">
                 <div class="import-preview-head">
                   <div>
                     <strong>Preview hasil import</strong>
@@ -538,8 +538,8 @@
           </article>
 
           <section class="charts-grid">
-            <article class="card chart-card">
-              <div class="section-heading">
+            <article class="card chart-card tw-panel-card">
+              <div class="section-heading tw-section-heading">
                 <div class="section-title">
                   <span class="section-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -557,8 +557,8 @@
               <div id="cashflowChart" class="chart-list"></div>
             </article>
 
-            <article class="card chart-card">
-              <div class="section-heading">
+            <article class="card chart-card tw-panel-card">
+              <div class="section-heading tw-section-heading">
                 <div class="section-title">
                   <span class="section-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -577,8 +577,8 @@
             </article>
           </section>
 
-          <article class="card table-card">
-            <div class="section-heading split-heading">
+          <article class="card table-card tw-panel-card">
+            <div class="section-heading split-heading tw-section-heading">
               <div class="section-title">
                 <span class="section-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -622,8 +622,8 @@
         </div>
 
         <aside class="right-column">
-          <article class="card telegram-card">
-            <div class="section-heading">
+          <article class="card telegram-card tw-sidebar-card">
+            <div class="section-heading tw-section-heading">
               <div class="section-title">
                 <span class="section-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -642,19 +642,19 @@
             </p>
 
             <div class="telegram-actions">
-              <button id="telegramLinkButton" class="secondary-button" type="button">Buat kode tautan</button>
-              <button id="telegramUnlinkButton" class="secondary-button is-hidden" type="button">Putuskan koneksi</button>
+              <button id="telegramLinkButton" class="secondary-button tw-action-secondary" type="button">Buat kode tautan</button>
+              <button id="telegramUnlinkButton" class="secondary-button tw-action-secondary is-hidden" type="button">Putuskan koneksi</button>
             </div>
 
-            <div id="telegramCodeBox" class="telegram-code is-hidden">
+            <div id="telegramCodeBox" class="telegram-code tw-soft-panel is-hidden">
               <span>Kirim atau tempel kode berikut ke bot Telegram:</span>
               <strong id="telegramCodeText">XXXXXXXX</strong>
               <small id="telegramCodeMeta">Bot akan membaca kode ini langsung lewat parsing teks. Kode berlaku 10 menit.</small>
             </div>
           </article>
 
-          <article class="card chatbot-card">
-            <div class="section-heading">
+          <article class="card chatbot-card tw-sidebar-card">
+            <div class="section-heading tw-section-heading">
               <div class="section-title">
                 <span class="section-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -686,12 +686,12 @@
                 placeholder="Tanyakan kondisi keuangan Anda..."
                 required
               ></textarea>
-              <button class="primary-button" type="submit">Kirim</button>
+              <button class="primary-button tw-action-primary" type="submit">Kirim</button>
             </form>
           </article>
 
-          <article class="card insight-card">
-            <div class="section-heading">
+          <article class="card insight-card tw-sidebar-card">
+            <div class="section-heading tw-section-heading">
               <div class="section-title">
                 <span class="section-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
