@@ -146,6 +146,7 @@ const elements = {
   flowNetMeta: document.getElementById("flowNetMeta"),
   flowNetValue: document.getElementById("flowNetValue"),
   flowTimeline: document.getElementById("flowTimeline"),
+  heroMetaText: document.getElementById("heroMetaText"),
   heroSummaryText: document.getElementById("heroSummaryText"),
   incomeFoot: document.getElementById("incomeFoot"),
   incomeValue: document.getElementById("incomeValue"),
@@ -481,16 +482,30 @@ function syncTransactionCategoryOptions(preferredValue) {
 
 // render/app-shell.js
 async function request(path, options = {}) {
-  const response = await fetch(path, {
-    credentials: "same-origin",
-    ...options,
-    headers: {
-      ...(options.headers || {})
-    }
-  });
+  let response;
+  try {
+    response = await fetch(path, {
+      credentials: "same-origin",
+      ...options,
+      headers: {
+        ...(options.headers || {})
+      }
+    });
+  } catch {
+    const error = new Error("Jaringan sedang bermasalah. Periksa koneksi Anda lalu coba lagi.");
+    error.status = 0;
+    throw error;
+  }
 
   const raw = await response.text();
-  const payload = raw ? JSON.parse(raw) : {};
+  let payload = {};
+  if (raw) {
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      payload = { message: raw };
+    }
+  }
 
   if (!response.ok) {
     const error = new Error(payload.error || payload.message || "Terjadi kesalahan saat memproses permintaan.");
@@ -504,13 +519,26 @@ async function request(path, options = {}) {
 function showAuthGate(message = "") {
   elements.authGate.classList.remove("is-hidden");
   elements.appShell.classList.add("is-locked");
-  elements.authMessage.textContent = message;
+  setAuthMessage(message, message ? "info" : "default");
+  const focusTarget = state.authMode === "register" ? elements.authName : elements.authEmail;
+  if (focusTarget && typeof focusTarget.focus === "function") {
+    window.requestAnimationFrame(() => {
+      focusTarget.focus();
+      focusTarget.select?.();
+    });
+  }
 }
 
 function hideAuthGate() {
   elements.authGate.classList.add("is-hidden");
   elements.appShell.classList.remove("is-locked");
-  elements.authMessage.textContent = "";
+  setAuthMessage("");
+}
+
+function setAuthMessage(message = "", tone = "default") {
+  elements.authMessage.textContent = message;
+  elements.authMessage.classList.toggle("is-info", tone === "info");
+  elements.authMessage.classList.toggle("is-success", tone === "success");
 }
 
 function setAuthMode(mode) {
@@ -526,7 +554,8 @@ function setAuthMode(mode) {
     ? "Daftarkan akun baru untuk menyimpan transaksi Anda secara terpisah."
     : "Masuk untuk mengakses dashboard keuangan pribadi. Data transaksi setiap akun dipisahkan otomatis di sistem.";
   elements.authSubmitButton.textContent = isRegister ? "Daftar Akun" : "Masuk";
-  elements.authMessage.textContent = "";
+  elements.authPassword.autocomplete = isRegister ? "new-password" : "current-password";
+  setAuthMessage("");
   setAuthPasswordVisibility(false);
 }
 
@@ -573,6 +602,11 @@ function renderHealth() {
   };
 
   elements.chatModeChip.textContent = labels[state.health.chatMode] || "Mode chatbot aktif";
+  const config = state.health.config || {};
+  const appBaseLabel = config.appBaseUrlConfigured ? "deploy siap webhook" : "APP_BASE_URL belum diisi";
+  const telegramLabel = state.health.telegramConfigured ? "Telegram siap" : "Telegram belum aktif";
+  const cookieLabel = config.sameSite ? `Cookie ${config.sameSite}` : "Cookie aman";
+  elements.heroMetaText.textContent = `${telegramLabel} • ${appBaseLabel} • ${cookieLabel}`;
 }
 
 function renderTelegramStatus() {
@@ -640,6 +674,9 @@ function clearDashboard() {
   elements.heroSummaryText.textContent = state.user
     ? "Memuat ringkasan keuangan terbaru."
     : "Masuk ke akun untuk memuat ringkasan keuangan terbaru.";
+  elements.heroMetaText.textContent = state.health
+    ? "Layanan siap dimuat setelah sesi akun tersedia."
+    : "Memeriksa keamanan aplikasi dan kesiapan layanan...";
   elements.flowIncomeValue.textContent = "Rp0";
   elements.flowExpenseValue.textContent = "Rp0";
   elements.flowNetValue.textContent = "Rp0";
@@ -801,6 +838,7 @@ function renderSummary() {
   elements.heroSummaryText.textContent = summary.topExpenseCategory
     ? `Saldo saat ini ${formatCurrency(summary.balance)}. Pengeluaran terbesar ada di ${summary.topExpenseCategory.category}.`
     : `Saldo saat ini ${formatCurrency(summary.balance)}. Tambahkan transaksi untuk memperkaya analisis.`;
+  elements.heroMetaText.textContent = `${summary.transactionCount} transaksi • Rasio tabungan ${formatPercent(summary.savingsRate)} • ${summary.monthlyCashflow.length} bulan terpetakan`;
 
   renderFlowStats(summary);
 }
@@ -2551,7 +2589,26 @@ async function handleAuthSubmit(event) {
     password: elements.authPassword.value
   };
 
+  if (!payload.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
+    setAuthMessage("Masukkan alamat email yang valid.");
+    elements.authEmail.focus();
+    return;
+  }
+
+  if (payload.password.length < 8) {
+    setAuthMessage("Password minimal 8 karakter agar akun lebih aman.");
+    elements.authPassword.focus();
+    return;
+  }
+
+  if (state.authMode === "register" && payload.name.length < 2) {
+    setAuthMessage("Nama minimal 2 karakter.");
+    elements.authName.focus();
+    return;
+  }
+
   try {
+    setAuthMessage(state.authMode === "register" ? "Menyiapkan akun aman Anda..." : "Memverifikasi sesi aman...", "info");
     button.disabled = true;
     button.textContent = state.authMode === "register" ? "Mendaftarkan..." : "Memproses...";
 
@@ -2568,12 +2625,13 @@ async function handleAuthSubmit(event) {
     hideAuthGate();
     elements.authForm.reset();
     setAuthPasswordVisibility(false);
+    setAuthMessage(state.authMode === "register" ? "Akun berhasil dibuat." : "Berhasil masuk.", "success");
     resetTransactionForm();
     resetChat();
     await reloadDashboard();
     applyPendingLaunchShortcut();
   } catch (error) {
-    elements.authMessage.textContent = error.message;
+    setAuthMessage(error.message);
   } finally {
     button.disabled = false;
     button.textContent = state.authMode === "register" ? "Daftar Akun" : "Masuk";

@@ -59,12 +59,16 @@ const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL || "https://api.openai.com/
 const OCR_SPACE_API_KEY = String(process.env.OCR_SPACE_API_KEY || "").trim();
 const OCR_SPACE_API_URL = "https://api.ocr.space/parse/image";
 const COOKIE_NAME = "session_id";
+const SESSION_COOKIE_SAME_SITE = parseCookieSameSite(process.env.SESSION_COOKIE_SAME_SITE);
+const BODY_LIMIT_BYTES = readPositiveIntEnv(process.env.BODY_LIMIT_BYTES, 5_000_000);
+const STATIC_CACHE_MAX_AGE_SECONDS = readPositiveIntEnv(process.env.STATIC_CACHE_MAX_AGE_SECONDS, 300);
+const SLOW_REQUEST_THRESHOLD_MS = readPositiveIntEnv(process.env.SLOW_REQUEST_THRESHOLD_MS, 1_000);
 const TELEGRAM_BOT_TOKEN = String(process.env.TELEGRAM_BOT_TOKEN || "").trim();
 const TELEGRAM_WEBHOOK_SECRET = String(process.env.TELEGRAM_WEBHOOK_SECRET || "").trim();
 const TELEGRAM_BOT_USERNAME = String(process.env.TELEGRAM_BOT_USERNAME || "").trim();
 const APP_BASE_URL = String(process.env.APP_BASE_URL || "").trim();
 const TELEGRAM_AUTO_SET_WEBHOOK = String(process.env.TELEGRAM_AUTO_SET_WEBHOOK || "").trim().toLowerCase() === "true";
-const TELEGRAM_RECEIPT_DRAFT_TTL_MS = 15 * 60_000;
+const TELEGRAM_RECEIPT_DRAFT_TTL_MS = readPositiveIntEnv(process.env.TELEGRAM_RECEIPT_DRAFT_TTL_MS, 15 * 60_000);
 const ALLOWED_ORIGINS = buildAllowedOrigins({
   appBaseUrl: APP_BASE_URL,
   envAllowedOrigins: process.env.ALLOWED_ORIGINS,
@@ -77,11 +81,11 @@ const LOGGER = createLogger({
   serviceName: "arunika-finance"
 });
 const RATE_LIMITS = {
-  api: { max: 240, windowMs: 60_000 },
-  auth: { max: 20, windowMs: 10 * 60_000 },
-  chat: { max: 50, windowMs: 60_000 },
-  telegramWebhook: { max: 1_200, windowMs: 60_000 },
-  transactionWrite: { max: 60, windowMs: 60_000 }
+  api: readRateLimitEnv("API", { max: 240, windowMs: 60_000 }),
+  auth: readRateLimitEnv("AUTH", { max: 20, windowMs: 10 * 60_000 }),
+  chat: readRateLimitEnv("CHAT", { max: 50, windowMs: 60_000 }),
+  telegramWebhook: readRateLimitEnv("TELEGRAM_WEBHOOK", { max: 1_200, windowMs: 60_000 }),
+  transactionWrite: readRateLimitEnv("TRANSACTION_WRITE", { max: 60, windowMs: 60_000 })
 };
 
 const MIME_TYPES = {
@@ -108,16 +112,23 @@ const {
   sendUnauthorized
 } = createHttpService({
   allowedOrigins: ALLOWED_ORIGINS,
+  bodyLimitBytes: BODY_LIMIT_BYTES,
   getRequestId,
   nodeEnv: process.env.NODE_ENV,
   rateLimits: RATE_LIMITS,
-  rateLimitStore: RATE_LIMIT_STORE
+  rateLimitStore: RATE_LIMIT_STORE,
+  securityProfile: {
+    bodyLimitBytes: BODY_LIMIT_BYTES,
+    sameSite: SESSION_COOKIE_SAME_SITE,
+    staticCacheMaxAgeSeconds: STATIC_CACHE_MAX_AGE_SECONDS
+  }
 });
 
 const { buildClearCookie, buildSessionCookie, getSessionFromRequest } = createSessionAuth({
   cookieName: COOKIE_NAME,
   getSessionWithUser,
   nodeEnv: process.env.NODE_ENV,
+  sameSite: SESSION_COOKIE_SAME_SITE,
   sessionMaxAgeSeconds: SESSION_MAX_AGE_SECONDS
 });
 
@@ -148,6 +159,14 @@ const { handleSystemRoute, serveStatic } = createSystemRoutes({
   model: OPENAI_MODEL,
   path,
   publicDir: PUBLIC_DIR,
+  securityProfile: {
+    appBaseUrlConfigured: Boolean(APP_BASE_URL),
+    allowedOriginCount: ALLOWED_ORIGINS.size,
+    bodyLimitBytes: BODY_LIMIT_BYTES,
+    sameSite: SESSION_COOKIE_SAME_SITE,
+    staticCacheMaxAgeSeconds: STATIC_CACHE_MAX_AGE_SECONDS
+  },
+  staticCacheMaxAgeSeconds: STATIC_CACHE_MAX_AGE_SECONDS,
   sendJson,
   sendText
 });
@@ -805,6 +824,27 @@ async function buildChatReply(message, history, user) {
   }
 }
 
+function readPositiveIntEnv(value, fallback) {
+  const parsed = Number.parseInt(String(value || "").trim(), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function readRateLimitEnv(prefix, fallback) {
+  return {
+    max: readPositiveIntEnv(process.env[`RATE_LIMIT_${prefix}_MAX`], fallback.max),
+    windowMs: readPositiveIntEnv(process.env[`RATE_LIMIT_${prefix}_WINDOW_MS`], fallback.windowMs)
+  };
+}
+
+function parseCookieSameSite(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["strict", "none"].includes(normalized)) {
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  }
+
+  return "Lax";
+}
+
 async function handleRequest(req, res) {
   if (!req.url) {
     sendText(req, res, 400, "Permintaan tidak valid.");
@@ -937,7 +977,7 @@ function createAppServer() {
         return;
       }
 
-      if (durationMs >= 1_000) {
+      if (durationMs >= SLOW_REQUEST_THRESHOLD_MS) {
         LOGGER.info("api-request-slow", {
           durationMs,
           method: req.method,

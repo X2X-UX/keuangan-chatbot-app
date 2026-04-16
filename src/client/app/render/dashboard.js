@@ -100,6 +100,7 @@ function renderSummary() {
   elements.heroSummaryText.textContent = summary.topExpenseCategory
     ? `Saldo saat ini ${formatCurrency(summary.balance)}. Pengeluaran terbesar ada di ${summary.topExpenseCategory.category}.`
     : `Saldo saat ini ${formatCurrency(summary.balance)}. Tambahkan transaksi untuk memperkaya analisis.`;
+  elements.heroMetaText.textContent = `${summary.transactionCount} transaksi • Rasio tabungan ${formatPercent(summary.savingsRate)} • ${summary.monthlyCashflow.length} bulan terpetakan`;
 
   renderFlowStats(summary);
 }

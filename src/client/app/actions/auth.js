@@ -63,7 +63,26 @@ async function handleAuthSubmit(event) {
     password: elements.authPassword.value
   };
 
+  if (!payload.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
+    setAuthMessage("Masukkan alamat email yang valid.");
+    elements.authEmail.focus();
+    return;
+  }
+
+  if (payload.password.length < 8) {
+    setAuthMessage("Password minimal 8 karakter agar akun lebih aman.");
+    elements.authPassword.focus();
+    return;
+  }
+
+  if (state.authMode === "register" && payload.name.length < 2) {
+    setAuthMessage("Nama minimal 2 karakter.");
+    elements.authName.focus();
+    return;
+  }
+
   try {
+    setAuthMessage(state.authMode === "register" ? "Menyiapkan akun aman Anda..." : "Memverifikasi sesi aman...", "info");
     button.disabled = true;
     button.textContent = state.authMode === "register" ? "Mendaftarkan..." : "Memproses...";
 
@@ -80,12 +99,13 @@ async function handleAuthSubmit(event) {
     hideAuthGate();
     elements.authForm.reset();
     setAuthPasswordVisibility(false);
+    setAuthMessage(state.authMode === "register" ? "Akun berhasil dibuat." : "Berhasil masuk.", "success");
     resetTransactionForm();
     resetChat();
     await reloadDashboard();
     applyPendingLaunchShortcut();
   } catch (error) {
-    elements.authMessage.textContent = error.message;
+    setAuthMessage(error.message);
   } finally {
     button.disabled = false;
     button.textContent = state.authMode === "register" ? "Daftar Akun" : "Masuk";

@@ -2,6 +2,7 @@ function createSessionAuth({
   cookieName,
   getSessionWithUser,
   nodeEnv,
+  sameSite,
   sessionMaxAgeSeconds
 }) {
   function parseCookies(req) {
@@ -28,7 +29,7 @@ function createSessionAuth({
       `${cookieName}=${sessionId}`,
       "Path=/",
       "HttpOnly",
-      "SameSite=Lax",
+      `SameSite=${sameSite}`,
       `Max-Age=${sessionMaxAgeSeconds}`
     ];
 
@@ -40,7 +41,12 @@ function createSessionAuth({
   }
 
   function buildClearCookie() {
-    return `${cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+    const parts = [`${cookieName}=`, "Path=/", "HttpOnly", `SameSite=${sameSite}`, "Max-Age=0"];
+    if (nodeEnv === "production") {
+      parts.push("Secure");
+    }
+
+    return parts.join("; ");
   }
 
   return {

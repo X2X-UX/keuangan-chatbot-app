@@ -135,6 +135,7 @@ const elements = {
   flowNetMeta: document.getElementById("flowNetMeta"),
   flowNetValue: document.getElementById("flowNetValue"),
   flowTimeline: document.getElementById("flowTimeline"),
+  heroMetaText: document.getElementById("heroMetaText"),
   heroSummaryText: document.getElementById("heroSummaryText"),
   incomeFoot: document.getElementById("incomeFoot"),
   incomeValue: document.getElementById("incomeValue"),

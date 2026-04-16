@@ -14,7 +14,7 @@
 
 @layer components {
   .tw-surface-card {
-    @apply rounded-[24px] border border-white/90 bg-white/90 shadow-card backdrop-blur;
+    @apply rounded-[28px] border border-white/80 bg-white/90 shadow-card backdrop-blur-xl;
   }
 
   .tw-section-chip {
@@ -22,19 +22,19 @@
   }
 
   .tw-action-primary {
-    @apply inline-flex items-center justify-center rounded-xl bg-gradient-to-br from-brand-primary to-blue-700 px-4 py-3 font-semibold text-white shadow-soft transition hover:-translate-y-0.5;
+    @apply inline-flex items-center justify-center rounded-2xl bg-gradient-to-br from-brand-primary via-blue-700 to-cyan-600 px-5 py-3.5 font-semibold text-white shadow-card transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-primary/15;
   }
 
   .tw-action-secondary {
-    @apply inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 font-semibold text-brand-ink transition hover:-translate-y-0.5 hover:border-slate-300;
+    @apply inline-flex items-center justify-center rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3.5 font-semibold text-brand-ink shadow-soft transition hover:-translate-y-0.5 hover:border-slate-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-primary/10;
   }
 
   .tw-metric-card {
-    @apply rounded-3xl border border-white/90 bg-white/90 p-5 shadow-card backdrop-blur;
+    @apply rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-card backdrop-blur-xl;
   }
 
   .tw-panel-card {
-    @apply rounded-[24px] border border-white/90 bg-white/90 p-5 shadow-card backdrop-blur md:p-6;
+    @apply rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-card backdrop-blur-xl md:p-6;
   }
 
   .tw-soft-panel {
@@ -62,7 +62,7 @@
   }
 
   .tw-sidebar-card {
-    @apply rounded-[24px] border border-white/90 bg-white/90 p-5 shadow-card backdrop-blur md:p-6;
+    @apply min-w-0 rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-card backdrop-blur-xl md:p-6;
   }
 
   .tw-filter-bar {
@@ -70,27 +70,27 @@
   }
 
   .tw-input-shell {
-    @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-brand-ink shadow-soft transition focus:border-brand-primary/40 focus:outline-none focus:ring-4 focus:ring-brand-primary/10;
+    @apply w-full rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-brand-ink shadow-soft transition focus:border-brand-primary/40 focus:outline-none focus:ring-4 focus:ring-brand-primary/10;
   }
 
   .tw-table-shell {
-    @apply overflow-hidden rounded-2xl border border-slate-200 bg-white;
+    @apply overflow-hidden rounded-[22px] border border-slate-200/90 bg-white/95 shadow-soft;
   }
 
   .tw-prompt-list {
-    @apply flex flex-wrap gap-3;
+    @apply gap-3;
   }
 
   .tw-prompt-button {
-    @apply inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-brand-primary transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white;
+    @apply inline-flex items-center rounded-full border border-slate-200/90 bg-white/80 px-4 py-2.5 text-sm font-semibold text-brand-primary shadow-soft transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-primary/10;
   }
 
   .tw-chat-log {
-    @apply grid min-h-[320px] gap-3 rounded-3xl border border-slate-200 bg-slate-50/80 p-3 shadow-soft md:max-h-[560px];
+    @apply grid min-h-[320px] min-w-0 gap-3 rounded-[26px] border border-slate-200/90 bg-slate-50/90 p-3 shadow-soft md:max-h-[560px];
   }
 
   .tw-chat-composer {
-    @apply grid gap-3 rounded-3xl border border-slate-200 bg-slate-50/80 p-4 shadow-soft;
+    @apply grid min-w-0 gap-3 rounded-[26px] border border-slate-200/90 bg-slate-50/90 p-4 shadow-soft;
   }
 
   .tw-chat-bubble {

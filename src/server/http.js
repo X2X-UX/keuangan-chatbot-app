@@ -47,9 +47,11 @@ function buildAllowedOrigins({ appBaseUrl, envAllowedOrigins, port, URLClass = U
 
 function createHttpService({
   allowedOrigins,
+  bodyLimitBytes,
   getRequestId,
   rateLimits,
   rateLimitStore,
+  securityProfile,
   sendJsonFallback,
   nodeEnv
 }) {
@@ -91,10 +93,13 @@ function createHttpService({
 
   function getSecurityHeaders(req) {
     const headers = {
+      "Cross-Origin-Embedder-Policy": "require-corp",
       "Cross-Origin-Opener-Policy": "same-origin",
       "Cross-Origin-Resource-Policy": "same-origin",
+      "Origin-Agent-Cluster": "?1",
       "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
       "Referrer-Policy": "strict-origin-when-cross-origin",
+      "X-DNS-Prefetch-Control": "off",
       "X-Content-Type-Options": "nosniff",
       "X-Frame-Options": "DENY"
     };
@@ -107,7 +112,8 @@ function createHttpService({
       "img-src 'self' data:",
       "object-src 'none'",
       "script-src 'self'",
-      "style-src 'self' 'unsafe-inline'"
+      "style-src 'self' 'unsafe-inline'",
+      "connect-src 'self'"
     ].join("; ");
 
     if (nodeEnv === "production") {
@@ -231,7 +237,7 @@ function createHttpService({
 
       req.on("data", (chunk) => {
         body += chunk;
-        if (body.length > 5_000_000) {
+        if (body.length > bodyLimitBytes) {
           reject(new Error("Payload terlalu besar."));
           req.destroy();
         }
@@ -276,6 +282,7 @@ function createHttpService({
     isUnsafeApiMutation,
     parseJsonBody,
     readBody,
+    securityProfile,
     sendJson,
     sendText,
     sendUnauthorized

@@ -1,14 +1,28 @@
 async function request(path, options = {}) {
-  const response = await fetch(path, {
-    credentials: "same-origin",
-    ...options,
-    headers: {
-      ...(options.headers || {})
-    }
-  });
+  let response;
+  try {
+    response = await fetch(path, {
+      credentials: "same-origin",
+      ...options,
+      headers: {
+        ...(options.headers || {})
+      }
+    });
+  } catch {
+    const error = new Error("Jaringan sedang bermasalah. Periksa koneksi Anda lalu coba lagi.");
+    error.status = 0;
+    throw error;
+  }
 
   const raw = await response.text();
-  const payload = raw ? JSON.parse(raw) : {};
+  let payload = {};
+  if (raw) {
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      payload = { message: raw };
+    }
+  }
 
   if (!response.ok) {
     const error = new Error(payload.error || payload.message || "Terjadi kesalahan saat memproses permintaan.");
@@ -22,13 +36,26 @@ async function request(path, options = {}) {
 function showAuthGate(message = "") {
   elements.authGate.classList.remove("is-hidden");
   elements.appShell.classList.add("is-locked");
-  elements.authMessage.textContent = message;
+  setAuthMessage(message, message ? "info" : "default");
+  const focusTarget = state.authMode === "register" ? elements.authName : elements.authEmail;
+  if (focusTarget && typeof focusTarget.focus === "function") {
+    window.requestAnimationFrame(() => {
+      focusTarget.focus();
+      focusTarget.select?.();
+    });
+  }
 }
 
 function hideAuthGate() {
   elements.authGate.classList.add("is-hidden");
   elements.appShell.classList.remove("is-locked");
-  elements.authMessage.textContent = "";
+  setAuthMessage("");
+}
+
+function setAuthMessage(message = "", tone = "default") {
+  elements.authMessage.textContent = message;
+  elements.authMessage.classList.toggle("is-info", tone === "info");
+  elements.authMessage.classList.toggle("is-success", tone === "success");
 }
 
 function setAuthMode(mode) {
@@ -44,7 +71,8 @@ function setAuthMode(mode) {
     ? "Daftarkan akun baru untuk menyimpan transaksi Anda secara terpisah."
     : "Masuk untuk mengakses dashboard keuangan pribadi. Data transaksi setiap akun dipisahkan otomatis di sistem.";
   elements.authSubmitButton.textContent = isRegister ? "Daftar Akun" : "Masuk";
-  elements.authMessage.textContent = "";
+  elements.authPassword.autocomplete = isRegister ? "new-password" : "current-password";
+  setAuthMessage("");
   setAuthPasswordVisibility(false);
 }
 
@@ -91,6 +119,11 @@ function renderHealth() {
   };
 
   elements.chatModeChip.textContent = labels[state.health.chatMode] || "Mode chatbot aktif";
+  const config = state.health.config || {};
+  const appBaseLabel = config.appBaseUrlConfigured ? "deploy siap webhook" : "APP_BASE_URL belum diisi";
+  const telegramLabel = state.health.telegramConfigured ? "Telegram siap" : "Telegram belum aktif";
+  const cookieLabel = config.sameSite ? `Cookie ${config.sameSite}` : "Cookie aman";
+  elements.heroMetaText.textContent = `${telegramLabel} • ${appBaseLabel} • ${cookieLabel}`;
 }
 
 function renderTelegramStatus() {
@@ -158,6 +191,9 @@ function clearDashboard() {
   elements.heroSummaryText.textContent = state.user
     ? "Memuat ringkasan keuangan terbaru."
     : "Masuk ke akun untuk memuat ringkasan keuangan terbaru.";
+  elements.heroMetaText.textContent = state.health
+    ? "Layanan siap dimuat setelah sesi akun tersedia."
+    : "Memeriksa keamanan aplikasi dan kesiapan layanan...";
   elements.flowIncomeValue.textContent = "Rp0";
   elements.flowExpenseValue.textContent = "Rp0";
   elements.flowNetValue.textContent = "Rp0";

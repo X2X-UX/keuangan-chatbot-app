@@ -6,4 +6,6 @@ src/client/.generated/
 *.log
 data/*.sqlite
 data/*.sqlite-*
+src/server/data/data/*.sqlite
+src/server/data/data/*.sqlite-*
 !data/transactions.json
