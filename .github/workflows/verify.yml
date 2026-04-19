@@ -4,11 +4,18 @@ on:
   push:
     branches:
       - main
+      - develop
   pull_request:
+  workflow_dispatch:
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APP_BASE_URL: https://example.com
+      TELEGRAM_BOT_TOKEN: ci-placeholder-token
+      TELEGRAM_WEBHOOK_SECRET: ci-placeholder-secret
 
     steps:
       - name: Checkout repository
@@ -18,9 +25,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Run verify
+      - name: Run preflight
+        run: npm run preflight
+
+      - name: Sync public assets
+        run: npm run sync:public
+
+      - name: Run verification suite
         run: npm run verify

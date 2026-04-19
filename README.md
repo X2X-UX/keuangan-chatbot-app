@@ -1,50 +1,131 @@
 # Arunika Finance
 
-Aplikasi keuangan online ringan untuk mencatat pemasukan dan pengeluaran, melihat ringkasan arus kas, lalu bertanya langsung ke chatbot keuangan berbasis data transaksi terbaru.
+Arunika Finance is a lightweight personal finance web application for tracking transactions, reviewing cashflow, capturing receipts, and chatting with a finance assistant backed by your latest account data.
 
-## Fitur utama
+## Highlights
 
-- Dashboard saldo, pemasukan, pengeluaran, rasio tabungan, dan insight otomatis.
-- Login, register, logout, dan session cookie untuk memisahkan data tiap user.
-- Database SQLite lokal di `data/arunika.sqlite`.
-- Tabel transaksi dengan pencarian, filter tipe, dan hapus data.
-- Integrasi Telegram bot untuk chat keuangan dari aplikasi Telegram.
-- Chatbot keuangan:
-  - Mode lokal aktif tanpa konfigurasi tambahan.
-  - Mode AI aktif jika `OPENAI_API_KEY` diisi.
+- Personal dashboard for balance, income, expenses, savings rate, and automated insights.
+- Account-based authentication with isolated user data via secure session cookies.
+- SQLite-backed storage for local-first deployment simplicity.
+- Transaction table with search, filtering, editing, and deletion.
+- Receipt capture and OCR-assisted transaction drafting.
+- Telegram bot integration for finance chat and transaction workflows.
+- Dual assistant modes:
+  - Local mode without external AI configuration.
+  - OpenAI-assisted mode when `OPENAI_API_KEY` is configured.
 
-## Menjalankan aplikasi (lokal)
+## Tech Stack
 
-1. Buka terminal di folder proyek `d:\keuangan`.
-2. Salin file environment:
+- Node.js 22
+- Native HTTP server
+- SQLite via Node.js built-in runtime support
+- Vanilla JavaScript frontend
+- Tailwind CSS component layer plus custom CSS
+- GitHub Actions for verification
+- Render blueprint for deployment
+
+## Requirements
+
+- Node.js `>= 22.18.0`
+- npm
+- Optional: OpenAI API key
+- Optional: Telegram bot credentials
+
+## Quick Start
+
+1. Copy the example environment file:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-3. Jalankan aplikasi:
+2. Install dependencies:
 
 ```powershell
-npm.cmd start
+npm install
 ```
 
-4. Buka browser ke `http://localhost:3000` (atau port dari env `PORT`).
-
-Catatan:
-- Saat `npm start` atau `npm run dev`, source frontend di `src/client/` otomatis dirakit lalu disinkronkan ke root assets (`index.html`, `styles.css`, `app.js`, dst.) dan ke folder `public/`.
-- Tailwind CSS sekarang ikut dikompilasi saat proses sinkronisasi frontend. Source utility/framework ada di `src/client/styles.tailwind.css`, lalu hasilnya digabung ke `styles.css` final.
-- Backend menerapkan header keamanan HTTP, rate limit API, serta validasi origin untuk endpoint mutasi.
-- Sebelum push ke GitHub, jalankan verifikasi cepat:
+3. Start the application:
 
 ```powershell
-npm.cmd run verify
+npm start
 ```
 
-Perintah ini akan menyinkronkan aset frontend, menjalankan test modul ringan, smoke test route penting, lalu mengecek sintaks file JavaScript utama.
+4. Open:
 
-## Struktur proyek
+```text
+http://localhost:3000
+```
 
-Source utama sekarang dipusatkan di folder `src/`:
+## Available Scripts
+
+- `npm run dev`
+  - Starts the app locally.
+- `npm run sync:public`
+  - Rebuilds frontend assets from `src/client/` into root assets and `public/`.
+- `npm run preflight`
+  - Validates core deployment environment values.
+- `npm run test:light`
+  - Runs lightweight module tests.
+- `npm run test:routes`
+  - Runs smoke tests for critical HTTP routes.
+- `npm run test:telegram`
+  - Runs Telegram OCR and assistant flow checks.
+- `npm run verify`
+  - Runs sync, tests, and syntax validation as a broader verification suite.
+
+## Environment Variables
+
+Use `.env.example` as the canonical starting point.
+
+### Core
+
+- `PORT`
+- `NODE_ENV`
+- `APP_BASE_URL`
+- `ALLOWED_ORIGINS`
+
+### AI and OCR
+
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_BASE_URL`
+- `OCR_SPACE_API_KEY`
+
+### Session and HTTP controls
+
+- `SESSION_COOKIE_SAME_SITE`
+- `BODY_LIMIT_BYTES`
+- `STATIC_CACHE_MAX_AGE_SECONDS`
+- `SLOW_REQUEST_THRESHOLD_MS`
+
+### Telegram
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_BOT_USERNAME`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `TELEGRAM_AUTO_SET_WEBHOOK`
+- `TELEGRAM_RECEIPT_DRAFT_TTL_MS`
+
+### Rate limiting
+
+- `RATE_LIMIT_API_MAX`
+- `RATE_LIMIT_API_WINDOW_MS`
+- `RATE_LIMIT_AUTH_MAX`
+- `RATE_LIMIT_AUTH_WINDOW_MS`
+- `RATE_LIMIT_CHAT_MAX`
+- `RATE_LIMIT_CHAT_WINDOW_MS`
+- `RATE_LIMIT_TELEGRAM_WEBHOOK_MAX`
+- `RATE_LIMIT_TELEGRAM_WEBHOOK_WINDOW_MS`
+- `RATE_LIMIT_TRANSACTION_WRITE_MAX`
+- `RATE_LIMIT_TRANSACTION_WRITE_WINDOW_MS`
+
+### Data isolation for tests or local experimentation
+
+- `ARUNIKA_DATA_DIR`
+- `ARUNIKA_DB_FILE`
+
+## Project Structure
 
 ```text
 src/
@@ -52,8 +133,6 @@ src/
     index.html
     styles.css
     styles.tailwind.css
-    transaction-categories.js
-    transaction-amount.js
     app/
       core/
       render/
@@ -67,128 +146,146 @@ src/
     data/
     routes/
     services/
+scripts/
+public/
 ```
 
-Catatan struktur:
-- `src/client/` adalah source of truth frontend.
-- `src/client/styles.tailwind.css` adalah layer framework UI, sementara `src/client/styles.css` tetap memuat styling custom dan komponen yang belum dimigrasikan.
-- `src/server/` adalah source of truth backend.
-- File legacy seperti `server.js`, `server.next.js`, `database.js`, dan `database.next.js` sekarang hanya wrapper kompatibilitas.
-- Root `app.js` dan asset frontend root lain adalah output sinkronisasi dari `src/client/`.
+### Notes
 
-## Test ringan
+- `src/client/` is the frontend source of truth.
+- `src/server/` is the backend source of truth.
+- Root assets such as `index.html`, `styles.css`, and `app.js` are generated/synced outputs.
+- `src/client/styles.tailwind.css` provides the framework utility layer, while `src/client/styles.css` contains the main custom styling system.
 
-Selain `verify`, tersedia juga test modul ringan untuk area yang paling rawan berubah:
+## Quality and Verification
+
+### Lightweight module tests
 
 ```powershell
-npm.cmd run test:light
+npm run test:light
 ```
 
-Saat ini test ringan mencakup:
-- parsing nominal fleksibel
-- parser OCR receipt
-- helper transaksi dasar
+Current coverage includes:
 
-Smoke test route penting:
+- flexible amount parsing
+- receipt OCR/parser helpers
+- transaction utility behavior
+
+### Route smoke tests
 
 ```powershell
-npm.cmd run test:routes
+npm run test:routes
 ```
 
-Cakupannya:
+Current coverage includes:
+
 - `GET /api/health`
-- register + session auth
-- proteksi endpoint transaksi
-- buat transaksi + hitung summary
+- registration and session auth
+- transaction endpoint protection
+- transaction creation and summary calculation
 
-Flow Telegram OCR:
-
-```powershell
-npm.cmd run test:telegram
-```
-
-Cakupannya:
-- foto struk Telegram -> OCR draft
-- edit cepat draft (`kategori ...`, `merchant ...`, `catatan ...`, `hapus kategori`, `set default kategori`, `hapus catatan`)
-- `lihat draft`
-- `reset draft`
-- callback tombol cepat (`Simpan`, `Batal`, `Lihat Draft`)
-- validasi low-confidence (`cek nominal`, `cek tanggal`, `cek kategori`, `cek semua`) sebelum simpan
-- `simpan`
-- `batal`
-
-## Environment test
-
-Untuk isolasi data saat test atau eksperimen lokal, backend mendukung:
-
-- `ARUNIKA_DATA_DIR`
-- `ARUNIKA_DB_FILE`
-
-Kalau env ini diisi, SQLite akan memakai lokasi data yang ditentukan tanpa mengganggu data utama aplikasi.
-
-## Instal sebagai aplikasi HP (PWA)
-
-Setelah aplikasi sudah live di domain HTTPS (Railway/hosting lain), aplikasi bisa diinstal ke HP:
-
-1. Buka URL aplikasi di browser HP.
-2. Android (Chrome): pilih menu -> `Install app` atau `Add to Home screen`.
-3. iPhone (Safari): tap `Share` -> `Add to Home Screen`.
-4. Jalankan dari ikon home screen seperti aplikasi native.
-
-## Deploy ke Render (siap produksi)
-
-Proyek ini sudah menyertakan blueprint [render.yaml](render.yaml) yang siap dipakai.
-
-1. Push repository ke GitHub.
-2. Di Render, pilih `New +` -> `Blueprint` -> pilih repository ini.
-3. Pastikan service `arunika-finance` terbuat.
-4. Isi environment variable berikut di Render:
-   - Wajib untuk Telegram:
-     - `APP_BASE_URL` = URL publik HTTPS aplikasi Render, contoh `https://arunika-finance.onrender.com`
-     - `TELEGRAM_BOT_TOKEN` = token bot dari BotFather
-   - Opsional:
-     - `TELEGRAM_BOT_USERNAME`
-     - `OPENAI_API_KEY` (kalau ingin mode AI OpenAI)
-     - `ALLOWED_ORIGINS` (opsional, pisahkan dengan koma jika ada origin frontend tambahan)
-5. Deploy service.
-6. Verifikasi health check: `GET /api/health` harus status `ok`.
-
-Opsional (direkomendasikan) sebelum deploy:
+### Telegram flow checks
 
 ```powershell
-npm.cmd run preflight
+npm run test:telegram
 ```
 
-Perintah ini akan mengecek env penting untuk Telegram (`APP_BASE_URL`, `TELEGRAM_BOT_TOKEN`) dan menandai yang masih kosong.
+Current coverage includes:
 
-Catatan penting deploy:
-- Database SQLite disimpan di persistent disk Render pada path `data/`.
-- Webhook Telegram akan dipasang otomatis saat startup jika:
+- Telegram receipt upload to OCR draft
+- quick draft editing commands
+- draft reset and view operations
+- quick action callbacks
+- low-confidence validation checks
+- save and cancel flows
+
+### Full verification
+
+```powershell
+npm run verify
+```
+
+This command rebuilds public assets, runs test suites, and checks JavaScript syntax for key files.
+
+## Security and Reliability
+
+The application includes:
+
+- HTTP security headers
+- origin validation for unsafe API mutations
+- configurable API rate limiting
+- request body size limits
+- secure session cookies in production
+- health and readiness reporting through `/api/health`
+
+## Deployment
+
+### Render
+
+This repository includes a production-ready [render.yaml](render.yaml) blueprint.
+
+1. Push the repository to GitHub.
+2. In Render, create a new Blueprint service from the repository.
+3. Confirm the `arunika-finance` service is created.
+4. Configure the required environment variables:
+   - `APP_BASE_URL`
+   - `TELEGRAM_BOT_TOKEN`
+5. Optionally configure:
+   - `TELEGRAM_BOT_USERNAME`
+   - `OPENAI_API_KEY`
+   - `ALLOWED_ORIGINS`
+6. Deploy the service.
+7. Verify:
+
+```text
+GET /api/health
+```
+
+Recommended before deploy:
+
+```powershell
+npm run preflight
+npm run verify
+```
+
+### Deployment notes
+
+- SQLite data is expected on a persistent disk under `data/`.
+- Telegram webhook setup can be automated at startup when:
   - `TELEGRAM_AUTO_SET_WEBHOOK=true`
-  - `APP_BASE_URL` dan `TELEGRAM_BOT_TOKEN` valid
+  - `APP_BASE_URL` is valid
+  - `TELEGRAM_BOT_TOKEN` is configured
 
-## Menghubungkan Telegram
+## Progressive Web App
 
-1. Login ke dashboard web.
-2. Buka panel Telegram lalu klik `Buat kode tautan`.
-3. Kirim atau tempel kode tautan itu langsung ke bot Telegram.
-4. Setelah terhubung, Anda bisa gunakan:
+Once deployed on HTTPS, the app can be installed on mobile devices.
+
+- Android / Chrome: use `Install app` or `Add to Home screen`
+- iPhone / Safari: use `Share` -> `Add to Home Screen`
+
+## Telegram Linking
+
+1. Sign in to the web dashboard.
+2. Open the Telegram panel.
+3. Generate a linking code.
+4. Send the code to the Telegram bot.
+5. Once linked, you can use:
    - `/summary`
    - `/help`
-   - pesan bebas untuk analisis keuangan
-   - input transaksi dengan parsing teks seperti `pengeluaran 25000 makan siang kategori Makanan`
+   - free-form finance questions
+   - transaction input messages such as `pengeluaran 25000 makan siang kategori Makanan`
 
-## Demo account
+## Demo Account
 
 - Email: `demo@arunika.local`
 - Password: `demo12345`
 
-## Referensi OpenAI
+## References
 
 - https://platform.openai.com/docs/api-reference/responses
 - https://platform.openai.com/docs/models/gpt-4.1-mini
 
-## Catatan teknis
+## Technical Notes
 
-- Frontend sekarang memakai Tailwind CSS secara bertahap melalui pipeline `sync-public`, tanpa mengubah endpoint atau arsitektur backend yang sudah ada.
-- Backend menggunakan `node:sqlite` bawaan Node.js (masih experimental di Node 22).
+- The frontend uses a gradual Tailwind CSS integration through the `sync-public` pipeline.
+- The backend uses Node.js built-in SQLite runtime support available in Node 22.

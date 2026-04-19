@@ -46,7 +46,7 @@ for (const key of requiredForTelegram) {
 const appBaseUrl = String(process.env.APP_BASE_URL || "").trim();
 if (appBaseUrl && !isHttpsUrl(appBaseUrl)) {
   hasError = true;
-  console.log("[ERR] APP_BASE_URL harus URL HTTPS publik.");
+  console.log("[ERR] APP_BASE_URL must be a public HTTPS URL.");
 }
 
 for (const key of recommended) {
@@ -58,7 +58,7 @@ if (hasError) {
   console.log("\nStatus: NOT READY");
   process.exitCode = 1;
 } else {
-  console.log("\nStatus: READY FOR TELEGRAM DEPLOY");
+  console.log("\nStatus: READY FOR DEPLOYMENT");
 }
 
 function loadEnvFile(filePath) {

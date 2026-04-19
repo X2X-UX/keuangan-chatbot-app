@@ -1,7 +1,7 @@
 {
   "name": "keuangan-chatbot-app",
   "version": "1.0.0",
-  "description": "Aplikasi keuangan online dengan dashboard transaksi dan chatbot finansial.",
+  "description": "Personal finance dashboard with transaction tracking, cashflow insights, receipt capture, and Telegram-assisted financial chat.",
   "main": "src/server/index.js",
   "scripts": {
     "preflight": "node scripts/preflight.js",
@@ -16,6 +16,26 @@
     "start": "node src/server/index.js",
     "dev": "node src/server/index.js",
     "telegram:webhook": "node register-telegram-webhook.js"
+  },
+  "keywords": [
+    "finance",
+    "dashboard",
+    "pwa",
+    "telegram",
+    "chatbot",
+    "sqlite",
+    "nodejs"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/X2X-UX/keuangan-chatbot-app.git"
+  },
+  "bugs": {
+    "url": "https://github.com/X2X-UX/keuangan-chatbot-app/issues"
+  },
+  "homepage": "https://github.com/X2X-UX/keuangan-chatbot-app#readme",
+  "engines": {
+    "node": ">=22.18.0"
   },
   "license": "MIT",
   "devDependencies": {

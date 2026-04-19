@@ -1,7 +1,7 @@
 {
   "name": "Arunika Finance",
   "short_name": "Arunika",
-  "description": "Aplikasi keuangan untuk mencatat transaksi, melihat ringkasan arus kas, dan chat asisten finansial.",
+  "description": "Personal finance dashboard for transaction tracking, receipt capture, cashflow review, and assisted financial insights.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -12,7 +12,7 @@
     {
       "name": "Scan Struk",
       "short_name": "Scan Struk",
-      "description": "Buka langsung ke alur scan struk.",
+      "description": "Open the receipt capture flow instantly.",
       "url": "/?shortcut=scan-receipt",
       "icons": [
         {
@@ -25,7 +25,7 @@
     {
       "name": "Input Manual",
       "short_name": "Input Manual",
-      "description": "Buka langsung ke form input transaksi manual.",
+      "description": "Open the manual transaction entry form instantly.",
       "url": "/?shortcut=manual-entry",
       "icons": [
         {
