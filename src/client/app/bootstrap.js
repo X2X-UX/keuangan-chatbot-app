@@ -1,6 +1,11 @@
 function bindEvents() {
   elements.loginTabButton.addEventListener("click", () => setAuthMode("login"));
   elements.registerTabButton.addEventListener("click", () => setAuthMode("register"));
+  elements.localeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setLocale(button.dataset.localeValue || "id");
+    });
+  });
   if (elements.authPasswordToggle) {
     elements.authPasswordToggle.addEventListener("click", handleAuthPasswordToggle);
   }
@@ -111,6 +116,15 @@ function bindEvents() {
   elements.chatForm.addEventListener("submit", handleChatSubmit);
   elements.searchInput.addEventListener("input", renderTransactions);
   elements.typeFilter.addEventListener("change", renderTransactions);
+  if (elements.exportCsvButton) {
+    elements.exportCsvButton.addEventListener("click", handleExportTransactionsCsv);
+  }
+  if (elements.exportExcelButton) {
+    elements.exportExcelButton.addEventListener("click", handleExportTransactionsExcel);
+  }
+  if (elements.exportPdfButton) {
+    elements.exportPdfButton.addEventListener("click", handleExportTransactionsPdf);
+  }
   elements.quickPrompts.addEventListener("click", async (event) => {
     const button = event.target.closest("button[data-prompt]");
     if (!button) {
@@ -141,6 +155,7 @@ async function registerServiceWorker() {
 
 async function initializeApp() {
   state.launchShortcut = getLaunchShortcutFromUrl();
+  setLocale(loadLocalePreference(), { persist: false, rerender: false });
   resetTransactionForm();
   resetImportState();
   setAuthMode("login");
@@ -156,7 +171,11 @@ async function initializeApp() {
     await loadSession();
   } catch (error) {
     elements.heroSummaryText.textContent = error.message;
-    showAuthGate("Gagal memuat status aplikasi. Coba refresh halaman.");
+    showAuthGate(
+      getActiveLocale() === "en"
+        ? "Failed to load application status. Please refresh the page."
+        : "Gagal memuat status aplikasi. Coba refresh halaman."
+    );
   }
 }
 

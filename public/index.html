@@ -32,7 +32,13 @@
 
     <section id="authGate" class="auth-gate">
       <div class="auth-card card tw-surface-card max-w-[470px] p-8 sm:p-10">
-        <span class="eyebrow tw-section-chip">Akses Aman</span>
+        <div class="auth-card-head">
+          <span class="eyebrow tw-section-chip" data-i18n="auth.safeAccess">Akses Aman</span>
+          <div class="locale-switcher" aria-label="Language switcher">
+            <button class="locale-button" type="button" data-locale-button data-locale-value="id">ID</button>
+            <button class="locale-button" type="button" data-locale-button data-locale-value="en">EN</button>
+          </div>
+        </div>
         <h2 id="authTitle">Masuk ke Arunika Finance</h2>
         <p id="authSubtitle">
           Masuk untuk mengakses dashboard keuangan pribadi. Data transaksi setiap akun akan
@@ -40,30 +46,32 @@
         </p>
 
         <div class="auth-tabs grid gap-3 sm:grid-cols-2">
-          <button id="loginTabButton" class="auth-tab is-active" type="button">Login</button>
-          <button id="registerTabButton" class="auth-tab" type="button">Daftar</button>
+          <button id="loginTabButton" class="auth-tab is-active" type="button" data-i18n="auth.loginTab">Login</button>
+          <button id="registerTabButton" class="auth-tab" type="button" data-i18n="auth.registerTab">Daftar</button>
         </div>
 
         <form id="authForm" class="auth-form">
           <label id="nameField">
-            <span>Nama</span>
-            <input id="authName" name="name" type="text" placeholder="Nama lengkap" minlength="2" autocomplete="name" />
+            <span data-i18n="auth.nameLabel">Nama</span>
+            <input id="authName" name="name" type="text" placeholder="Nama lengkap" data-i18n-placeholder="auth.namePlaceholder" minlength="2" autocomplete="name" />
           </label>
           <label>
-            <span>Email</span>
-            <input id="authEmail" name="email" type="email" placeholder="nama@email.com" autocomplete="email" autocapitalize="none" spellcheck="false" required />
+            <span data-i18n="auth.emailLabel">Email</span>
+            <input id="authEmail" name="email" type="email" placeholder="nama@email.com" data-i18n-placeholder="auth.emailPlaceholder" autocomplete="email" autocapitalize="none" spellcheck="false" required />
           </label>
           <label class="auth-password-field">
-            <span>Password</span>
+            <span data-i18n="auth.passwordLabel">Password</span>
             <div class="auth-password-wrap">
-              <input id="authPassword" name="password" type="password" placeholder="Minimal 8 karakter" minlength="8" autocomplete="current-password" required />
+              <input id="authPassword" name="password" type="password" placeholder="Minimal 8 karakter" data-i18n-placeholder="auth.passwordPlaceholder" minlength="8" autocomplete="current-password" required />
               <button
                 id="authPasswordToggle"
                 class="auth-password-toggle"
                 type="button"
                 aria-label="Tampilkan password"
+                data-i18n-aria-label="auth.toggleShowPassword"
                 aria-pressed="false"
                 title="Tampilkan password"
+                data-i18n-title="auth.toggleShowPassword"
               >
                 <svg class="auth-password-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path class="icon-eye-open" d="M2.5 12s3.8-6 9.5-6 9.5 6 9.5 6-3.8 6-9.5 6-9.5-6-9.5-6z"></path>
@@ -78,7 +86,7 @@
         </form>
 
         <p id="authMessage" class="auth-message" role="status" aria-live="polite"></p>
-        <p class="auth-hint">
+        <p class="auth-hint" data-i18n-html="auth.demoHint">
           Akun demo: <strong>demo@arunika.local</strong> / <strong>demo12345</strong>
         </p>
       </div>
@@ -92,20 +100,26 @@
               <img class="brand-mark" src="/icons/arunika-mark.svg" alt="Logo Arunika Finance" />
               <div class="brand-text">
                 <span class="brand-kicker">Arunika Finance</span>
-                <span class="brand-caption">Personal finance tracker</span>
+                <span class="brand-caption" data-i18n="hero.brandCaption">Personal finance tracker</span>
               </div>
             </div>
-            <span class="eyebrow hero-eyebrow tw-section-chip">Cashflow, Receipts, and Insights</span>
+            <div class="hero-top-actions">
+              <span class="eyebrow hero-eyebrow tw-section-chip" data-i18n="hero.eyebrow">Cashflow, Receipts, and Insights</span>
+              <div class="locale-switcher locale-switcher-hero" aria-label="Language switcher">
+                <button class="locale-button locale-button-hero" type="button" data-locale-button data-locale-value="id">ID</button>
+                <button class="locale-button locale-button-hero" type="button" data-locale-button data-locale-value="en">EN</button>
+              </div>
+            </div>
           </div>
           <h1 class="max-w-[12ch]">Arunika Finance</h1>
-          <p class="hero-lead max-w-[32ch] text-balance">
+          <p class="hero-lead max-w-[32ch] text-balance" data-i18n="hero.lead">
             Platform keuangan online untuk mencatat arus kas, menganalisis pola pengeluaran,
             dan berdiskusi dengan asisten keuangan berbasis data transaksi Anda.
           </p>
           <div class="hero-highlights">
-            <span>Dashboard real-time</span>
-            <span>Scan struk berbasis AI</span>
-            <span>Insight cashflow personal</span>
+            <span data-i18n="hero.highlightDashboard">Dashboard real-time</span>
+            <span data-i18n="hero.highlightReceipt">Scan struk berbasis AI</span>
+            <span data-i18n="hero.highlightInsight">Insight cashflow personal</span>
           </div>
         </div>
 
@@ -127,7 +141,7 @@
                   <path d="M10 4.5H6.5A2.5 2.5 0 0 0 4 7v10a2.5 2.5 0 0 0 2.5 2.5H10"></path>
                 </svg>
               </span>
-              <span>Keluar</span>
+              <span data-i18n="session.logout">Keluar</span>
             </button>
           </div>
         </div>
@@ -612,13 +626,21 @@
                 </div>
               </div>
 
-              <div class="filters tw-filter-bar">
-                <input id="searchInput" class="tw-input-shell" type="search" placeholder="Cari deskripsi atau kategori..." />
-                <select id="typeFilter" class="tw-input-shell">
-                  <option value="all">Semua tipe</option>
-                  <option value="income">Pemasukan</option>
-                  <option value="expense">Pengeluaran</option>
-                </select>
+              <div class="history-controls">
+                <div class="filters tw-filter-bar">
+                  <input id="searchInput" class="tw-input-shell" type="search" placeholder="Cari deskripsi atau kategori..." />
+                  <select id="typeFilter" class="tw-input-shell">
+                    <option value="all">Semua tipe</option>
+                    <option value="income">Pemasukan</option>
+                    <option value="expense">Pengeluaran</option>
+                  </select>
+                </div>
+
+                <div class="table-export-actions">
+                  <button id="exportCsvButton" class="secondary-button tw-action-secondary" type="button" data-i18n="export.csv">Ekspor CSV</button>
+                  <button id="exportExcelButton" class="secondary-button tw-action-secondary" type="button" data-i18n="export.excel">Ekspor Excel</button>
+                  <button id="exportPdfButton" class="secondary-button tw-action-secondary" type="button" data-i18n="export.pdf">Ekspor PDF</button>
+                </div>
               </div>
             </div>
 

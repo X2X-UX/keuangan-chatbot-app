@@ -17,6 +17,7 @@ const state = {
   editingTransactionId: null,
   health: null,
   launchShortcut: null,
+  locale: "id",
   summary: null,
   transactionEntryMethod: null,
   transactionEntryStep: "chooser",
@@ -30,6 +31,8 @@ const state = {
   user: null
 };
 const COMPACT_MODE_STORAGE_KEY = "arunika_compact_mode";
+const LOCALE_STORAGE_KEY = "arunika_locale";
+const SUPPORTED_LOCALES = ["id", "en"];
 const TRANSACTION_CATEGORY_OPTIONS = globalThis.TRANSACTION_CATEGORY_OPTIONS || {
   expense: ["Makanan", "Transportasi", "Tagihan", "Transfer", "Belanja", "Kesehatan", "Pendidikan", "Hiburan", "Rumah Tangga"],
   income: ["Gaji", "Freelance", "Bonus", "Penjualan", "Investasi", "Transfer", "Hadiah"]
@@ -49,27 +52,39 @@ const parseFlexibleAmount =
 const formatFlexibleCurrency =
   globalThis.formatFlexibleCurrency ||
   ((value) =>
-    new Intl.NumberFormat("id-ID", {
+    new Intl.NumberFormat(state.locale === "en" ? "en-US" : "id-ID", {
       currency: "IDR",
       maximumFractionDigits: 0,
       style: "currency"
     }).format(Number(value) || 0));
-
-const currencyFormatter = new Intl.NumberFormat("id-ID", {
-  currency: "IDR",
-  maximumFractionDigits: 0,
-  style: "currency"
-});
-
-const percentFormatter = new Intl.NumberFormat("id-ID", {
-  maximumFractionDigits: 1,
-  minimumFractionDigits: 1
-});
 const animatedValues = new Map();
 const prefersReducedMotion =
   typeof window !== "undefined" &&
   typeof window.matchMedia === "function" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function getActiveLocale() {
+  return SUPPORTED_LOCALES.includes(state.locale) ? state.locale : "id";
+}
+
+function getIntlLocale() {
+  return getActiveLocale() === "en" ? "en-US" : "id-ID";
+}
+
+function createCurrencyFormatter() {
+  return new Intl.NumberFormat(getIntlLocale(), {
+    currency: "IDR",
+    maximumFractionDigits: 0,
+    style: "currency"
+  });
+}
+
+function createPercentFormatter() {
+  return new Intl.NumberFormat(getIntlLocale(), {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 1
+  });
+}
 
 function getLaunchShortcutFromUrl() {
   if (typeof window === "undefined") {
@@ -136,6 +151,9 @@ const elements = {
   compactModeButton: document.getElementById("compactModeButton"),
   expenseFoot: document.getElementById("expenseFoot"),
   expenseValue: document.getElementById("expenseValue"),
+  exportCsvButton: document.getElementById("exportCsvButton"),
+  exportExcelButton: document.getElementById("exportExcelButton"),
+  exportPdfButton: document.getElementById("exportPdfButton"),
   flowExpenseBar: document.getElementById("flowExpenseBar"),
   flowExpenseMeta: document.getElementById("flowExpenseMeta"),
   flowExpenseValue: document.getElementById("flowExpenseValue"),
@@ -172,6 +190,7 @@ const elements = {
   importTypeColumn: document.getElementById("importTypeColumn"),
   insightList: document.getElementById("insightList"),
   loginTabButton: document.getElementById("loginTabButton"),
+  localeButtons: Array.from(document.querySelectorAll("[data-locale-button]")),
   logoutButton: document.getElementById("logoutButton"),
   nameField: document.getElementById("nameField"),
   quickPrompts: document.getElementById("quickPrompts"),
@@ -323,12 +342,263 @@ const IMPORT_PRESETS = {
   }
 };
 
+const I18N_MESSAGES = {
+  id: {
+    "auth.safeAccess": "Akses Aman",
+    "auth.loginTab": "Login",
+    "auth.registerTab": "Daftar",
+    "auth.nameLabel": "Nama",
+    "auth.namePlaceholder": "Nama lengkap",
+    "auth.emailLabel": "Email",
+    "auth.emailPlaceholder": "nama@email.com",
+    "auth.passwordLabel": "Password",
+    "auth.passwordPlaceholder": "Minimal 8 karakter",
+    "auth.demoHint": "Akun demo: <strong>demo@arunika.local</strong> / <strong>demo12345</strong>",
+    "auth.toggleShowPassword": "Tampilkan password",
+    "auth.toggleHidePassword": "Sembunyikan password",
+    "auth.title.login": "Masuk ke Arunika Finance",
+    "auth.title.register": "Buat akun Arunika Finance",
+    "auth.subtitle.login": "Masuk untuk mengakses dashboard keuangan pribadi. Data transaksi setiap akun dipisahkan otomatis di sistem.",
+    "auth.subtitle.register": "Daftarkan akun baru untuk menyimpan transaksi Anda secara terpisah.",
+    "auth.submit.login": "Masuk",
+    "auth.submit.register": "Daftar Akun",
+    "auth.status.loadingLogin": "Memverifikasi sesi aman...",
+    "auth.status.loadingRegister": "Menyiapkan akun aman Anda...",
+    "auth.status.successLogin": "Berhasil masuk.",
+    "auth.status.successRegister": "Akun berhasil dibuat.",
+    "auth.status.loggedOut": "Anda sudah logout.",
+    "auth.status.sessionEnded": "Sesi Anda berakhir. Silakan masuk kembali.",
+    "auth.error.invalidEmail": "Masukkan alamat email yang valid.",
+    "auth.error.shortPassword": "Password minimal 8 karakter agar akun lebih aman.",
+    "auth.error.shortName": "Nama minimal 2 karakter.",
+    "hero.brandCaption": "Personal finance tracker",
+    "hero.eyebrow": "Cashflow, Receipts, and Insights",
+    "hero.lead": "Platform keuangan online untuk mencatat arus kas, menganalisis pola pengeluaran, dan berdiskusi dengan asisten keuangan berbasis data transaksi Anda.",
+    "hero.highlightDashboard": "Dashboard real-time",
+    "hero.highlightReceipt": "Scan struk berbasis AI",
+    "hero.highlightInsight": "Insight cashflow personal",
+    "session.logout": "Keluar",
+    "session.guestName": "Belum masuk",
+    "session.guestEmail": "Gunakan akun demo atau daftar akun baru.",
+    "health.chatMode.local": "Chatbot lokal aktif",
+    "health.chatMode.localFallback": "Mode fallback lokal",
+    "health.chatMode.openai": "AI aktif - {model}",
+    "health.chatMode.default": "Mode chatbot aktif",
+    "health.appBase.ready": "deploy siap webhook",
+    "health.appBase.missing": "APP_BASE_URL belum diisi",
+    "health.telegram.ready": "Telegram siap",
+    "health.telegram.missing": "Telegram belum aktif",
+    "health.cookie.secure": "Cookie aman",
+    "dashboard.summary.loadingSignedIn": "Memuat ringkasan keuangan terbaru.",
+    "dashboard.summary.loadingSignedOut": "Masuk ke akun untuk memuat ringkasan keuangan terbaru.",
+    "dashboard.meta.readyAfterSession": "Layanan siap dimuat setelah sesi akun tersedia.",
+    "dashboard.meta.checking": "Memeriksa keamanan aplikasi dan kesiapan layanan...",
+    "dashboard.waitTransactions": "Menunggu data transaksi",
+    "dashboard.waitIncome": "Menunggu data pemasukan",
+    "dashboard.waitExpense": "Menunggu data pengeluaran",
+    "dashboard.waitNet": "Menunggu data neraca",
+    "dashboard.insufficientData": "Belum cukup data",
+    "dashboard.monthlyFlowEmpty": "Flow bulanan akan tampil setelah data transaksi tersedia.",
+    "dashboard.cashflowSignin": "Masuk untuk melihat arus kas bulanan.",
+    "dashboard.categorySignin": "Masuk untuk melihat komposisi pengeluaran.",
+    "dashboard.insightSignin": "Insight akan tampil setelah data akun berhasil dimuat.",
+    "dashboard.transactionsEmpty": "Belum ada transaksi untuk ditampilkan.",
+    "export.csv": "Ekspor CSV",
+    "export.excel": "Ekspor Excel",
+    "export.pdf": "Ekspor PDF",
+    "compactMode.enabled": "Mode Ringkas: Aktif",
+    "compactMode.disabled": "Mode Ringkas: Nonaktif",
+    "format.noMonth": "Tanpa bulan"
+  },
+  en: {
+    "auth.safeAccess": "Secure Access",
+    "auth.loginTab": "Sign In",
+    "auth.registerTab": "Register",
+    "auth.nameLabel": "Name",
+    "auth.namePlaceholder": "Full name",
+    "auth.emailLabel": "Email",
+    "auth.emailPlaceholder": "name@email.com",
+    "auth.passwordLabel": "Password",
+    "auth.passwordPlaceholder": "Minimum 8 characters",
+    "auth.demoHint": "Demo account: <strong>demo@arunika.local</strong> / <strong>demo12345</strong>",
+    "auth.toggleShowPassword": "Show password",
+    "auth.toggleHidePassword": "Hide password",
+    "auth.title.login": "Sign in to Arunika Finance",
+    "auth.title.register": "Create your Arunika Finance account",
+    "auth.subtitle.login": "Sign in to access your personal finance dashboard. Transaction data is automatically isolated for each account.",
+    "auth.subtitle.register": "Create a new account to keep your transactions securely separated.",
+    "auth.submit.login": "Sign In",
+    "auth.submit.register": "Create Account",
+    "auth.status.loadingLogin": "Verifying your secure session...",
+    "auth.status.loadingRegister": "Preparing your secure account...",
+    "auth.status.successLogin": "Signed in successfully.",
+    "auth.status.successRegister": "Account created successfully.",
+    "auth.status.loggedOut": "You have signed out.",
+    "auth.status.sessionEnded": "Your session has expired. Please sign in again.",
+    "auth.error.invalidEmail": "Enter a valid email address.",
+    "auth.error.shortPassword": "Use at least 8 characters for a stronger password.",
+    "auth.error.shortName": "Name must be at least 2 characters.",
+    "hero.brandCaption": "Personal finance tracker",
+    "hero.eyebrow": "Cashflow, Receipts, and Insights",
+    "hero.lead": "A personal finance platform for tracking cashflow, understanding spending patterns, and chatting with an assistant grounded in your transaction data.",
+    "hero.highlightDashboard": "Real-time dashboard",
+    "hero.highlightReceipt": "AI-powered receipt scan",
+    "hero.highlightInsight": "Personal cashflow insights",
+    "session.logout": "Sign Out",
+    "session.guestName": "Not signed in",
+    "session.guestEmail": "Use the demo account or create a new account.",
+    "health.chatMode.local": "Local assistant active",
+    "health.chatMode.localFallback": "Local fallback mode",
+    "health.chatMode.openai": "AI active - {model}",
+    "health.chatMode.default": "Assistant mode active",
+    "health.appBase.ready": "webhook deployment ready",
+    "health.appBase.missing": "APP_BASE_URL is not configured",
+    "health.telegram.ready": "Telegram ready",
+    "health.telegram.missing": "Telegram not configured",
+    "health.cookie.secure": "Secure cookie policy",
+    "dashboard.summary.loadingSignedIn": "Loading your latest finance summary.",
+    "dashboard.summary.loadingSignedOut": "Sign in to load your latest finance summary.",
+    "dashboard.meta.readyAfterSession": "Services are ready once an account session is available.",
+    "dashboard.meta.checking": "Checking application security and service readiness...",
+    "dashboard.waitTransactions": "Waiting for transaction data",
+    "dashboard.waitIncome": "Waiting for income data",
+    "dashboard.waitExpense": "Waiting for expense data",
+    "dashboard.waitNet": "Waiting for balance data",
+    "dashboard.insufficientData": "Not enough data yet",
+    "dashboard.monthlyFlowEmpty": "Monthly flow will appear after transaction data is available.",
+    "dashboard.cashflowSignin": "Sign in to view monthly cashflow.",
+    "dashboard.categorySignin": "Sign in to view expense composition.",
+    "dashboard.insightSignin": "Insights will appear after account data has loaded.",
+    "dashboard.transactionsEmpty": "No transactions to display yet.",
+    "export.csv": "Export CSV",
+    "export.excel": "Export Excel",
+    "export.pdf": "Export PDF",
+    "compactMode.enabled": "Compact Mode: On",
+    "compactMode.disabled": "Compact Mode: Off",
+    "format.noMonth": "No month"
+  }
+};
+
+function t(key, variables = {}) {
+  const locale = getActiveLocale();
+  const template = I18N_MESSAGES[locale]?.[key] || I18N_MESSAGES.id?.[key] || key;
+  return template.replace(/\{(\w+)\}/g, (_, token) => String(variables[token] ?? ""));
+}
+
+function applyStaticTranslations() {
+  document.querySelectorAll("[data-i18n]").forEach((element) => {
+    element.textContent = t(element.dataset.i18n);
+  });
+
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((element) => {
+    element.setAttribute("placeholder", t(element.dataset.i18nPlaceholder));
+  });
+
+  document.querySelectorAll("[data-i18n-title]").forEach((element) => {
+    element.setAttribute("title", t(element.dataset.i18nTitle));
+  });
+
+  document.querySelectorAll("[data-i18n-aria-label]").forEach((element) => {
+    element.setAttribute("aria-label", t(element.dataset.i18nAriaLabel));
+  });
+
+  document.querySelectorAll("[data-i18n-html]").forEach((element) => {
+    element.innerHTML = t(element.dataset.i18nHtml);
+  });
+}
+
+function renderLocaleButtons() {
+  elements.localeButtons.forEach((button) => {
+    const isActive = button.dataset.localeValue === getActiveLocale();
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function shouldDefaultLocale() {
+  if (typeof navigator === "undefined") {
+    return "id";
+  }
+
+  return String(navigator.language || "").toLowerCase().startsWith("en") ? "en" : "id";
+}
+
+function loadLocalePreference() {
+  try {
+    const saved = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+    if (SUPPORTED_LOCALES.includes(saved)) {
+      return saved;
+    }
+  } catch {
+    // ignore storage errors
+  }
+
+  return shouldDefaultLocale();
+}
+
+function rerenderLocaleAwareUI() {
+  if (typeof renderAuthModeCopy === "function") {
+    renderAuthModeCopy();
+  }
+
+  if (typeof setAuthPasswordVisibility === "function" && elements.authPassword) {
+    setAuthPasswordVisibility(elements.authPassword.type === "text");
+  }
+
+  if (typeof renderSession === "function") {
+    renderSession();
+  }
+
+  if (state.summary) {
+    if (typeof renderSummary === "function") renderSummary();
+    if (typeof renderCashflowChart === "function") renderCashflowChart();
+    if (typeof renderCategoryChart === "function") renderCategoryChart();
+    if (typeof renderTransactions === "function") renderTransactions();
+    if (typeof renderInsights === "function") renderInsights();
+  } else if (typeof clearDashboard === "function") {
+    clearDashboard();
+  }
+
+  if (state.health && typeof renderHealth === "function") {
+    renderHealth();
+  }
+
+  if (typeof renderTelegramStatus === "function") {
+    renderTelegramStatus();
+  }
+
+  if (typeof renderTransactionAmountHint === "function" && elements.transactionAmount) {
+    renderTransactionAmountHint();
+  }
+}
+
+function setLocale(locale, options = {}) {
+  const persist = options.persist !== false;
+  state.locale = SUPPORTED_LOCALES.includes(locale) ? locale : "id";
+  document.documentElement.lang = state.locale;
+  document.documentElement.setAttribute("data-locale", state.locale);
+  applyStaticTranslations();
+  renderLocaleButtons();
+
+  if (persist) {
+    try {
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, state.locale);
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  if (options.rerender !== false) {
+    rerenderLocaleAwareUI();
+  }
+}
+
 function formatCurrency(value) {
-  return currencyFormatter.format(Number(value) || 0);
+  return createCurrencyFormatter().format(Number(value) || 0);
 }
 
 function formatPercent(value) {
-  return `${percentFormatter.format(Number(value) || 0)}%`;
+  return `${createPercentFormatter().format(Number(value) || 0)}%`;
 }
 
 function formatSignedCurrency(value) {
@@ -406,7 +676,7 @@ function setCompactMode(enabled, options = {}) {
   elements.appShell.classList.toggle("is-compact", state.compactMode);
 
   if (elements.compactModeButton) {
-    elements.compactModeButton.textContent = `Mode Ringkas: ${state.compactMode ? "Aktif" : "Nonaktif"}`;
+    elements.compactModeButton.textContent = state.compactMode ? t("compactMode.enabled") : t("compactMode.disabled");
     elements.compactModeButton.setAttribute("aria-pressed", String(state.compactMode));
   }
 
@@ -439,7 +709,7 @@ function loadCompactModePreference() {
 }
 
 function formatDate(value) {
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat(getIntlLocale(), {
     day: "2-digit",
     month: "short",
     year: "numeric"
@@ -448,11 +718,11 @@ function formatDate(value) {
 
 function formatMonth(monthKey) {
   if (!monthKey) {
-    return "Tanpa bulan";
+    return t("format.noMonth");
   }
 
   const [year, month] = monthKey.split("-");
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat(getIntlLocale(), {
     month: "short",
     year: "numeric"
   }).format(new Date(Number(year), Number(month) - 1, 1));
@@ -492,7 +762,11 @@ async function request(path, options = {}) {
       }
     });
   } catch {
-    const error = new Error("Jaringan sedang bermasalah. Periksa koneksi Anda lalu coba lagi.");
+    const error = new Error(
+      getActiveLocale() === "en"
+        ? "The network is currently unavailable. Check your connection and try again."
+        : "Jaringan sedang bermasalah. Periksa koneksi Anda lalu coba lagi."
+    );
     error.status = 0;
     throw error;
   }
@@ -508,12 +782,25 @@ async function request(path, options = {}) {
   }
 
   if (!response.ok) {
-    const error = new Error(payload.error || payload.message || "Terjadi kesalahan saat memproses permintaan.");
+    const error = new Error(
+      payload.error ||
+        payload.message ||
+        (getActiveLocale() === "en"
+          ? "An error occurred while processing the request."
+          : "Terjadi kesalahan saat memproses permintaan.")
+    );
     error.status = response.status;
     throw error;
   }
 
   return payload;
+}
+
+function renderAuthModeCopy() {
+  const isRegister = state.authMode === "register";
+  elements.authTitle.textContent = isRegister ? t("auth.title.register") : t("auth.title.login");
+  elements.authSubtitle.textContent = isRegister ? t("auth.subtitle.register") : t("auth.subtitle.login");
+  elements.authSubmitButton.textContent = isRegister ? t("auth.submit.register") : t("auth.submit.login");
 }
 
 function showAuthGate(message = "") {
@@ -549,11 +836,7 @@ function setAuthMode(mode) {
   elements.registerTabButton.classList.toggle("is-active", isRegister);
   elements.nameField.classList.toggle("is-hidden", !isRegister);
   elements.authName.required = isRegister;
-  elements.authTitle.textContent = isRegister ? "Buat akun Arunika Finance" : "Masuk ke Arunika Finance";
-  elements.authSubtitle.textContent = isRegister
-    ? "Daftarkan akun baru untuk menyimpan transaksi Anda secara terpisah."
-    : "Masuk untuk mengakses dashboard keuangan pribadi. Data transaksi setiap akun dipisahkan otomatis di sistem.";
-  elements.authSubmitButton.textContent = isRegister ? "Daftar Akun" : "Masuk";
+  renderAuthModeCopy();
   elements.authPassword.autocomplete = isRegister ? "new-password" : "current-password";
   setAuthMessage("");
   setAuthPasswordVisibility(false);
@@ -569,8 +852,9 @@ function setAuthPasswordVisibility(visible) {
 
   elements.authPasswordToggle.classList.toggle("is-visible", isVisible);
   elements.authPasswordToggle.setAttribute("aria-pressed", isVisible ? "true" : "false");
-  elements.authPasswordToggle.setAttribute("aria-label", isVisible ? "Sembunyikan password" : "Tampilkan password");
-  elements.authPasswordToggle.setAttribute("title", isVisible ? "Sembunyikan password" : "Tampilkan password");
+  const toggleLabel = isVisible ? t("auth.toggleHidePassword") : t("auth.toggleShowPassword");
+  elements.authPasswordToggle.setAttribute("aria-label", toggleLabel);
+  elements.authPasswordToggle.setAttribute("title", toggleLabel);
 }
 
 function handleAuthPasswordToggle() {
@@ -585,8 +869,8 @@ function renderSession() {
     return;
   }
 
-  elements.sessionName.textContent = "Belum masuk";
-  elements.sessionEmail.textContent = "Gunakan akun demo atau daftar akun baru.";
+  elements.sessionName.textContent = t("session.guestName");
+  elements.sessionEmail.textContent = t("session.guestEmail");
   elements.logoutButton.classList.add("is-hidden");
 }
 
@@ -596,22 +880,25 @@ function renderHealth() {
   }
 
   const labels = {
-    local: "Chatbot lokal aktif",
-    "local-fallback": "Mode fallback lokal",
-    openai: `AI aktif - ${state.health.model}`
+    local: t("health.chatMode.local"),
+    "local-fallback": t("health.chatMode.localFallback"),
+    openai: t("health.chatMode.openai", { model: state.health.model })
   };
 
-  elements.chatModeChip.textContent = labels[state.health.chatMode] || "Mode chatbot aktif";
+  elements.chatModeChip.textContent = labels[state.health.chatMode] || t("health.chatMode.default");
   const config = state.health.config || {};
-  const appBaseLabel = config.appBaseUrlConfigured ? "deploy siap webhook" : "APP_BASE_URL belum diisi";
-  const telegramLabel = state.health.telegramConfigured ? "Telegram siap" : "Telegram belum aktif";
-  const cookieLabel = config.sameSite ? `Cookie ${config.sameSite}` : "Cookie aman";
+  const appBaseLabel = config.appBaseUrlConfigured ? t("health.appBase.ready") : t("health.appBase.missing");
+  const telegramLabel = state.health.telegramConfigured ? t("health.telegram.ready") : t("health.telegram.missing");
+  const cookieLabel = config.sameSite ? `Cookie ${config.sameSite}` : t("health.cookie.secure");
   elements.heroMetaText.textContent = `${telegramLabel} • ${appBaseLabel} • ${cookieLabel}`;
 }
 
 function renderTelegramStatus() {
   if (!state.user) {
-    elements.telegramStatusText.textContent = "Masuk untuk melihat status koneksi Telegram.";
+    elements.telegramStatusText.textContent =
+      getActiveLocale() === "en"
+        ? "Sign in to view your Telegram connection status."
+        : "Masuk untuk melihat status koneksi Telegram.";
     elements.telegramLinkButton.disabled = true;
     elements.telegramUnlinkButton.classList.add("is-hidden");
     elements.telegramCodeBox.classList.add("is-hidden");
@@ -619,7 +906,8 @@ function renderTelegramStatus() {
   }
 
   if (!state.telegramStatus) {
-    elements.telegramStatusText.textContent = "Memuat status Telegram...";
+    elements.telegramStatusText.textContent =
+      getActiveLocale() === "en" ? "Loading Telegram status..." : "Memuat status Telegram...";
     elements.telegramLinkButton.disabled = true;
     elements.telegramUnlinkButton.classList.add("is-hidden");
     elements.telegramCodeBox.classList.add("is-hidden");
@@ -632,25 +920,40 @@ function renderTelegramStatus() {
 
   if (!status.configured) {
     elements.telegramStatusText.textContent =
-      "Telegram belum dikonfigurasi di server. Isi TELEGRAM_BOT_TOKEN setelah aplikasi dihosting.";
+      getActiveLocale() === "en"
+        ? "Telegram is not configured on the server yet. Set TELEGRAM_BOT_TOKEN after deployment."
+        : "Telegram belum dikonfigurasi di server. Isi TELEGRAM_BOT_TOKEN setelah aplikasi dihosting.";
     elements.telegramCodeBox.classList.add("is-hidden");
     return;
   }
 
   if (!status.webhookReady) {
     elements.telegramStatusText.textContent =
-      "Bot siap, tapi APP_BASE_URL belum diisi. Webhook Telegram belum bisa didaftarkan.";
+      getActiveLocale() === "en"
+        ? "The bot is ready, but APP_BASE_URL is missing. The Telegram webhook cannot be registered yet."
+        : "Bot siap, tapi APP_BASE_URL belum diisi. Webhook Telegram belum bisa didaftarkan.";
   } else if (status.linked && status.link) {
     const handle = status.link.username ? `@${status.link.username}` : `chat ${status.link.chatId}`;
-    elements.telegramStatusText.textContent = `Telegram sudah terhubung ke ${handle}.`;
+    elements.telegramStatusText.textContent =
+      getActiveLocale() === "en" ? `Telegram is connected to ${handle}.` : `Telegram sudah terhubung ke ${handle}.`;
   } else {
-    const botHint = status.botUrl ? ` Buka bot: ${status.botUrl}` : "";
-    elements.telegramStatusText.textContent = `Bot siap dihubungkan. Tempel kode tautan dari dashboard ke chat bot.${botHint}`;
+    const botHint = status.botUrl
+      ? getActiveLocale() === "en"
+        ? ` Open bot: ${status.botUrl}`
+        : ` Buka bot: ${status.botUrl}`
+      : "";
+    elements.telegramStatusText.textContent =
+      getActiveLocale() === "en"
+        ? `The bot is ready to be linked. Paste the dashboard link code into the bot chat.${botHint}`
+        : `Bot siap dihubungkan. Tempel kode tautan dari dashboard ke chat bot.${botHint}`;
   }
 
   if (state.telegramCommand) {
     elements.telegramCodeText.textContent = state.telegramCommand;
-    elements.telegramCodeMeta.textContent = "Kirim kode ini apa adanya ke bot Telegram. Bot akan memprosesnya lewat parsing teks. Kode berlaku 10 menit.";
+    elements.telegramCodeMeta.textContent =
+      getActiveLocale() === "en"
+        ? "Send this code exactly as shown to the Telegram bot. The bot will process it through text parsing. The code is valid for 10 minutes."
+        : "Kirim kode ini apa adanya ke bot Telegram. Bot akan memprosesnya lewat parsing teks. Kode berlaku 10 menit.";
     elements.telegramCodeBox.classList.remove("is-hidden");
   } else {
     elements.telegramCodeBox.classList.add("is-hidden");
@@ -667,22 +970,22 @@ function clearDashboard() {
   elements.incomeValue.textContent = "Rp0";
   elements.expenseValue.textContent = "Rp0";
   elements.savingsValue.textContent = "0%";
-  elements.balanceFoot.textContent = "Menunggu data transaksi";
-  elements.incomeFoot.textContent = "0 kategori income";
-  elements.expenseFoot.textContent = "0 kategori expense";
-  elements.savingsFoot.textContent = "Belum cukup data";
+  elements.balanceFoot.textContent = t("dashboard.waitTransactions");
+  elements.incomeFoot.textContent = getActiveLocale() === "en" ? "0 income categories" : "0 kategori income";
+  elements.expenseFoot.textContent = getActiveLocale() === "en" ? "0 expense categories" : "0 kategori expense";
+  elements.savingsFoot.textContent = t("dashboard.insufficientData");
   elements.heroSummaryText.textContent = state.user
-    ? "Memuat ringkasan keuangan terbaru."
-    : "Masuk ke akun untuk memuat ringkasan keuangan terbaru.";
+    ? t("dashboard.summary.loadingSignedIn")
+    : t("dashboard.summary.loadingSignedOut");
   elements.heroMetaText.textContent = state.health
-    ? "Layanan siap dimuat setelah sesi akun tersedia."
-    : "Memeriksa keamanan aplikasi dan kesiapan layanan...";
+    ? t("dashboard.meta.readyAfterSession")
+    : t("dashboard.meta.checking");
   elements.flowIncomeValue.textContent = "Rp0";
   elements.flowExpenseValue.textContent = "Rp0";
   elements.flowNetValue.textContent = "Rp0";
-  elements.flowIncomeMeta.textContent = "Menunggu data pemasukan";
-  elements.flowExpenseMeta.textContent = "Menunggu data pengeluaran";
-  elements.flowNetMeta.textContent = "Menunggu data neraca";
+  elements.flowIncomeMeta.textContent = t("dashboard.waitIncome");
+  elements.flowExpenseMeta.textContent = t("dashboard.waitExpense");
+  elements.flowNetMeta.textContent = t("dashboard.waitNet");
   elements.flowIncomeBar.style.width = "0%";
   elements.flowExpenseBar.style.width = "0%";
   elements.flowNetBar.style.width = "0%";
@@ -694,14 +997,14 @@ function clearDashboard() {
   setAnimatedValue("flowIncome", 0);
   setAnimatedValue("flowExpense", 0);
   setAnimatedValue("flowNet", 0);
-  elements.flowTimeline.innerHTML = '<div class="empty-state">Flow bulanan akan tampil setelah data transaksi tersedia.</div>';
-  elements.cashflowChart.innerHTML = '<div class="empty-state">Masuk untuk melihat arus kas bulanan.</div>';
-  elements.categoryChart.innerHTML = '<div class="empty-state">Masuk untuk melihat komposisi pengeluaran.</div>';
-  elements.insightList.innerHTML = '<div class="empty-state">Insight akan tampil setelah data akun berhasil dimuat.</div>';
+  elements.flowTimeline.innerHTML = `<div class="empty-state">${t("dashboard.monthlyFlowEmpty")}</div>`;
+  elements.cashflowChart.innerHTML = `<div class="empty-state">${t("dashboard.cashflowSignin")}</div>`;
+  elements.categoryChart.innerHTML = `<div class="empty-state">${t("dashboard.categorySignin")}</div>`;
+  elements.insightList.innerHTML = `<div class="empty-state">${t("dashboard.insightSignin")}</div>`;
   elements.transactionTableBody.innerHTML = `
     <tr>
       <td colspan="6">
-        <div class="empty-state">Belum ada transaksi untuk ditampilkan.</div>
+        <div class="empty-state">${t("dashboard.transactionsEmpty")}</div>
       </td>
     </tr>
   `;
@@ -830,15 +1133,38 @@ function renderSummary() {
     );
   }
 
-  elements.balanceFoot.textContent = `${summary.transactionCount} transaksi tercatat`;
-  elements.incomeFoot.textContent = `${summary.incomeCategories.length} kategori income`;
-  elements.expenseFoot.textContent = `${summary.expenseCategories.length} kategori expense`;
-  elements.savingsFoot.textContent = summary.savingsRate >= 20 ? "Tabungan relatif sehat" : "Masih bisa dioptimalkan";
+  elements.balanceFoot.textContent =
+    getActiveLocale() === "en"
+      ? `${summary.transactionCount} transactions recorded`
+      : `${summary.transactionCount} transaksi tercatat`;
+  elements.incomeFoot.textContent =
+    getActiveLocale() === "en"
+      ? `${summary.incomeCategories.length} income categories`
+      : `${summary.incomeCategories.length} kategori income`;
+  elements.expenseFoot.textContent =
+    getActiveLocale() === "en"
+      ? `${summary.expenseCategories.length} expense categories`
+      : `${summary.expenseCategories.length} kategori expense`;
+  elements.savingsFoot.textContent =
+    getActiveLocale() === "en"
+      ? summary.savingsRate >= 20
+        ? "Savings health looks solid"
+        : "Still has room for improvement"
+      : summary.savingsRate >= 20
+        ? "Tabungan relatif sehat"
+        : "Masih bisa dioptimalkan";
 
   elements.heroSummaryText.textContent = summary.topExpenseCategory
-    ? `Saldo saat ini ${formatCurrency(summary.balance)}. Pengeluaran terbesar ada di ${summary.topExpenseCategory.category}.`
-    : `Saldo saat ini ${formatCurrency(summary.balance)}. Tambahkan transaksi untuk memperkaya analisis.`;
-  elements.heroMetaText.textContent = `${summary.transactionCount} transaksi • Rasio tabungan ${formatPercent(summary.savingsRate)} • ${summary.monthlyCashflow.length} bulan terpetakan`;
+    ? getActiveLocale() === "en"
+      ? `Current balance is ${formatCurrency(summary.balance)}. Your top expense is ${summary.topExpenseCategory.category}.`
+      : `Saldo saat ini ${formatCurrency(summary.balance)}. Pengeluaran terbesar ada di ${summary.topExpenseCategory.category}.`
+    : getActiveLocale() === "en"
+      ? `Current balance is ${formatCurrency(summary.balance)}. Add more transactions to improve the analysis.`
+      : `Saldo saat ini ${formatCurrency(summary.balance)}. Tambahkan transaksi untuk memperkaya analisis.`;
+  elements.heroMetaText.textContent =
+    getActiveLocale() === "en"
+      ? `${summary.transactionCount} transactions • Savings rate ${formatPercent(summary.savingsRate)} • ${summary.monthlyCashflow.length} mapped months`
+      : `${summary.transactionCount} transaksi • Rasio tabungan ${formatPercent(summary.savingsRate)} • ${summary.monthlyCashflow.length} bulan terpetakan`;
 
   renderFlowStats(summary);
 }
@@ -891,12 +1217,18 @@ function renderFlowStats(summary) {
       balance > previousFlowNet ? "up" : "down"
     );
   }
-  elements.flowIncomeMeta.textContent = `${formatPercent(incomeShare)} dari total arus kas`;
-  elements.flowExpenseMeta.textContent = `${formatPercent(expenseShare)} dari total arus kas`;
+  elements.flowIncomeMeta.textContent =
+    getActiveLocale() === "en" ? `${formatPercent(incomeShare)} of total cashflow` : `${formatPercent(incomeShare)} dari total arus kas`;
+  elements.flowExpenseMeta.textContent =
+    getActiveLocale() === "en" ? `${formatPercent(expenseShare)} of total cashflow` : `${formatPercent(expenseShare)} dari total arus kas`;
   elements.flowNetMeta.textContent =
-    balance >= 0
-      ? `Surplus ${formatCurrency(balance)} pada periode berjalan`
-      : `Defisit ${formatCurrency(Math.abs(balance))} pada periode berjalan`;
+    getActiveLocale() === "en"
+      ? balance >= 0
+        ? `Surplus of ${formatCurrency(balance)} in the current period`
+        : `Deficit of ${formatCurrency(Math.abs(balance))} in the current period`
+      : balance >= 0
+        ? `Surplus ${formatCurrency(balance)} pada periode berjalan`
+        : `Defisit ${formatCurrency(Math.abs(balance))} pada periode berjalan`;
 
   elements.flowIncomeBar.style.width = `${Math.max(incomeShare, income > 0 ? 8 : 0)}%`;
   elements.flowExpenseBar.style.width = `${Math.max(expenseShare, expense > 0 ? 8 : 0)}%`;
@@ -906,7 +1238,7 @@ function renderFlowStats(summary) {
   elements.flowTimeline.innerHTML = "";
   const monthly = (summary.monthlyCashflow || []).slice(-6);
   if (monthly.length === 0) {
-    elements.flowTimeline.innerHTML = '<div class="empty-state">Flow bulanan akan tampil setelah data transaksi tersedia.</div>';
+    elements.flowTimeline.innerHTML = `<div class="empty-state">${t("dashboard.monthlyFlowEmpty")}</div>`;
     return;
   }
 
@@ -914,12 +1246,16 @@ function renderFlowStats(summary) {
     const node = document.createElement("article");
     const net = Number(entry.net) || 0;
     const trendClass = net >= 0 ? "up" : "down";
-    const trendLabel = net >= 0 ? "Surplus" : "Defisit";
+    const trendLabel = getActiveLocale() === "en" ? (net >= 0 ? "Surplus" : "Deficit") : net >= 0 ? "Surplus" : "Defisit";
     node.className = `flow-node ${trendClass}`;
     node.innerHTML = `
       <span class="flow-node-month">${formatMonth(entry.month)}</span>
       <strong class="flow-node-net">${formatSignedCurrency(net)}</strong>
-      <small class="flow-node-detail">${trendLabel} dari ${formatCurrency(entry.income)} vs ${formatCurrency(entry.expense)}</small>
+      <small class="flow-node-detail">${
+        getActiveLocale() === "en"
+          ? `${trendLabel} from ${formatCurrency(entry.income)} vs ${formatCurrency(entry.expense)}`
+          : `${trendLabel} dari ${formatCurrency(entry.income)} vs ${formatCurrency(entry.expense)}`
+      }</small>
     `;
     elements.flowTimeline.appendChild(node);
   });
@@ -930,7 +1266,10 @@ function renderCashflowChart() {
   elements.cashflowChart.innerHTML = "";
 
   if (data.length === 0) {
-    elements.cashflowChart.innerHTML = '<div class="empty-state">Belum ada arus kas bulanan untuk ditampilkan.</div>';
+    elements.cashflowChart.innerHTML =
+      getActiveLocale() === "en"
+        ? '<div class="empty-state">No monthly cashflow is available yet.</div>'
+        : '<div class="empty-state">Belum ada arus kas bulanan untuk ditampilkan.</div>';
     return;
   }
 
@@ -942,12 +1281,16 @@ function renderCashflowChart() {
     row.innerHTML = `
       <div class="chart-head">
         <strong>${formatMonth(entry.month)}</strong>
-        <span>Net ${formatCurrency(entry.net)}</span>
+        <span>${getActiveLocale() === "en" ? "Net" : "Net"} ${formatCurrency(entry.net)}</span>
       </div>
       <div class="chart-track">
         <div class="chart-fill cashflow-fill" style="width:${Math.max((Math.abs(entry.net) / maxValue) * 100, 6)}%"></div>
       </div>
-      <small>Pemasukan ${formatCurrency(entry.income)} - Pengeluaran ${formatCurrency(entry.expense)}</small>
+      <small>${
+        getActiveLocale() === "en"
+          ? `Income ${formatCurrency(entry.income)} - Expense ${formatCurrency(entry.expense)}`
+          : `Pemasukan ${formatCurrency(entry.income)} - Pengeluaran ${formatCurrency(entry.expense)}`
+      }</small>
     `;
     elements.cashflowChart.appendChild(row);
   });
@@ -958,7 +1301,10 @@ function renderCategoryChart() {
   elements.categoryChart.innerHTML = "";
 
   if (data.length === 0) {
-    elements.categoryChart.innerHTML = '<div class="empty-state">Belum ada kategori pengeluaran untuk ditampilkan.</div>';
+    elements.categoryChart.innerHTML =
+      getActiveLocale() === "en"
+        ? '<div class="empty-state">No expense categories are available yet.</div>'
+        : '<div class="empty-state">Belum ada kategori pengeluaran untuk ditampilkan.</div>';
     return;
   }
 
@@ -990,6 +1336,305 @@ function getFilteredTransactions() {
   });
 }
 
+function getTransactionTypeLabel(type) {
+  if (type === "income") {
+    return getActiveLocale() === "en" ? "Income" : "Pemasukan";
+  }
+
+  return getActiveLocale() === "en" ? "Expense" : "Pengeluaran";
+}
+
+function getTransactionExportCopy() {
+  return getActiveLocale() === "en"
+    ? {
+        amount: "Amount",
+        category: "Category",
+        date: "Date",
+        description: "Description",
+        empty: "No transactions match the current filters.",
+        expense: "Expense",
+        exportedAt: "Exported at",
+        filters: "Filters",
+        notes: "Notes",
+        noNotes: "No additional notes",
+        query: "Search",
+        recapTitle: "Transaction History Recap",
+        sheetTitle: "Transaction Recap",
+        totalExpense: "Total expense",
+        totalIncome: "Total income",
+        totalNet: "Net balance",
+        totalRows: "Transactions",
+        type: "Type",
+        typeAll: "All types"
+      }
+    : {
+        amount: "Nominal",
+        category: "Kategori",
+        date: "Tanggal",
+        description: "Deskripsi",
+        empty: "Belum ada transaksi yang cocok dengan filter saat ini.",
+        expense: "Pengeluaran",
+        exportedAt: "Diekspor pada",
+        filters: "Filter",
+        notes: "Catatan",
+        noNotes: "Tanpa catatan tambahan",
+        query: "Pencarian",
+        recapTitle: "Rekap Riwayat Transaksi",
+        sheetTitle: "Rekap Transaksi",
+        totalExpense: "Total pengeluaran",
+        totalIncome: "Total pemasukan",
+        totalNet: "Saldo net",
+        totalRows: "Jumlah transaksi",
+        type: "Tipe",
+        typeAll: "Semua tipe"
+      };
+}
+
+function buildTransactionExportSnapshot() {
+  const rows = getFilteredTransactions();
+  const typeFilter = elements.typeFilter.value;
+  const searchQuery = elements.searchInput.value.trim();
+  const totals = rows.reduce(
+    (result, item) => {
+      const amount = Number(item.amount) || 0;
+      if (item.type === "income") {
+        result.income += amount;
+      } else {
+        result.expense += amount;
+      }
+      return result;
+    },
+    { expense: 0, income: 0 }
+  );
+  totals.net = totals.income - totals.expense;
+
+  return {
+    exportedAt: new Date(),
+    rows,
+    searchQuery,
+    totals,
+    typeFilter
+  };
+}
+
+function buildTransactionExportFileBaseName(snapshot) {
+  const dateStamp = snapshot.exportedAt.toISOString().slice(0, 10);
+  const typeStamp = snapshot.typeFilter === "all" ? "all" : snapshot.typeFilter;
+  return `transaction-recap-${typeStamp}-${dateStamp}`;
+}
+
+function formatTransactionExportDateTime(value) {
+  return new Intl.DateTimeFormat(getIntlLocale(), {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(value);
+}
+
+function buildTransactionExportHtml(snapshot, options = {}) {
+  const copy = getTransactionExportCopy();
+  const title = options.title || copy.recapTitle;
+  const typeFilterLabel = snapshot.typeFilter === "all" ? copy.typeAll : getTransactionTypeLabel(snapshot.typeFilter);
+  const rowsHtml = snapshot.rows.length
+    ? snapshot.rows
+        .map((item) => {
+          const signedAmount = `${item.type === "income" ? "+" : "-"}${formatCurrency(item.amount)}`;
+          const notes = item.notes ? escapeHTML(item.notes) : copy.noNotes;
+          return `
+            <tr>
+              <td>${escapeHTML(formatDate(item.date))}</td>
+              <td>${escapeHTML(item.description)}</td>
+              <td>${escapeHTML(item.category)}</td>
+              <td>${escapeHTML(getTransactionTypeLabel(item.type))}</td>
+              <td style="text-align:right;">${escapeHTML(signedAmount)}</td>
+              <td>${escapeHTML(notes)}</td>
+            </tr>
+          `;
+        })
+        .join("")
+    : `
+        <tr>
+          <td colspan="6">${escapeHTML(copy.empty)}</td>
+        </tr>
+      `;
+
+  return `<!DOCTYPE html>
+<html lang="${escapeHTML(getActiveLocale())}">
+  <head>
+    <meta charset="UTF-8" />
+    <title>${escapeHTML(title)}</title>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        margin: 24px;
+        color: #10233f;
+      }
+
+      h1 {
+        margin: 0 0 6px;
+        font-size: 26px;
+      }
+
+      .meta,
+      .filters,
+      .summary {
+        margin-top: 16px;
+      }
+
+      .meta p,
+      .filters p {
+        margin: 4px 0;
+        color: #42556f;
+      }
+
+      .summary-grid {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+      }
+
+      .summary-grid td {
+        border: 1px solid #d5e2f0;
+        padding: 10px 12px;
+      }
+
+      .summary-grid td:first-child {
+        width: 38%;
+        font-weight: 700;
+        background: #f6f9fc;
+      }
+
+      table.report {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 18px;
+      }
+
+      table.report th,
+      table.report td {
+        border: 1px solid #d5e2f0;
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      table.report th {
+        background: #eef4fb;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      @media print {
+        body {
+          margin: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>${escapeHTML(title)}</h1>
+
+    <div class="meta">
+      <p><strong>${escapeHTML(copy.exportedAt)}:</strong> ${escapeHTML(formatTransactionExportDateTime(snapshot.exportedAt))}</p>
+    </div>
+
+    <div class="filters">
+      <p><strong>${escapeHTML(copy.filters)}:</strong> ${escapeHTML(copy.type)} = ${escapeHTML(typeFilterLabel)}</p>
+      <p><strong>${escapeHTML(copy.query)}:</strong> ${escapeHTML(snapshot.searchQuery || "-")}</p>
+    </div>
+
+    <div class="summary">
+      <table class="summary-grid">
+        <tr>
+          <td>${escapeHTML(copy.totalRows)}</td>
+          <td>${escapeHTML(String(snapshot.rows.length))}</td>
+        </tr>
+        <tr>
+          <td>${escapeHTML(copy.totalIncome)}</td>
+          <td>${escapeHTML(formatCurrency(snapshot.totals.income))}</td>
+        </tr>
+        <tr>
+          <td>${escapeHTML(copy.totalExpense)}</td>
+          <td>${escapeHTML(formatCurrency(snapshot.totals.expense))}</td>
+        </tr>
+        <tr>
+          <td>${escapeHTML(copy.totalNet)}</td>
+          <td>${escapeHTML(formatSignedCurrency(snapshot.totals.net))}</td>
+        </tr>
+      </table>
+    </div>
+
+    <table class="report">
+      <thead>
+        <tr>
+          <th>${escapeHTML(copy.date)}</th>
+          <th>${escapeHTML(copy.description)}</th>
+          <th>${escapeHTML(copy.category)}</th>
+          <th>${escapeHTML(copy.type)}</th>
+          <th>${escapeHTML(copy.amount)}</th>
+          <th>${escapeHTML(copy.notes)}</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+  </body>
+</html>`;
+}
+
+function downloadTransactionExportFile(content, fileName, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+
+function buildTransactionExportUrl(format) {
+  const params = new URLSearchParams();
+  params.set("format", format);
+  params.set("locale", getActiveLocale());
+
+  const searchQuery = elements.searchInput.value.trim();
+  if (searchQuery) {
+    params.set("search", searchQuery);
+  }
+
+  if (elements.typeFilter.value && elements.typeFilter.value !== "all") {
+    params.set("type", elements.typeFilter.value);
+  }
+
+  return `/api/transactions/export?${params.toString()}`;
+}
+
+function triggerTransactionExportDownload(url) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.rel = "noreferrer";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function handleExportTransactionsCsv() {
+  triggerTransactionExportDownload(buildTransactionExportUrl("csv"));
+}
+
+function handleExportTransactionsExcel() {
+  const snapshot = buildTransactionExportSnapshot();
+  const html = buildTransactionExportHtml(snapshot, {
+    title: `${getTransactionExportCopy().sheetTitle} - Arunika Finance`
+  });
+  downloadTransactionExportFile(html, `${buildTransactionExportFileBaseName(snapshot)}.xls`, "application/vnd.ms-excel;charset=utf-8");
+}
+
+function handleExportTransactionsPdf() {
+  triggerTransactionExportDownload(buildTransactionExportUrl("pdf"));
+}
+
 function renderTransactions() {
   const rows = getFilteredTransactions();
   elements.transactionTableBody.innerHTML = "";
@@ -998,7 +1643,11 @@ function renderTransactions() {
     elements.transactionTableBody.innerHTML = `
       <tr>
         <td colspan="6">
-          <div class="empty-state">Belum ada transaksi yang cocok dengan filter saat ini.</div>
+          <div class="empty-state">${
+            getActiveLocale() === "en"
+              ? "No transactions match the current filters."
+              : "Belum ada transaksi yang cocok dengan filter saat ini."
+          }</div>
         </td>
       </tr>
     `;
@@ -1033,19 +1682,29 @@ function renderTransactions() {
             ${
               item.notes
                 ? `<span class="transaction-description-notes">${escapeHTML(item.notes)}</span>`
-                : `<span class="transaction-description-notes is-muted">Tanpa catatan tambahan</span>`
+                : `<span class="transaction-description-notes is-muted">${
+                    getActiveLocale() === "en" ? "No additional notes" : "Tanpa catatan tambahan"
+                  }</span>`
             }
           </div>
         </div>
       </td>
       <td data-label="Kategori">${escapeHTML(item.category)}</td>
-      <td data-label="Tipe"><span class="type-pill ${item.type}">${item.type === "income" ? "Pemasukan" : "Pengeluaran"}</span></td>
+      <td data-label="Tipe"><span class="type-pill ${item.type}">${
+        item.type === "income"
+          ? getActiveLocale() === "en"
+            ? "Income"
+            : "Pemasukan"
+          : getActiveLocale() === "en"
+            ? "Expense"
+            : "Pengeluaran"
+      }</span></td>
       <td data-label="Nominal" class="amount ${item.type}">${item.type === "income" ? "+" : "-"}${formatCurrency(item.amount)}</td>
       <td data-label="Aksi">
         <div class="table-actions">
           ${receiptAction}
-          <button class="edit-button" data-id="${item.id}" type="button">Edit</button>
-          <button class="delete-button" data-id="${item.id}" type="button">Hapus</button>
+          <button class="edit-button" data-id="${item.id}" type="button">${getActiveLocale() === "en" ? "Edit" : "Edit"}</button>
+          <button class="delete-button" data-id="${item.id}" type="button">${getActiveLocale() === "en" ? "Delete" : "Hapus"}</button>
         </div>
       </td>
     `;
@@ -1058,7 +1717,10 @@ function renderInsights() {
   elements.insightList.innerHTML = "";
 
   if (items.length === 0) {
-    elements.insightList.innerHTML = '<div class="empty-state">Insight akan muncul setelah ada transaksi.</div>';
+    elements.insightList.innerHTML =
+      getActiveLocale() === "en"
+        ? '<div class="empty-state">Insights will appear after transactions are available.</div>'
+        : '<div class="empty-state">Insight akan muncul setelah ada transaksi.</div>';
     return;
   }
 
@@ -2534,7 +3196,7 @@ function handleUnauthorized(error) {
   renderSession();
   clearDashboard();
   resetChat();
-  showAuthGate("Sesi Anda berakhir. Silakan masuk kembali.");
+  showAuthGate(t("auth.status.sessionEnded"));
   return true;
 }
 
@@ -2590,27 +3252,34 @@ async function handleAuthSubmit(event) {
   };
 
   if (!payload.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
-    setAuthMessage("Masukkan alamat email yang valid.");
+    setAuthMessage(t("auth.error.invalidEmail"));
     elements.authEmail.focus();
     return;
   }
 
   if (payload.password.length < 8) {
-    setAuthMessage("Password minimal 8 karakter agar akun lebih aman.");
+    setAuthMessage(t("auth.error.shortPassword"));
     elements.authPassword.focus();
     return;
   }
 
   if (state.authMode === "register" && payload.name.length < 2) {
-    setAuthMessage("Nama minimal 2 karakter.");
+    setAuthMessage(t("auth.error.shortName"));
     elements.authName.focus();
     return;
   }
 
   try {
-    setAuthMessage(state.authMode === "register" ? "Menyiapkan akun aman Anda..." : "Memverifikasi sesi aman...", "info");
+    setAuthMessage(state.authMode === "register" ? t("auth.status.loadingRegister") : t("auth.status.loadingLogin"), "info");
     button.disabled = true;
-    button.textContent = state.authMode === "register" ? "Mendaftarkan..." : "Memproses...";
+    button.textContent =
+      state.authMode === "register"
+        ? getActiveLocale() === "en"
+          ? "Creating account..."
+          : "Mendaftarkan..."
+        : getActiveLocale() === "en"
+          ? "Processing..."
+          : "Memproses...";
 
     const result = await request(`/api/auth/${state.authMode}`, {
       method: "POST",
@@ -2625,7 +3294,7 @@ async function handleAuthSubmit(event) {
     hideAuthGate();
     elements.authForm.reset();
     setAuthPasswordVisibility(false);
-    setAuthMessage(state.authMode === "register" ? "Akun berhasil dibuat." : "Berhasil masuk.", "success");
+    setAuthMessage(state.authMode === "register" ? t("auth.status.successRegister") : t("auth.status.successLogin"), "success");
     resetTransactionForm();
     resetChat();
     await reloadDashboard();
@@ -2634,7 +3303,7 @@ async function handleAuthSubmit(event) {
     setAuthMessage(error.message);
   } finally {
     button.disabled = false;
-    button.textContent = state.authMode === "register" ? "Daftar Akun" : "Masuk";
+    button.textContent = state.authMode === "register" ? t("auth.submit.register") : t("auth.submit.login");
   }
 }
 
@@ -2656,7 +3325,7 @@ async function handleLogout() {
     clearDashboard();
     resetChat();
     setAuthMode("login");
-    showAuthGate("Anda sudah logout.");
+    showAuthGate(t("auth.status.loggedOut"));
   }
 }
 
@@ -2895,6 +3564,11 @@ async function handleDelete(event) {
 function bindEvents() {
   elements.loginTabButton.addEventListener("click", () => setAuthMode("login"));
   elements.registerTabButton.addEventListener("click", () => setAuthMode("register"));
+  elements.localeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setLocale(button.dataset.localeValue || "id");
+    });
+  });
   if (elements.authPasswordToggle) {
     elements.authPasswordToggle.addEventListener("click", handleAuthPasswordToggle);
   }
@@ -3005,6 +3679,15 @@ function bindEvents() {
   elements.chatForm.addEventListener("submit", handleChatSubmit);
   elements.searchInput.addEventListener("input", renderTransactions);
   elements.typeFilter.addEventListener("change", renderTransactions);
+  if (elements.exportCsvButton) {
+    elements.exportCsvButton.addEventListener("click", handleExportTransactionsCsv);
+  }
+  if (elements.exportExcelButton) {
+    elements.exportExcelButton.addEventListener("click", handleExportTransactionsExcel);
+  }
+  if (elements.exportPdfButton) {
+    elements.exportPdfButton.addEventListener("click", handleExportTransactionsPdf);
+  }
   elements.quickPrompts.addEventListener("click", async (event) => {
     const button = event.target.closest("button[data-prompt]");
     if (!button) {
@@ -3035,6 +3718,7 @@ async function registerServiceWorker() {
 
 async function initializeApp() {
   state.launchShortcut = getLaunchShortcutFromUrl();
+  setLocale(loadLocalePreference(), { persist: false, rerender: false });
   resetTransactionForm();
   resetImportState();
   setAuthMode("login");
@@ -3050,7 +3734,11 @@ async function initializeApp() {
     await loadSession();
   } catch (error) {
     elements.heroSummaryText.textContent = error.message;
-    showAuthGate("Gagal memuat status aplikasi. Coba refresh halaman.");
+    showAuthGate(
+      getActiveLocale() === "en"
+        ? "Failed to load application status. Please refresh the page."
+        : "Gagal memuat status aplikasi. Coba refresh halaman."
+    );
   }
 }
 

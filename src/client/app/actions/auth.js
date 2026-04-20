@@ -8,7 +8,7 @@ function handleUnauthorized(error) {
   renderSession();
   clearDashboard();
   resetChat();
-  showAuthGate("Sesi Anda berakhir. Silakan masuk kembali.");
+  showAuthGate(t("auth.status.sessionEnded"));
   return true;
 }
 
@@ -64,27 +64,34 @@ async function handleAuthSubmit(event) {
   };
 
   if (!payload.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
-    setAuthMessage("Masukkan alamat email yang valid.");
+    setAuthMessage(t("auth.error.invalidEmail"));
     elements.authEmail.focus();
     return;
   }
 
   if (payload.password.length < 8) {
-    setAuthMessage("Password minimal 8 karakter agar akun lebih aman.");
+    setAuthMessage(t("auth.error.shortPassword"));
     elements.authPassword.focus();
     return;
   }
 
   if (state.authMode === "register" && payload.name.length < 2) {
-    setAuthMessage("Nama minimal 2 karakter.");
+    setAuthMessage(t("auth.error.shortName"));
     elements.authName.focus();
     return;
   }
 
   try {
-    setAuthMessage(state.authMode === "register" ? "Menyiapkan akun aman Anda..." : "Memverifikasi sesi aman...", "info");
+    setAuthMessage(state.authMode === "register" ? t("auth.status.loadingRegister") : t("auth.status.loadingLogin"), "info");
     button.disabled = true;
-    button.textContent = state.authMode === "register" ? "Mendaftarkan..." : "Memproses...";
+    button.textContent =
+      state.authMode === "register"
+        ? getActiveLocale() === "en"
+          ? "Creating account..."
+          : "Mendaftarkan..."
+        : getActiveLocale() === "en"
+          ? "Processing..."
+          : "Memproses...";
 
     const result = await request(`/api/auth/${state.authMode}`, {
       method: "POST",
@@ -99,7 +106,7 @@ async function handleAuthSubmit(event) {
     hideAuthGate();
     elements.authForm.reset();
     setAuthPasswordVisibility(false);
-    setAuthMessage(state.authMode === "register" ? "Akun berhasil dibuat." : "Berhasil masuk.", "success");
+    setAuthMessage(state.authMode === "register" ? t("auth.status.successRegister") : t("auth.status.successLogin"), "success");
     resetTransactionForm();
     resetChat();
     await reloadDashboard();
@@ -108,7 +115,7 @@ async function handleAuthSubmit(event) {
     setAuthMessage(error.message);
   } finally {
     button.disabled = false;
-    button.textContent = state.authMode === "register" ? "Daftar Akun" : "Masuk";
+    button.textContent = state.authMode === "register" ? t("auth.submit.register") : t("auth.submit.login");
   }
 }
 
@@ -130,6 +137,6 @@ async function handleLogout() {
     clearDashboard();
     resetChat();
     setAuthMode("login");
-    showAuthGate("Anda sudah logout.");
+    showAuthGate(t("auth.status.loggedOut"));
   }
 }

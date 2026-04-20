@@ -6,6 +6,7 @@ const state = {
   editingTransactionId: null,
   health: null,
   launchShortcut: null,
+  locale: "id",
   summary: null,
   transactionEntryMethod: null,
   transactionEntryStep: "chooser",
@@ -19,6 +20,8 @@ const state = {
   user: null
 };
 const COMPACT_MODE_STORAGE_KEY = "arunika_compact_mode";
+const LOCALE_STORAGE_KEY = "arunika_locale";
+const SUPPORTED_LOCALES = ["id", "en"];
 const TRANSACTION_CATEGORY_OPTIONS = globalThis.TRANSACTION_CATEGORY_OPTIONS || {
   expense: ["Makanan", "Transportasi", "Tagihan", "Transfer", "Belanja", "Kesehatan", "Pendidikan", "Hiburan", "Rumah Tangga"],
   income: ["Gaji", "Freelance", "Bonus", "Penjualan", "Investasi", "Transfer", "Hadiah"]
@@ -38,27 +41,39 @@ const parseFlexibleAmount =
 const formatFlexibleCurrency =
   globalThis.formatFlexibleCurrency ||
   ((value) =>
-    new Intl.NumberFormat("id-ID", {
+    new Intl.NumberFormat(state.locale === "en" ? "en-US" : "id-ID", {
       currency: "IDR",
       maximumFractionDigits: 0,
       style: "currency"
     }).format(Number(value) || 0));
-
-const currencyFormatter = new Intl.NumberFormat("id-ID", {
-  currency: "IDR",
-  maximumFractionDigits: 0,
-  style: "currency"
-});
-
-const percentFormatter = new Intl.NumberFormat("id-ID", {
-  maximumFractionDigits: 1,
-  minimumFractionDigits: 1
-});
 const animatedValues = new Map();
 const prefersReducedMotion =
   typeof window !== "undefined" &&
   typeof window.matchMedia === "function" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function getActiveLocale() {
+  return SUPPORTED_LOCALES.includes(state.locale) ? state.locale : "id";
+}
+
+function getIntlLocale() {
+  return getActiveLocale() === "en" ? "en-US" : "id-ID";
+}
+
+function createCurrencyFormatter() {
+  return new Intl.NumberFormat(getIntlLocale(), {
+    currency: "IDR",
+    maximumFractionDigits: 0,
+    style: "currency"
+  });
+}
+
+function createPercentFormatter() {
+  return new Intl.NumberFormat(getIntlLocale(), {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 1
+  });
+}
 
 function getLaunchShortcutFromUrl() {
   if (typeof window === "undefined") {
@@ -125,6 +140,9 @@ const elements = {
   compactModeButton: document.getElementById("compactModeButton"),
   expenseFoot: document.getElementById("expenseFoot"),
   expenseValue: document.getElementById("expenseValue"),
+  exportCsvButton: document.getElementById("exportCsvButton"),
+  exportExcelButton: document.getElementById("exportExcelButton"),
+  exportPdfButton: document.getElementById("exportPdfButton"),
   flowExpenseBar: document.getElementById("flowExpenseBar"),
   flowExpenseMeta: document.getElementById("flowExpenseMeta"),
   flowExpenseValue: document.getElementById("flowExpenseValue"),
@@ -161,6 +179,7 @@ const elements = {
   importTypeColumn: document.getElementById("importTypeColumn"),
   insightList: document.getElementById("insightList"),
   loginTabButton: document.getElementById("loginTabButton"),
+  localeButtons: Array.from(document.querySelectorAll("[data-locale-button]")),
   logoutButton: document.getElementById("logoutButton"),
   nameField: document.getElementById("nameField"),
   quickPrompts: document.getElementById("quickPrompts"),
@@ -312,12 +331,263 @@ const IMPORT_PRESETS = {
   }
 };
 
+const I18N_MESSAGES = {
+  id: {
+    "auth.safeAccess": "Akses Aman",
+    "auth.loginTab": "Login",
+    "auth.registerTab": "Daftar",
+    "auth.nameLabel": "Nama",
+    "auth.namePlaceholder": "Nama lengkap",
+    "auth.emailLabel": "Email",
+    "auth.emailPlaceholder": "nama@email.com",
+    "auth.passwordLabel": "Password",
+    "auth.passwordPlaceholder": "Minimal 8 karakter",
+    "auth.demoHint": "Akun demo: <strong>demo@arunika.local</strong> / <strong>demo12345</strong>",
+    "auth.toggleShowPassword": "Tampilkan password",
+    "auth.toggleHidePassword": "Sembunyikan password",
+    "auth.title.login": "Masuk ke Arunika Finance",
+    "auth.title.register": "Buat akun Arunika Finance",
+    "auth.subtitle.login": "Masuk untuk mengakses dashboard keuangan pribadi. Data transaksi setiap akun dipisahkan otomatis di sistem.",
+    "auth.subtitle.register": "Daftarkan akun baru untuk menyimpan transaksi Anda secara terpisah.",
+    "auth.submit.login": "Masuk",
+    "auth.submit.register": "Daftar Akun",
+    "auth.status.loadingLogin": "Memverifikasi sesi aman...",
+    "auth.status.loadingRegister": "Menyiapkan akun aman Anda...",
+    "auth.status.successLogin": "Berhasil masuk.",
+    "auth.status.successRegister": "Akun berhasil dibuat.",
+    "auth.status.loggedOut": "Anda sudah logout.",
+    "auth.status.sessionEnded": "Sesi Anda berakhir. Silakan masuk kembali.",
+    "auth.error.invalidEmail": "Masukkan alamat email yang valid.",
+    "auth.error.shortPassword": "Password minimal 8 karakter agar akun lebih aman.",
+    "auth.error.shortName": "Nama minimal 2 karakter.",
+    "hero.brandCaption": "Personal finance tracker",
+    "hero.eyebrow": "Cashflow, Receipts, and Insights",
+    "hero.lead": "Platform keuangan online untuk mencatat arus kas, menganalisis pola pengeluaran, dan berdiskusi dengan asisten keuangan berbasis data transaksi Anda.",
+    "hero.highlightDashboard": "Dashboard real-time",
+    "hero.highlightReceipt": "Scan struk berbasis AI",
+    "hero.highlightInsight": "Insight cashflow personal",
+    "session.logout": "Keluar",
+    "session.guestName": "Belum masuk",
+    "session.guestEmail": "Gunakan akun demo atau daftar akun baru.",
+    "health.chatMode.local": "Chatbot lokal aktif",
+    "health.chatMode.localFallback": "Mode fallback lokal",
+    "health.chatMode.openai": "AI aktif - {model}",
+    "health.chatMode.default": "Mode chatbot aktif",
+    "health.appBase.ready": "deploy siap webhook",
+    "health.appBase.missing": "APP_BASE_URL belum diisi",
+    "health.telegram.ready": "Telegram siap",
+    "health.telegram.missing": "Telegram belum aktif",
+    "health.cookie.secure": "Cookie aman",
+    "dashboard.summary.loadingSignedIn": "Memuat ringkasan keuangan terbaru.",
+    "dashboard.summary.loadingSignedOut": "Masuk ke akun untuk memuat ringkasan keuangan terbaru.",
+    "dashboard.meta.readyAfterSession": "Layanan siap dimuat setelah sesi akun tersedia.",
+    "dashboard.meta.checking": "Memeriksa keamanan aplikasi dan kesiapan layanan...",
+    "dashboard.waitTransactions": "Menunggu data transaksi",
+    "dashboard.waitIncome": "Menunggu data pemasukan",
+    "dashboard.waitExpense": "Menunggu data pengeluaran",
+    "dashboard.waitNet": "Menunggu data neraca",
+    "dashboard.insufficientData": "Belum cukup data",
+    "dashboard.monthlyFlowEmpty": "Flow bulanan akan tampil setelah data transaksi tersedia.",
+    "dashboard.cashflowSignin": "Masuk untuk melihat arus kas bulanan.",
+    "dashboard.categorySignin": "Masuk untuk melihat komposisi pengeluaran.",
+    "dashboard.insightSignin": "Insight akan tampil setelah data akun berhasil dimuat.",
+    "dashboard.transactionsEmpty": "Belum ada transaksi untuk ditampilkan.",
+    "export.csv": "Ekspor CSV",
+    "export.excel": "Ekspor Excel",
+    "export.pdf": "Ekspor PDF",
+    "compactMode.enabled": "Mode Ringkas: Aktif",
+    "compactMode.disabled": "Mode Ringkas: Nonaktif",
+    "format.noMonth": "Tanpa bulan"
+  },
+  en: {
+    "auth.safeAccess": "Secure Access",
+    "auth.loginTab": "Sign In",
+    "auth.registerTab": "Register",
+    "auth.nameLabel": "Name",
+    "auth.namePlaceholder": "Full name",
+    "auth.emailLabel": "Email",
+    "auth.emailPlaceholder": "name@email.com",
+    "auth.passwordLabel": "Password",
+    "auth.passwordPlaceholder": "Minimum 8 characters",
+    "auth.demoHint": "Demo account: <strong>demo@arunika.local</strong> / <strong>demo12345</strong>",
+    "auth.toggleShowPassword": "Show password",
+    "auth.toggleHidePassword": "Hide password",
+    "auth.title.login": "Sign in to Arunika Finance",
+    "auth.title.register": "Create your Arunika Finance account",
+    "auth.subtitle.login": "Sign in to access your personal finance dashboard. Transaction data is automatically isolated for each account.",
+    "auth.subtitle.register": "Create a new account to keep your transactions securely separated.",
+    "auth.submit.login": "Sign In",
+    "auth.submit.register": "Create Account",
+    "auth.status.loadingLogin": "Verifying your secure session...",
+    "auth.status.loadingRegister": "Preparing your secure account...",
+    "auth.status.successLogin": "Signed in successfully.",
+    "auth.status.successRegister": "Account created successfully.",
+    "auth.status.loggedOut": "You have signed out.",
+    "auth.status.sessionEnded": "Your session has expired. Please sign in again.",
+    "auth.error.invalidEmail": "Enter a valid email address.",
+    "auth.error.shortPassword": "Use at least 8 characters for a stronger password.",
+    "auth.error.shortName": "Name must be at least 2 characters.",
+    "hero.brandCaption": "Personal finance tracker",
+    "hero.eyebrow": "Cashflow, Receipts, and Insights",
+    "hero.lead": "A personal finance platform for tracking cashflow, understanding spending patterns, and chatting with an assistant grounded in your transaction data.",
+    "hero.highlightDashboard": "Real-time dashboard",
+    "hero.highlightReceipt": "AI-powered receipt scan",
+    "hero.highlightInsight": "Personal cashflow insights",
+    "session.logout": "Sign Out",
+    "session.guestName": "Not signed in",
+    "session.guestEmail": "Use the demo account or create a new account.",
+    "health.chatMode.local": "Local assistant active",
+    "health.chatMode.localFallback": "Local fallback mode",
+    "health.chatMode.openai": "AI active - {model}",
+    "health.chatMode.default": "Assistant mode active",
+    "health.appBase.ready": "webhook deployment ready",
+    "health.appBase.missing": "APP_BASE_URL is not configured",
+    "health.telegram.ready": "Telegram ready",
+    "health.telegram.missing": "Telegram not configured",
+    "health.cookie.secure": "Secure cookie policy",
+    "dashboard.summary.loadingSignedIn": "Loading your latest finance summary.",
+    "dashboard.summary.loadingSignedOut": "Sign in to load your latest finance summary.",
+    "dashboard.meta.readyAfterSession": "Services are ready once an account session is available.",
+    "dashboard.meta.checking": "Checking application security and service readiness...",
+    "dashboard.waitTransactions": "Waiting for transaction data",
+    "dashboard.waitIncome": "Waiting for income data",
+    "dashboard.waitExpense": "Waiting for expense data",
+    "dashboard.waitNet": "Waiting for balance data",
+    "dashboard.insufficientData": "Not enough data yet",
+    "dashboard.monthlyFlowEmpty": "Monthly flow will appear after transaction data is available.",
+    "dashboard.cashflowSignin": "Sign in to view monthly cashflow.",
+    "dashboard.categorySignin": "Sign in to view expense composition.",
+    "dashboard.insightSignin": "Insights will appear after account data has loaded.",
+    "dashboard.transactionsEmpty": "No transactions to display yet.",
+    "export.csv": "Export CSV",
+    "export.excel": "Export Excel",
+    "export.pdf": "Export PDF",
+    "compactMode.enabled": "Compact Mode: On",
+    "compactMode.disabled": "Compact Mode: Off",
+    "format.noMonth": "No month"
+  }
+};
+
+function t(key, variables = {}) {
+  const locale = getActiveLocale();
+  const template = I18N_MESSAGES[locale]?.[key] || I18N_MESSAGES.id?.[key] || key;
+  return template.replace(/\{(\w+)\}/g, (_, token) => String(variables[token] ?? ""));
+}
+
+function applyStaticTranslations() {
+  document.querySelectorAll("[data-i18n]").forEach((element) => {
+    element.textContent = t(element.dataset.i18n);
+  });
+
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((element) => {
+    element.setAttribute("placeholder", t(element.dataset.i18nPlaceholder));
+  });
+
+  document.querySelectorAll("[data-i18n-title]").forEach((element) => {
+    element.setAttribute("title", t(element.dataset.i18nTitle));
+  });
+
+  document.querySelectorAll("[data-i18n-aria-label]").forEach((element) => {
+    element.setAttribute("aria-label", t(element.dataset.i18nAriaLabel));
+  });
+
+  document.querySelectorAll("[data-i18n-html]").forEach((element) => {
+    element.innerHTML = t(element.dataset.i18nHtml);
+  });
+}
+
+function renderLocaleButtons() {
+  elements.localeButtons.forEach((button) => {
+    const isActive = button.dataset.localeValue === getActiveLocale();
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function shouldDefaultLocale() {
+  if (typeof navigator === "undefined") {
+    return "id";
+  }
+
+  return String(navigator.language || "").toLowerCase().startsWith("en") ? "en" : "id";
+}
+
+function loadLocalePreference() {
+  try {
+    const saved = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+    if (SUPPORTED_LOCALES.includes(saved)) {
+      return saved;
+    }
+  } catch {
+    // ignore storage errors
+  }
+
+  return shouldDefaultLocale();
+}
+
+function rerenderLocaleAwareUI() {
+  if (typeof renderAuthModeCopy === "function") {
+    renderAuthModeCopy();
+  }
+
+  if (typeof setAuthPasswordVisibility === "function" && elements.authPassword) {
+    setAuthPasswordVisibility(elements.authPassword.type === "text");
+  }
+
+  if (typeof renderSession === "function") {
+    renderSession();
+  }
+
+  if (state.summary) {
+    if (typeof renderSummary === "function") renderSummary();
+    if (typeof renderCashflowChart === "function") renderCashflowChart();
+    if (typeof renderCategoryChart === "function") renderCategoryChart();
+    if (typeof renderTransactions === "function") renderTransactions();
+    if (typeof renderInsights === "function") renderInsights();
+  } else if (typeof clearDashboard === "function") {
+    clearDashboard();
+  }
+
+  if (state.health && typeof renderHealth === "function") {
+    renderHealth();
+  }
+
+  if (typeof renderTelegramStatus === "function") {
+    renderTelegramStatus();
+  }
+
+  if (typeof renderTransactionAmountHint === "function" && elements.transactionAmount) {
+    renderTransactionAmountHint();
+  }
+}
+
+function setLocale(locale, options = {}) {
+  const persist = options.persist !== false;
+  state.locale = SUPPORTED_LOCALES.includes(locale) ? locale : "id";
+  document.documentElement.lang = state.locale;
+  document.documentElement.setAttribute("data-locale", state.locale);
+  applyStaticTranslations();
+  renderLocaleButtons();
+
+  if (persist) {
+    try {
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, state.locale);
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  if (options.rerender !== false) {
+    rerenderLocaleAwareUI();
+  }
+}
+
 function formatCurrency(value) {
-  return currencyFormatter.format(Number(value) || 0);
+  return createCurrencyFormatter().format(Number(value) || 0);
 }
 
 function formatPercent(value) {
-  return `${percentFormatter.format(Number(value) || 0)}%`;
+  return `${createPercentFormatter().format(Number(value) || 0)}%`;
 }
 
 function formatSignedCurrency(value) {
@@ -395,7 +665,7 @@ function setCompactMode(enabled, options = {}) {
   elements.appShell.classList.toggle("is-compact", state.compactMode);
 
   if (elements.compactModeButton) {
-    elements.compactModeButton.textContent = `Mode Ringkas: ${state.compactMode ? "Aktif" : "Nonaktif"}`;
+    elements.compactModeButton.textContent = state.compactMode ? t("compactMode.enabled") : t("compactMode.disabled");
     elements.compactModeButton.setAttribute("aria-pressed", String(state.compactMode));
   }
 
@@ -428,7 +698,7 @@ function loadCompactModePreference() {
 }
 
 function formatDate(value) {
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat(getIntlLocale(), {
     day: "2-digit",
     month: "short",
     year: "numeric"
@@ -437,11 +707,11 @@ function formatDate(value) {
 
 function formatMonth(monthKey) {
   if (!monthKey) {
-    return "Tanpa bulan";
+    return t("format.noMonth");
   }
 
   const [year, month] = monthKey.split("-");
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat(getIntlLocale(), {
     month: "short",
     year: "numeric"
   }).format(new Date(Number(year), Number(month) - 1, 1));

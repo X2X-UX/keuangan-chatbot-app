@@ -913,7 +913,7 @@ async function handleRequest(req, res) {
       return;
     }
 
-    if (await handleTransactionRoute(req, res, pathname, session)) {
+    if (await handleTransactionRoute(req, res, url, session)) {
       return;
     }
 

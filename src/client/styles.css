@@ -233,6 +233,13 @@ input:where([type='submit']) {
   font-size: clamp(1.5rem, 3vw, 2rem);
 }
 
+.auth-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
 .auth-card p {
   margin: 0;
   color: var(--muted);
@@ -412,6 +419,14 @@ input:where([type='submit']) {
   margin-bottom: 20px;
 }
 
+.hero-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .brand-lockup {
   display: inline-flex;
   align-items: center;
@@ -486,6 +501,55 @@ input:where([type='submit']) {
   font-size: 0.84rem;
   font-weight: 700;
   box-shadow: 0 12px 22px rgba(11, 34, 63, 0.05);
+}
+
+.locale-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 999px;
+  border: 1px solid rgba(12, 74, 135, 0.12);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 10px 18px rgba(11, 34, 63, 0.05);
+}
+
+.locale-switcher-hero {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.locale-button {
+  min-width: 42px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #48627d;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.locale-button:hover {
+  transform: translateY(-1px);
+  color: var(--primary-strong);
+}
+
+.locale-button.is-active {
+  background: linear-gradient(180deg, rgba(12, 74, 135, 0.16), rgba(12, 74, 135, 0.1));
+  color: var(--primary-strong);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.locale-button-hero.is-active {
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.locale-button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-medium);
 }
 
 .hero-copy p,
@@ -1922,6 +1986,23 @@ th {
   min-width: 250px;
 }
 
+.history-controls {
+  display: grid;
+  gap: 12px;
+  justify-items: end;
+}
+
+.table-export-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.table-export-actions .secondary-button {
+  white-space: nowrap;
+}
+
 .table-wrap {
   overflow: auto;
   border: 1px solid rgba(12, 74, 135, 0.08);
@@ -2251,7 +2332,12 @@ tbody tr:hover {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
-    margin-bottom: 10px;
+  }
+
+  .hero-top-actions,
+  .auth-card-head {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .hero-eyebrow {
@@ -2400,6 +2486,15 @@ tbody tr:hover {
 
   .filters input {
     min-width: 0;
+  }
+
+  .history-controls {
+    width: 100%;
+    justify-items: stretch;
+  }
+
+  .table-export-actions {
+    width: 100%;
   }
 
   .section-heading,
