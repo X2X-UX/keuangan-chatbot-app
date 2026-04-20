@@ -8,11 +8,9 @@ Arunika Finance is a lightweight personal finance web application for tracking t
 - Account-based authentication with isolated user data via secure session cookies.
 - SQLite-backed storage for local-first deployment simplicity.
 - Transaction table with search, filtering, editing, and deletion.
-- Receipt capture and OCR-assisted transaction drafting.
+- Local-only finance assistant for summaries, spending analysis, and transaction guidance.
+- Receipt capture and optional OCR-assisted transaction drafting.
 - Telegram bot integration for finance chat and transaction workflows.
-- Dual assistant modes:
-  - Local mode without external AI configuration.
-  - OpenAI-assisted mode when `OPENAI_API_KEY` is configured.
 
 ## Tech Stack
 
@@ -28,7 +26,7 @@ Arunika Finance is a lightweight personal finance web application for tracking t
 
 - Node.js `>= 22.18.0`
 - npm
-- Optional: OpenAI API key
+- Optional: OpenAI API key for receipt analysis only
 - Optional: Telegram bot credentials
 
 ## Quick Start
@@ -87,10 +85,11 @@ Use `.env.example` as the canonical starting point.
 
 ### AI and OCR
 
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-- `OPENAI_BASE_URL`
-- `OCR_SPACE_API_KEY`
+- Chat assistant: no external AI environment variable is required
+- `OPENAI_API_KEY` for optional receipt analysis only
+- `OPENAI_MODEL` for optional receipt analysis tuning
+- `OPENAI_BASE_URL` for optional receipt analysis provider endpoint
+- `OCR_SPACE_API_KEY` for optional OCR extraction
 
 ### Session and HTTP controls
 
@@ -217,6 +216,7 @@ The application includes:
 - request body size limits
 - secure session cookies in production
 - health and readiness reporting through `/api/health`
+- local-only chat assistant processing for finance conversations
 
 ## Deployment
 
@@ -232,7 +232,10 @@ This repository includes a production-ready [render.yaml](render.yaml) blueprint
    - `TELEGRAM_BOT_TOKEN`
 5. Optionally configure:
    - `TELEGRAM_BOT_USERNAME`
-   - `OPENAI_API_KEY`
+   - `OPENAI_API_KEY` only if receipt analysis will use the external provider
+   - `OPENAI_MODEL`
+   - `OPENAI_BASE_URL`
+   - `OCR_SPACE_API_KEY`
    - `ALLOWED_ORIGINS`
 6. Deploy the service.
 7. Verify:
@@ -272,7 +275,7 @@ Once deployed on HTTPS, the app can be installed on mobile devices.
 5. Once linked, you can use:
    - `/summary`
    - `/help`
-   - free-form finance questions
+   - free-form finance questions answered by the local assistant
    - transaction input messages such as `pengeluaran 25000 makan siang kategori Makanan`
 
 ## Demo Account
@@ -282,6 +285,7 @@ Once deployed on HTTPS, the app can be installed on mobile devices.
 
 ## References
 
+- https://platform.openai.com/docs/guides/structured-outputs
 - https://platform.openai.com/docs/api-reference/responses
 - https://platform.openai.com/docs/models/gpt-4.1-mini
 

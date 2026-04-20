@@ -823,13 +823,13 @@ function createTelegramService({
     }
 
     if (/^\/summary\b/i.test(text)) {
-      const result = await buildChatReply("Buat ringkasan keuangan saya.", [], linked.user);
+      const result = await buildChatReply("Buat ringkasan keuangan saya.", linked.user);
       await sendTelegramMessage(chatId, result.reply);
       return;
     }
 
     const cleanedText = text.replace(/^\/\w+(?:@\w+)?\s*/i, "").trim() || text;
-    const result = await buildChatReply(cleanedText, [], linked.user);
+    const result = await buildChatReply(cleanedText, linked.user);
     await sendTelegramMessage(chatId, result.reply);
   }
 

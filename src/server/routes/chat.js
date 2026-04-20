@@ -24,7 +24,7 @@ function createChatRoutes({
       return true;
     }
 
-    const result = await buildChatReply(message, Array.isArray(payload.history) ? payload.history : [], session.user);
+    const result = await buildChatReply(message, session.user);
     sendJson(req, res, 200, result);
     return true;
   }

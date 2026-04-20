@@ -56,6 +56,7 @@ loadEnvFile(ENV_FILE);
 const PORT = Number(process.env.PORT || 3000);
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, "");
+const CHAT_ASSISTANT_MODEL = "local-finance-assistant";
 const OCR_SPACE_API_KEY = String(process.env.OCR_SPACE_API_KEY || "").trim();
 const OCR_SPACE_API_URL = "https://api.ocr.space/parse/image";
 const COOKIE_NAME = "session_id";
@@ -148,7 +149,7 @@ const { handleAuthRoute } = createAuthRoutes({
 
 const { handleSystemRoute, serveStatic } = createSystemRoutes({
   appName: "Arunika Finance",
-  chatModeResolver: () => (process.env.OPENAI_API_KEY ? "openai" : "local"),
+  chatModeResolver: () => "local",
   fs,
   fsp,
   getCorsHeaders,
@@ -156,7 +157,7 @@ const { handleSystemRoute, serveStatic } = createSystemRoutes({
   hasTelegramWebhookConfig: () => hasTelegramWebhookConfig(),
   isTelegramConfigured: () => isTelegramConfigured(),
   mimeTypes: MIME_TYPES,
-  model: OPENAI_MODEL,
+  model: CHAT_ASSISTANT_MODEL,
   path,
   publicDir: PUBLIC_DIR,
   securityProfile: {
@@ -502,49 +503,6 @@ function formatPercent(value) {
   return `${Number(value || 0).toFixed(1)}%`;
 }
 
-function createFinanceContext(summary, items, history, user) {
-  const recentTransactions = sortTransactions(items).slice(0, 8).map((item) => ({
-    amount: item.amount,
-    category: item.category,
-    date: item.date,
-    description: item.description,
-    type: item.type
-  }));
-
-  const recentHistory = Array.isArray(history)
-    ? history
-        .slice(-6)
-        .map((entry) => `${entry.role === "assistant" ? "Asisten" : "Pengguna"}: ${String(entry.content || "").trim()}`)
-        .join("\n")
-    : "";
-
-  return [
-    `Nama pengguna: ${user.name}`,
-    "Konteks aplikasi keuangan:",
-    JSON.stringify(
-      {
-        summary: {
-          totalIncome: summary.totalIncome,
-          totalExpense: summary.totalExpense,
-          balance: summary.balance,
-          savingsRate: summary.savingsRate,
-          topExpenseCategory: summary.topExpenseCategory,
-          biggestExpense: summary.biggestExpense
-        },
-        expenseCategories: summary.expenseCategories.slice(0, 5),
-        monthlyCashflow: summary.monthlyCashflow,
-        recentTransactions
-      },
-      null,
-      2
-    ),
-    recentHistory ? `Riwayat percakapan:\n${recentHistory}` : "",
-    "Jawab dalam Bahasa Indonesia yang profesional, ringkas, dan fokus pada data yang tersedia. Jangan mengarang data transaksi."
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-}
-
 function extractOpenAIText(payload) {
   if (typeof payload?.output_text === "string" && payload.output_text.trim()) {
     return payload.output_text.trim();
@@ -732,41 +690,7 @@ function generateLocalReply(message, summary) {
   ].join(" ");
 }
 
-async function requestOpenAI(message, history, summary, userTransactions, user) {
-  const response = await fetch(`${OPENAI_BASE_URL}/responses`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      instructions: "Anda adalah asisten keuangan profesional di aplikasi web. Jawab dalam Bahasa Indonesia, fokus pada analisis data transaksi pengguna, dan berikan langkah yang praktis.",
-      input: `${createFinanceContext(summary, userTransactions, history, user)}\n\nPertanyaan pengguna:\n${message}`,
-      max_output_tokens: 350,
-      text: {
-        format: {
-          type: "text"
-        }
-      }
-    }),
-    signal: AbortSignal.timeout(20_000)
-  });
-
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || "Gagal menghubungi layanan AI.");
-  }
-
-  const text = extractOpenAIText(payload);
-  if (!text) {
-    throw new Error("Respons AI kosong.");
-  }
-
-  return text;
-}
-
-async function buildChatReply(message, history, user) {
+async function buildChatReply(message, user) {
   const parsedInput = parseChatTransactionCommand(message);
   if (parsedInput) {
     if (parsedInput.error) {
@@ -805,23 +729,10 @@ async function buildChatReply(message, history, user) {
   const userTransactions = listTransactionsByUser(user.id);
   const summary = computeSummary(userTransactions);
 
-  if (!process.env.OPENAI_API_KEY) {
-    return {
-      mode: "local",
-      reply: generateLocalReply(message, summary)
-    };
-  }
-
-  try {
-    const reply = await requestOpenAI(message, history, summary, userTransactions, user);
-    return { mode: "openai", reply };
-  } catch (error) {
-    console.error("OpenAI request failed:", error.message);
-    return {
-      mode: "local-fallback",
-      reply: `${generateLocalReply(message, summary)}\n\nCatatan: layanan AI eksternal saat ini tidak tersedia, sehingga jawaban disusun menggunakan analisis lokal aplikasi.`
-    };
-  }
+  return {
+    mode: "local",
+    reply: generateLocalReply(message, summary)
+  };
 }
 
 function readPositiveIntEnv(value, fallback) {
