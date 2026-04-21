@@ -60,6 +60,8 @@ async function run() {
     const health = await request(server, "GET", "/api/health");
     assert.strictEqual(health.statusCode, 200);
     assert.strictEqual(health.body.status, "ok");
+    assert.strictEqual(health.body.chatMode, "local");
+    assert.strictEqual(health.body.model, "local-finance-assistant");
     assert.ok(health.headers["x-request-id"]);
 
     const unauthorized = await request(server, "GET", "/api/transactions");
@@ -104,13 +106,30 @@ async function run() {
     assert.strictEqual(createTransaction.statusCode, 201);
     assert.strictEqual(createTransaction.body.transaction.amount, 25000);
 
+    const createIncome = await request(server, "POST", "/api/transactions", {
+      body: {
+        amount: 5000000,
+        category: "Gaji",
+        date: "2026-04-10",
+        description: "Gaji route test",
+        notes: "pemasukan bulanan",
+        type: "income"
+      },
+      headers: {
+        Cookie: sessionCookie
+      }
+    });
+
+    assert.strictEqual(createIncome.statusCode, 201);
+    assert.strictEqual(createIncome.body.transaction.type, "income");
+
     const transactions = await request(server, "GET", "/api/transactions", {
       headers: {
         Cookie: sessionCookie
       }
     });
     assert.strictEqual(transactions.statusCode, 200);
-    assert.strictEqual(transactions.body.transactions.length, 1);
+    assert.strictEqual(transactions.body.transactions.length, 2);
 
     const summary = await request(server, "GET", "/api/summary", {
       headers: {
@@ -119,7 +138,39 @@ async function run() {
     });
     assert.strictEqual(summary.statusCode, 200);
     assert.strictEqual(summary.body.summary.totalExpense, 25000);
-    assert.strictEqual(summary.body.summary.totalIncome, 0);
+    assert.strictEqual(summary.body.summary.totalIncome, 5000000);
+
+    const exportCsv = await request(server, "GET", "/api/transactions/export?format=csv&type=expense&search=belanja&locale=en", {
+      headers: {
+        Cookie: sessionCookie
+      }
+    });
+    assert.strictEqual(exportCsv.statusCode, 200);
+    assert.match(String(exportCsv.headers["content-type"] || ""), /text\/csv/i);
+    assert.match(String(exportCsv.headers["content-disposition"] || ""), /attachment; filename="transaction-recap-expense-\d{4}-\d{2}-\d{2}\.csv"/i);
+    assert.match(exportCsv.body, /Transaction History Recap/);
+    assert.match(exportCsv.body, /"Transactions","1"/);
+    assert.match(exportCsv.body, /Belanja route test/);
+    assert.doesNotMatch(exportCsv.body, /Gaji route test/);
+
+    const exportPdf = await request(server, "GET", "/api/transactions/export?format=pdf&type=income", {
+      headers: {
+        Cookie: sessionCookie
+      }
+    });
+    assert.strictEqual(exportPdf.statusCode, 200);
+    assert.match(String(exportPdf.headers["content-type"] || ""), /application\/pdf/i);
+    assert.match(String(exportPdf.headers["content-disposition"] || ""), /attachment; filename="transaction-recap-income-\d{4}-\d{2}-\d{2}\.pdf"/i);
+    assert.match(exportPdf.body, /%PDF-1\.4/);
+    assert.match(exportPdf.body, /Gaji route test/);
+
+    const exportUnsupported = await request(server, "GET", "/api/transactions/export?format=xlsx", {
+      headers: {
+        Cookie: sessionCookie
+      }
+    });
+    assert.strictEqual(exportUnsupported.statusCode, 400);
+    assert.strictEqual(exportUnsupported.body.error, "Format export tidak didukung.");
 
     const receiptAnalyze = await request(server, "POST", "/api/transactions/receipt-analyze", {
       body: {

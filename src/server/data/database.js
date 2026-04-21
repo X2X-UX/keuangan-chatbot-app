@@ -3,7 +3,7 @@ const fs = require("fs");
 const { DatabaseSync } = require("node:sqlite");
 const { pbkdf2Sync, randomBytes, randomUUID, timingSafeEqual } = require("crypto");
 
-const ROOT = __dirname;
+const ROOT = path.resolve(__dirname, "../../..");
 const CONFIGURED_DATA_DIR = String(process.env.ARUNIKA_DATA_DIR || "").trim();
 const CONFIGURED_DB_FILE = String(process.env.ARUNIKA_DB_FILE || "").trim();
 const DATA_DIR = CONFIGURED_DATA_DIR ? path.resolve(CONFIGURED_DATA_DIR) : path.join(ROOT, "data");
