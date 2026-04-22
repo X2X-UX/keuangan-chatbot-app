@@ -64,6 +64,9 @@ async function run() {
     assert.strictEqual(health.body.model, "local-finance-assistant");
     assert.ok(health.headers["x-request-id"]);
 
+    const meUnauthorized = await request(server, "GET", "/api/auth/me");
+    assert.strictEqual(meUnauthorized.statusCode, 401);
+
     const unauthorized = await request(server, "GET", "/api/transactions");
     assert.strictEqual(unauthorized.statusCode, 401);
 
@@ -78,16 +81,65 @@ async function run() {
 
     assert.strictEqual(register.statusCode, 201);
     assert.strictEqual(register.body.user.email, email);
-    const sessionCookie = String(register.headers["set-cookie"]?.[0] || "").split(";")[0];
-    assert.ok(sessionCookie.startsWith("session_id="));
+    const registerSetCookie = String(register.headers["set-cookie"]?.[0] || "");
+    const registerSessionCookie = registerSetCookie.split(";")[0];
+    assert.ok(registerSessionCookie.startsWith("session_id="));
+    assert.match(registerSetCookie, /HttpOnly/);
+    assert.match(registerSetCookie, /Path=\//);
+    assert.match(registerSetCookie, /SameSite=Lax/);
+
+    const duplicateRegister = await request(server, "POST", "/api/auth/register", {
+      body: {
+        email,
+        name: "Route Tester",
+        password: "rahasia123"
+      }
+    });
+    assert.strictEqual(duplicateRegister.statusCode, 400);
+    assert.match(String(duplicateRegister.body.error || ""), /email/i);
+
+    const failedLogin = await request(server, "POST", "/api/auth/login", {
+      body: {
+        email,
+        password: "password-salah"
+      }
+    });
+    assert.strictEqual(failedLogin.statusCode, 401);
+    assert.strictEqual(failedLogin.body.error, "Email atau password salah.");
 
     const me = await request(server, "GET", "/api/auth/me", {
       headers: {
-        Cookie: sessionCookie
+        Cookie: registerSessionCookie
       }
     });
     assert.strictEqual(me.statusCode, 200);
     assert.strictEqual(me.body.user.email, email);
+
+    const logout = await request(server, "POST", "/api/auth/logout", {
+      headers: {
+        Cookie: registerSessionCookie
+      }
+    });
+    assert.strictEqual(logout.statusCode, 200);
+    assert.match(String(logout.headers["set-cookie"]?.[0] || ""), /Max-Age=0/);
+
+    const meAfterLogout = await request(server, "GET", "/api/auth/me", {
+      headers: {
+        Cookie: registerSessionCookie
+      }
+    });
+    assert.strictEqual(meAfterLogout.statusCode, 401);
+
+    const login = await request(server, "POST", "/api/auth/login", {
+      body: {
+        email,
+        password: "rahasia123"
+      }
+    });
+    assert.strictEqual(login.statusCode, 200);
+    assert.strictEqual(login.body.user.email, email);
+    const sessionCookie = String(login.headers["set-cookie"]?.[0] || "").split(";")[0];
+    assert.ok(sessionCookie.startsWith("session_id="));
 
     const createTransaction = await request(server, "POST", "/api/transactions", {
       body: {

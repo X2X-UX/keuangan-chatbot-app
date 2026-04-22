@@ -5,6 +5,7 @@ const path = require("path");
 
 const { findCanonicalCategory, inferTransactionCategory } = require("../transaction-categories");
 const { parseFlexibleAmount } = require("../transaction-amount");
+const { createSessionAuth } = require("../src/server/auth/session");
 const { createBackup, restoreBackup } = require("./sqlite-ops");
 const { loadEnvFile, parseCookieSameSite, readPositiveIntEnv, readRateLimitEnv } = require("../src/server/config/runtime");
 const { createFinanceAssistantService } = require("../src/server/services/finance-assistant/service");
@@ -15,6 +16,7 @@ runAmountTests();
 runFinanceAssistantTests();
 runReceiptParserTests();
 runRuntimeConfigTests();
+runSessionAuthTests();
 runSqliteOpsTests();
 runTransactionServiceTests();
 
@@ -194,6 +196,37 @@ function runRuntimeConfigTests() {
     delete process.env.RATE_LIMIT_SAMPLE_WINDOW_MS;
     fs.rmSync(tempRoot, { force: true, recursive: true });
   }
+}
+
+function runSessionAuthTests() {
+  const testSessionAuth = createSessionAuth({
+    cookieName: "session_id",
+    getSessionWithUser: (sessionId) => (sessionId ? { sessionId, user: { id: "user-1" } } : null),
+    nodeEnv: "test",
+    sameSite: "Lax",
+    sessionMaxAgeSeconds: 3600
+  });
+
+  assert.deepStrictEqual(testSessionAuth.parseCookies({ headers: { cookie: "session_id=abc123; theme=dark" } }), {
+    session_id: "abc123",
+    theme: "dark"
+  });
+  assert.strictEqual(testSessionAuth.getSessionFromRequest({ headers: { cookie: "session_id=abc123" } }).sessionId, "abc123");
+  assert.match(testSessionAuth.buildSessionCookie("abc123"), /HttpOnly/);
+  assert.match(testSessionAuth.buildSessionCookie("abc123"), /SameSite=Lax/);
+  assert.doesNotMatch(testSessionAuth.buildSessionCookie("abc123"), /Secure/);
+
+  const productionSessionAuth = createSessionAuth({
+    cookieName: "session_id",
+    getSessionWithUser: () => null,
+    nodeEnv: "production",
+    sameSite: "Strict",
+    sessionMaxAgeSeconds: 7200
+  });
+
+  assert.match(productionSessionAuth.buildSessionCookie("prod-session"), /Secure/);
+  assert.match(productionSessionAuth.buildClearCookie(), /Secure/);
+  assert.match(productionSessionAuth.buildClearCookie(), /Max-Age=0/);
 }
 
 function runSqliteOpsTests() {
