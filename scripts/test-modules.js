@@ -10,6 +10,7 @@ const { createBackup, restoreBackup } = require("./sqlite-ops");
 const { loadEnvFile, parseCookieSameSite, readPositiveIntEnv, readRateLimitEnv } = require("../src/server/config/runtime");
 const { createFinanceAssistantService } = require("../src/server/services/finance-assistant/service");
 const { createReceiptParser } = require("../src/server/services/receipts/parser");
+const { createTelegramDraftService } = require("../src/server/services/telegram/draft");
 const { createTransactionService } = require("../src/server/services/transactions/service");
 
 runAmountTests();
@@ -17,6 +18,7 @@ runFinanceAssistantTests();
 runReceiptParserTests();
 runRuntimeConfigTests();
 runSessionAuthTests();
+runTelegramDraftTests();
 runSqliteOpsTests();
 runTransactionServiceTests();
 
@@ -227,6 +229,81 @@ function runSessionAuthTests() {
   assert.match(productionSessionAuth.buildSessionCookie("prod-session"), /Secure/);
   assert.match(productionSessionAuth.buildClearCookie(), /Secure/);
   assert.match(productionSessionAuth.buildClearCookie(), /Max-Age=0/);
+}
+
+function runTelegramDraftTests() {
+  const savedDrafts = [];
+  const telegramDraftService = createTelegramDraftService({
+    deleteTelegramReceiptDraft: () => {},
+    draftTtlMs: 60_000,
+    findCanonicalCategory,
+    formatReceiptSuggestionForTelegram: (suggestion) => `Draft ${suggestion.description}`,
+    inferTransactionCategory,
+    normalizeReceiptDate: (value) => String(value).trim() || "2026-04-12",
+    sanitizeText,
+    sanitizeTransaction,
+    saveTelegramReceiptDraft: (chatId, draft) => {
+      savedDrafts.push({ chatId, draft });
+    }
+  });
+
+  const parsed = telegramDraftService.parseTelegramReceiptDraftCommand("merchant Alfamart Dadap");
+  assert.strictEqual(parsed.action, "patch");
+  assert.strictEqual(parsed.patch.description, "Alfamart Dadap");
+
+  const draft = {
+    originalSuggestion: {
+      amount: 50000,
+      category: "Transfer",
+      date: "2026-04-12",
+      description: "Transfer ke DANA",
+      notes: "OCR test",
+      reviewAlert: "",
+      reviewFlags: [],
+      reviewLevel: "low",
+      type: "expense"
+    },
+    reviewState: {
+      checks: {
+        amount: false,
+        category: false,
+        date: false
+      },
+      required: true
+    },
+    suggestion: {
+      amount: 50000,
+      category: "Transfer",
+      date: "2026-04-12",
+      description: "Transfer ke DANA",
+      notes: "OCR test",
+      reviewAlert: "",
+      reviewFlags: [],
+      reviewLevel: "low",
+      type: "expense"
+    }
+  };
+
+  const confirmedDraft = telegramDraftService.confirmReceiptDraftChecks(draft, "semua");
+  assert.strictEqual(confirmedDraft.reviewState.checks.amount, true);
+  assert.strictEqual(confirmedDraft.reviewState.checks.date, true);
+  assert.strictEqual(confirmedDraft.reviewState.checks.category, true);
+  assert.strictEqual(telegramDraftService.validateReceiptDraftBeforeSave(draft).ok, false);
+  assert.strictEqual(telegramDraftService.validateReceiptDraftBeforeSave(confirmedDraft).ok, true);
+
+  const patchedDraft = telegramDraftService.applyTelegramReceiptDraftPatch(draft, { notes: "dibayar tunai" });
+  assert.strictEqual(patchedDraft.suggestion.notes, "dibayar tunai");
+
+  const storedDraft = telegramDraftService.setTelegramReceiptDraft("123", draft);
+  assert.strictEqual(savedDrafts.length, 1);
+  assert.strictEqual(savedDrafts[0].chatId, "123");
+  assert.ok(storedDraft.createdAt);
+  assert.match(telegramDraftService.formatTelegramReceiptDraftReply(draft), /Balas `simpan`/);
+  assert.ok(
+    telegramDraftService
+      .buildReceiptDraftReplyMarkup(draft)
+      .inline_keyboard.some((row) => row.some((button) => button.callback_data === "draft_check_all"))
+  );
 }
 
 function runSqliteOpsTests() {
