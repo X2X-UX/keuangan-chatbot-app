@@ -10,6 +10,7 @@ const { createBackup, restoreBackup } = require("./sqlite-ops");
 const { loadEnvFile, parseCookieSameSite, readPositiveIntEnv, readRateLimitEnv } = require("../src/server/config/runtime");
 const { createFinanceAssistantService } = require("../src/server/services/finance-assistant/service");
 const { createReceiptParser } = require("../src/server/services/receipts/parser");
+const { createTelegramApiService } = require("../src/server/services/telegram/api");
 const { createTelegramDraftService } = require("../src/server/services/telegram/draft");
 const { createTransactionService } = require("../src/server/services/transactions/service");
 
@@ -18,6 +19,7 @@ runFinanceAssistantTests();
 runReceiptParserTests();
 runRuntimeConfigTests();
 runSessionAuthTests();
+runTelegramApiTests();
 runTelegramDraftTests();
 runSqliteOpsTests();
 runTransactionServiceTests();
@@ -229,6 +231,33 @@ function runSessionAuthTests() {
   assert.match(productionSessionAuth.buildSessionCookie("prod-session"), /Secure/);
   assert.match(productionSessionAuth.buildClearCookie(), /Secure/);
   assert.match(productionSessionAuth.buildClearCookie(), /Max-Age=0/);
+}
+
+function runTelegramApiTests() {
+  const telegramApiService = createTelegramApiService({
+    appBaseUrl: "https://example.com",
+    botToken: "bot-token",
+    botUsername: "arunika_bot",
+    getTelegramLinkByUserId: (userId) => (userId === "user-1" ? { chatId: "123" } : null),
+    mimeTypes: {
+      ".jpg": "image/jpeg",
+      ".png": "image/png"
+    },
+    secretToken: "secret-token"
+  });
+
+  assert.strictEqual(telegramApiService.isTelegramConfigured(), true);
+  assert.strictEqual(telegramApiService.hasTelegramWebhookConfig(), true);
+  assert.strictEqual(telegramApiService.getTelegramBotUrl(), "https://t.me/arunika_bot");
+  assert.strictEqual(telegramApiService.buildTelegramStatus("user-1").linked, true);
+  assert.strictEqual(
+    telegramApiService.validateTelegramWebhookRequest({ headers: { "x-telegram-bot-api-secret-token": "secret-token" } }),
+    true
+  );
+  assert.strictEqual(
+    telegramApiService.validateTelegramWebhookRequest({ headers: { "x-telegram-bot-api-secret-token": "wrong" } }),
+    false
+  );
 }
 
 function runTelegramDraftTests() {

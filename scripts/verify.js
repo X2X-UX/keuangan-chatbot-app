@@ -25,6 +25,7 @@ const FILES_TO_CHECK = [
   "src/server/data/database.js",
   "src/server/observability/logger.js",
   "src/server/services/finance-assistant/service.js",
+  "src/server/services/telegram/api.js",
   "src/server/services/telegram/draft.js",
   "src/client/transaction-amount.js",
   "src/client/transaction-categories.js",
