@@ -6,10 +6,12 @@ const path = require("path");
 const { findCanonicalCategory, inferTransactionCategory } = require("../transaction-categories");
 const { parseFlexibleAmount } = require("../transaction-amount");
 const { createBackup, restoreBackup } = require("./sqlite-ops");
+const { createFinanceAssistantService } = require("../src/server/services/finance-assistant/service");
 const { createReceiptParser } = require("../src/server/services/receipts/parser");
 const { createTransactionService } = require("../src/server/services/transactions/service");
 
 runAmountTests();
+runFinanceAssistantTests();
 runReceiptParserTests();
 runSqliteOpsTests();
 runTransactionServiceTests();
@@ -21,6 +23,54 @@ function runAmountTests() {
   assert.strictEqual(parseFlexibleAmount("1,5jt"), 1500000);
   assert.strictEqual(parseFlexibleAmount("200.000,00"), 200000);
   assert.strictEqual(parseFlexibleAmount("50,000.00"), 50000);
+}
+
+function runFinanceAssistantTests() {
+  const transactions = [
+    {
+      amount: 5000000,
+      category: "Gaji",
+      date: "2026-04-10",
+      description: "Gaji bulanan",
+      id: "tx-income",
+      notes: "",
+      type: "income"
+    },
+    {
+      amount: 75000,
+      category: "Makanan",
+      date: "2026-04-11",
+      description: "Makan siang",
+      id: "tx-expense",
+      notes: "",
+      type: "expense"
+    }
+  ];
+
+  const financeAssistant = createFinanceAssistantService({
+    createTransactionForUser: () => {
+      throw new Error("createTransactionForUser should not be called in this test");
+    },
+    findCanonicalCategory,
+    formatTransactionCategoryList: (type) => (type === "income" ? "Gaji, Hadiah" : "Makanan, Transportasi, Belanja"),
+    inferTransactionCategory,
+    listTransactionsByUser: () => transactions,
+    parseFlexibleAmount
+  });
+
+  const summary = financeAssistant.computeSummary(transactions);
+  assert.strictEqual(summary.totalIncome, 5000000);
+  assert.strictEqual(summary.totalExpense, 75000);
+  assert.strictEqual(summary.topExpenseCategory.category, "Makanan");
+
+  const parsed = financeAssistant.parseChatTransactionCommand("pengeluaran 25rb makan siang kategori makanan tanggal 2026-04-03");
+  assert.strictEqual(parsed.payload.amount, 25000);
+  assert.strictEqual(parsed.payload.category, "Makanan");
+  assert.strictEqual(parsed.payload.type, "expense");
+
+  const reply = financeAssistant.generateLocalReply("ringkasan saldo", summary);
+  assert.match(reply, /Pemasukan tercatat/);
+  assert.match(reply, /saldo bersih/i);
 }
 
 function runReceiptParserTests() {

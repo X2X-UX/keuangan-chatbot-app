@@ -22,6 +22,7 @@ const FILES_TO_CHECK = [
   "src/server/http.js",
   "src/server/data/database.js",
   "src/server/observability/logger.js",
+  "src/server/services/finance-assistant/service.js",
   "src/client/transaction-amount.js",
   "src/client/transaction-categories.js",
   "src/client/app/core/runtime.js",
