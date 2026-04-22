@@ -4,7 +4,14 @@ const fs = require("fs");
 const fsp = require("fs/promises");
 const { URL } = require("url");
 
+const ROOT = path.resolve(__dirname, "../..");
+const PUBLIC_DIR = path.join(ROOT, "public");
+const ENV_FILE = path.join(ROOT, ".env");
+
+loadEnvFile(ENV_FILE);
+
 const {
+  DATA_DIR,
   SESSION_MAX_AGE_SECONDS,
   createTelegramLinkCode,
   authenticateUser,
@@ -46,12 +53,7 @@ const { createReceiptParser } = require("./services/receipts/parser");
 const { createTelegramService } = require("./services/telegram/service");
 const { createTransactionService } = require("./services/transactions/service");
 
-const ROOT = path.resolve(__dirname, "../..");
-const PUBLIC_DIR = path.join(ROOT, "public");
-const RECEIPTS_DIR = path.join(ROOT, "data", "receipts");
-const ENV_FILE = path.join(ROOT, ".env");
-
-loadEnvFile(ENV_FILE);
+const RECEIPTS_DIR = path.join(DATA_DIR, "receipts");
 
 const PORT = Number(process.env.PORT || 3000);
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";

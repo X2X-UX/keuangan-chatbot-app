@@ -7,6 +7,8 @@
     "preflight": "node scripts/preflight.js",
     "build:tailwind": "tailwindcss -c tailwind.config.js -i src/client/styles.tailwind.css -o src/client/.generated/tailwind.css --minify",
     "sync:public": "node scripts/sync-public.js",
+    "db:backup": "node scripts/sqlite-backup.js",
+    "db:restore": "node scripts/sqlite-restore.js",
     "test:light": "node scripts/test-modules.js",
     "test:routes": "node scripts/test-routes.js",
     "test:telegram": "node scripts/test-telegram-flow.js",

@@ -1,12 +1,17 @@
 const assert = require("assert");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 
 const { findCanonicalCategory, inferTransactionCategory } = require("../transaction-categories");
 const { parseFlexibleAmount } = require("../transaction-amount");
+const { createBackup, restoreBackup } = require("./sqlite-ops");
 const { createReceiptParser } = require("../src/server/services/receipts/parser");
 const { createTransactionService } = require("../src/server/services/transactions/service");
 
 runAmountTests();
 runReceiptParserTests();
+runSqliteOpsTests();
 runTransactionServiceTests();
 
 console.log("Module tests OK");
@@ -101,6 +106,61 @@ function runReceiptParserTests() {
   assert.strictEqual(transferSuggestion.amount, 200000);
   assert.strictEqual(transferSuggestion.type, "expense");
   assert.ok(/transfer/i.test(transferSuggestion.description));
+}
+
+function runSqliteOpsTests() {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "arunika-sqlite-ops-"));
+
+  try {
+    const activeDataDir = path.join(tempRoot, "active-data");
+    const activeReceiptsDir = path.join(activeDataDir, "receipts");
+    const dbFile = path.join(activeDataDir, "arunika.sqlite");
+    const backupRootDir = path.join(tempRoot, "backups");
+    const snapshotRootDir = path.join(tempRoot, "snapshots");
+
+    fs.mkdirSync(activeReceiptsDir, { recursive: true });
+    fs.writeFileSync(dbFile, "active-db");
+    fs.writeFileSync(`${dbFile}-wal`, "wal-data");
+    fs.writeFileSync(path.join(activeReceiptsDir, "receipt.txt"), "active-receipt");
+
+    const backup = createBackup({
+      backupRootDir,
+      cwd: tempRoot,
+      dataDir: activeDataDir,
+      dbFile,
+      label: "module-test",
+      now: new Date("2026-04-22T00:00:00Z"),
+      receiptsDir: activeReceiptsDir
+    });
+
+    assert.ok(fs.existsSync(path.join(backup.backupDir, "arunika.sqlite")));
+    assert.ok(fs.existsSync(path.join(backup.backupDir, "arunika.sqlite-wal")));
+    assert.ok(fs.existsSync(path.join(backup.backupDir, "receipts", "receipt.txt")));
+    assert.ok(fs.existsSync(path.join(backup.backupDir, "metadata.json")));
+
+    fs.writeFileSync(path.join(backup.backupDir, "arunika.sqlite"), "restored-db");
+    fs.writeFileSync(path.join(backup.backupDir, "receipts", "receipt.txt"), "restored-receipt");
+    fs.writeFileSync(dbFile, "broken-db");
+    fs.writeFileSync(path.join(activeReceiptsDir, "receipt.txt"), "broken-receipt");
+
+    const restore = restoreBackup({
+      confirmRestore: true,
+      cwd: tempRoot,
+      dataDir: activeDataDir,
+      dbFile,
+      now: new Date("2026-04-22T01:00:00Z"),
+      receiptsDir: activeReceiptsDir,
+      snapshotRootDir,
+      sourceDir: backup.backupDir
+    });
+
+    assert.strictEqual(fs.readFileSync(dbFile, "utf8"), "restored-db");
+    assert.strictEqual(fs.readFileSync(path.join(activeReceiptsDir, "receipt.txt"), "utf8"), "restored-receipt");
+    assert.ok(restore.snapshotDir);
+    assert.strictEqual(fs.readFileSync(path.join(restore.snapshotDir, "arunika.sqlite"), "utf8"), "broken-db");
+  } finally {
+    fs.rmSync(tempRoot, { force: true, recursive: true });
+  }
 }
 
 function runTransactionServiceTests() {
