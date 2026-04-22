@@ -6,6 +6,7 @@ const path = require("path");
 const { findCanonicalCategory, inferTransactionCategory } = require("../transaction-categories");
 const { parseFlexibleAmount } = require("../transaction-amount");
 const { createBackup, restoreBackup } = require("./sqlite-ops");
+const { loadEnvFile, parseCookieSameSite, readPositiveIntEnv, readRateLimitEnv } = require("../src/server/config/runtime");
 const { createFinanceAssistantService } = require("../src/server/services/finance-assistant/service");
 const { createReceiptParser } = require("../src/server/services/receipts/parser");
 const { createTransactionService } = require("../src/server/services/transactions/service");
@@ -13,6 +14,7 @@ const { createTransactionService } = require("../src/server/services/transaction
 runAmountTests();
 runFinanceAssistantTests();
 runReceiptParserTests();
+runRuntimeConfigTests();
 runSqliteOpsTests();
 runTransactionServiceTests();
 
@@ -156,6 +158,42 @@ function runReceiptParserTests() {
   assert.strictEqual(transferSuggestion.amount, 200000);
   assert.strictEqual(transferSuggestion.type, "expense");
   assert.ok(/transfer/i.test(transferSuggestion.description));
+}
+
+function runRuntimeConfigTests() {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "arunika-runtime-config-"));
+
+  try {
+    const envFile = path.join(tempRoot, ".env");
+    fs.writeFileSync(envFile, "TEST_RUNTIME_KEY=loaded-value\nTEST_QUOTED_KEY=\"quoted\"\n");
+
+    delete process.env.TEST_RUNTIME_KEY;
+    delete process.env.TEST_QUOTED_KEY;
+    delete process.env.RATE_LIMIT_SAMPLE_MAX;
+    delete process.env.RATE_LIMIT_SAMPLE_WINDOW_MS;
+
+    loadEnvFile(envFile);
+
+    assert.strictEqual(process.env.TEST_RUNTIME_KEY, "loaded-value");
+    assert.strictEqual(process.env.TEST_QUOTED_KEY, "quoted");
+    assert.strictEqual(readPositiveIntEnv("42", 9), 42);
+    assert.strictEqual(readPositiveIntEnv("0", 9), 9);
+    assert.strictEqual(parseCookieSameSite("strict"), "Strict");
+    assert.strictEqual(parseCookieSameSite("unknown"), "Lax");
+
+    process.env.RATE_LIMIT_SAMPLE_MAX = "7";
+    process.env.RATE_LIMIT_SAMPLE_WINDOW_MS = "1234";
+    assert.deepStrictEqual(readRateLimitEnv("SAMPLE", { max: 1, windowMs: 2 }), {
+      max: 7,
+      windowMs: 1234
+    });
+  } finally {
+    delete process.env.TEST_RUNTIME_KEY;
+    delete process.env.TEST_QUOTED_KEY;
+    delete process.env.RATE_LIMIT_SAMPLE_MAX;
+    delete process.env.RATE_LIMIT_SAMPLE_WINDOW_MS;
+    fs.rmSync(tempRoot, { force: true, recursive: true });
+  }
 }
 
 function runSqliteOpsTests() {

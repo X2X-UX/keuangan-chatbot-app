@@ -19,6 +19,7 @@ const FILES_TO_CHECK = [
   "scripts/test-telegram-flow.js",
   "src/server/auth/session.js",
   "src/server/app.js",
+  "src/server/config/runtime.js",
   "src/server/http.js",
   "src/server/data/database.js",
   "src/server/observability/logger.js",
