@@ -57,6 +57,16 @@ function initializeDatabase() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS category_budgets (
+      user_id TEXT NOT NULL,
+      month TEXT NOT NULL,
+      category TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, month, category),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS telegram_links (
       user_id TEXT PRIMARY KEY,
       chat_id TEXT NOT NULL UNIQUE,
@@ -85,6 +95,7 @@ function initializeDatabase() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_category_budgets_user_month ON category_budgets(user_id, month);
     CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON transactions(user_id, date DESC);
     CREATE INDEX IF NOT EXISTS idx_telegram_link_codes_user_id ON telegram_link_codes(user_id);
     CREATE INDEX IF NOT EXISTS idx_telegram_receipt_drafts_user_id ON telegram_receipt_drafts(linked_user_id);
@@ -169,6 +180,19 @@ function sanitizeTelegramLink(row) {
     firstName: row.first_name,
     linkedAt: row.linked_at,
     username: row.username
+  };
+}
+
+function sanitizeCategoryBudget(row) {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    amount: Number(row.amount) || 0,
+    category: String(row.category || ""),
+    month: String(row.month || ""),
+    updatedAt: row.updated_at
   };
 }
 
@@ -523,6 +547,81 @@ function deleteTransactionForUser(userId, transactionId) {
   return existing;
 }
 
+function listCategoryBudgetsByUser(userId, month = "") {
+  const database = getDatabase();
+  const cleanMonth = String(month || "").trim();
+  const rows = cleanMonth
+    ? database
+        .prepare(
+          `
+            SELECT user_id, month, category, amount, updated_at
+            FROM category_budgets
+            WHERE user_id = ? AND month = ?
+            ORDER BY category COLLATE NOCASE ASC
+          `
+        )
+        .all(userId, cleanMonth)
+    : database
+        .prepare(
+          `
+            SELECT user_id, month, category, amount, updated_at
+            FROM category_budgets
+            WHERE user_id = ?
+            ORDER BY month DESC, category COLLATE NOCASE ASC
+          `
+        )
+        .all(userId);
+
+  return rows.map((row) => sanitizeCategoryBudget(row));
+}
+
+function upsertCategoryBudgetForUser(userId, budget) {
+  const database = getDatabase();
+  const month = String(budget?.month || "").trim();
+  const category = String(budget?.category || "").trim();
+  const amount = Math.round(Number(budget?.amount) || 0);
+
+  if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+    throw new Error("Periode budget harus memakai format YYYY-MM.");
+  }
+
+  if (!category) {
+    throw new Error("Kategori budget wajib diisi.");
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Nominal budget harus lebih besar dari nol.");
+  }
+
+  const updatedAt = new Date().toISOString();
+  database
+    .prepare(
+      `
+        INSERT INTO category_budgets (user_id, month, category, amount, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, month, category) DO UPDATE SET
+          amount = excluded.amount,
+          updated_at = excluded.updated_at
+      `
+    )
+    .run(userId, month, category, amount, updatedAt);
+
+  return sanitizeCategoryBudget({
+    amount,
+    category,
+    month,
+    updated_at: updatedAt
+  });
+}
+
+function deleteCategoryBudgetForUser(userId, month, category) {
+  const database = getDatabase();
+  const result = database
+    .prepare("DELETE FROM category_budgets WHERE user_id = ? AND month = ? AND category = ?")
+    .run(userId, String(month || "").trim(), String(category || "").trim());
+  return result.changes > 0;
+}
+
 function cleanupExpiredTelegramLinkCodes() {
   const database = getDatabase();
   database.prepare("DELETE FROM telegram_link_codes WHERE expires_at <= ?").run(new Date().toISOString());
@@ -805,6 +904,7 @@ module.exports = {
   TELEGRAM_LINK_CODE_TTL_SECONDS,
   authenticateUser,
   closeDatabase,
+  deleteCategoryBudgetForUser,
   deleteTelegramReceiptDraft,
   createSession,
   createTelegramLinkCode: generateTelegramLinkCode,
@@ -819,9 +919,11 @@ module.exports = {
   initializeDatabase,
   getTransactionByIdForUser,
   linkTelegramChatByCode,
+  listCategoryBudgetsByUser,
   listTransactionsByUser,
   saveTelegramReceiptDraft,
   unlinkTelegramByChatId,
   unlinkTelegramByUserId,
+  upsertCategoryBudgetForUser,
   updateTransactionForUser
 };

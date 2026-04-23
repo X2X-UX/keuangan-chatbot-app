@@ -1,5 +1,6 @@
 const state = {
   authMode: "login",
+  budgetMonth: "",
   chatHistory: [],
   compactMode: false,
   csvImport: null,
@@ -130,6 +131,18 @@ const elements = {
   authTitle: document.getElementById("authTitle"),
   balanceFoot: document.getElementById("balanceFoot"),
   balanceValue: document.getElementById("balanceValue"),
+  budgetAmount: document.getElementById("budgetAmount"),
+  budgetAttentionPromptButton: document.getElementById("budgetAttentionPromptButton"),
+  budgetCategory: document.getElementById("budgetCategory"),
+  budgetCurrentMeta: document.getElementById("budgetCurrentMeta"),
+  budgetForm: document.getElementById("budgetForm"),
+  budgetList: document.getElementById("budgetList"),
+  budgetMessage: document.getElementById("budgetMessage"),
+  budgetMonthInput: document.getElementById("budgetMonthInput"),
+  budgetMonthLabel: document.getElementById("budgetMonthLabel"),
+  budgetOverviewText: document.getElementById("budgetOverviewText"),
+  budgetOverviewValue: document.getElementById("budgetOverviewValue"),
+  budgetSubmitButton: document.getElementById("budgetSubmitButton"),
   cashflowChart: document.getElementById("cashflowChart"),
   categoryChart: document.getElementById("categoryChart"),
   chatForm: document.getElementById("chatForm"),
@@ -542,6 +555,8 @@ function rerenderLocaleAwareUI() {
     if (typeof renderSummary === "function") renderSummary();
     if (typeof renderCashflowChart === "function") renderCashflowChart();
     if (typeof renderCategoryChart === "function") renderCategoryChart();
+    if (typeof renderBudgetSummary === "function") renderBudgetSummary();
+    if (typeof renderBudgetFormOptions === "function") renderBudgetFormOptions();
     if (typeof renderTransactions === "function") renderTransactions();
     if (typeof renderInsights === "function") renderInsights();
   } else if (typeof clearDashboard === "function") {

@@ -8,6 +8,7 @@ function createTelegramService({
   botUsername,
   buildChatReply,
   computeSummary,
+  computeUserSummary,
   createTransactionForUser,
   deleteTelegramReceiptDraft,
   draftTtlMs,
@@ -355,14 +356,24 @@ function createTelegramService({
         try {
           const transaction = await saveTelegramReceiptDraftTransaction(linked.user.id, receiptDraft);
           clearTelegramReceiptDraft(chatId);
-          const summary = computeSummary(listTransactionsByUser(linked.user.id));
+          const summary =
+            typeof computeUserSummary === "function"
+              ? computeUserSummary(linked.user.id)
+              : computeSummary(listTransactionsByUser(linked.user.id));
+          const chatReply = await buildChatReply("Buat ringkasan budget terbaru saya.", linked.user);
+          const budgetAlert =
+            String(chatReply?.reply || "")
+              .split(/\s+/)
+              .join(" ")
+              .match(/Budget .*?(?:\.|$)|Semua \d+ budget kategori .*?(?:\.|$)/)?.[0] || "";
           await sendTelegramMessage(
             chatId,
             [
               "Transaksi dari hasil OCR berhasil disimpan.",
               `${transaction.type === "income" ? "Pemasukan" : "Pengeluaran"} ${formatCurrency(transaction.amount)} untuk ${transaction.description}.`,
               `Kategori: ${transaction.category}. Tanggal: ${transaction.date}.`,
-              `Saldo terbaru: ${formatCurrency(summary.balance)}.`
+              `Saldo terbaru: ${formatCurrency(summary.balance)}.`,
+              budgetAlert
             ].join(" ")
           );
         } catch (error) {

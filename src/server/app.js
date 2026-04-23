@@ -18,6 +18,7 @@ const {
   createSession,
   createTransactionForUser,
   createUser,
+  deleteCategoryBudgetForUser,
   deleteTelegramReceiptDraft,
   deleteSession,
   deleteTransactionForUser,
@@ -28,10 +29,12 @@ const {
   getTelegramLinkByUserId,
   initializeDatabase,
   linkTelegramChatByCode,
+  listCategoryBudgetsByUser,
   listTransactionsByUser,
   saveTelegramReceiptDraft,
   unlinkTelegramByChatId,
   unlinkTelegramByUserId,
+  upsertCategoryBudgetForUser,
   updateTransactionForUser
 } = require("./data/database");
 const {
@@ -44,6 +47,7 @@ const { createSessionAuth } = require("./auth/session");
 const { buildAllowedOrigins, createHttpService } = require("./http");
 const { createLogger, getRequestId } = require("./observability/logger");
 const { createAuthRoutes } = require("./routes/auth");
+const { createBudgetRoutes } = require("./routes/budgets");
 const { createChatRoutes } = require("./routes/chat");
 const { createSystemRoutes } = require("./routes/system");
 const { createTelegramRoutes } = require("./routes/telegram");
@@ -140,6 +144,7 @@ const { buildClearCookie, buildSessionCookie, getSessionFromRequest } = createSe
 const {
   buildChatReply,
   computeSummary,
+  computeUserSummary,
   formatCurrency,
   generateLocalReply,
   sanitizeText,
@@ -150,6 +155,7 @@ const {
   findCanonicalCategory,
   formatTransactionCategoryList,
   inferTransactionCategory,
+  listCategoryBudgetsByUser,
   listTransactionsByUser,
   parseFlexibleAmount
 });
@@ -198,6 +204,18 @@ const { handleChatRoute } = createChatRoutes({
   enforceRateLimit,
   parseJsonBody,
   sendJson
+});
+
+const { handleBudgetRoute } = createBudgetRoutes({
+  computeUserSummary,
+  deleteCategoryBudgetForUser,
+  enforceRateLimit,
+  findCanonicalCategory,
+  listCategoryBudgetsByUser,
+  parseFlexibleAmount,
+  parseJsonBody,
+  sendJson,
+  upsertCategoryBudgetForUser
 });
 
 const {
@@ -295,6 +313,7 @@ const {
   botUsername: TELEGRAM_BOT_USERNAME,
   buildChatReply,
   computeSummary,
+  computeUserSummary,
   createTransactionForUser,
   deleteTelegramReceiptDraft,
   draftTtlMs: TELEGRAM_RECEIPT_DRAFT_TTL_MS,
@@ -332,7 +351,7 @@ const { handleTelegramRoute } = createTelegramRoutes({
 const { handleTransactionRoute } = createTransactionRoutes({
   analyzeReceipt,
   buildTransactionFingerprint,
-  computeSummary,
+  computeUserSummary,
   createTransactionForUser,
   deleteTransactionForUser,
   enforceRateLimit,
@@ -364,6 +383,7 @@ const { createAppServer, startServer } = createServerRuntime({
   getSecurityHeaders,
   getSessionFromRequest,
   handleAuthRoute,
+  handleBudgetRoute,
   handleChatRoute,
   handleSystemRoute,
   handleTelegramRoute,

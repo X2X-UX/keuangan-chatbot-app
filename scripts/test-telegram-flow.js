@@ -113,6 +113,9 @@ async function run() {
     computeSummary: (transactions) => ({
       balance: transactions.reduce((sum, item) => sum + (item.type === "income" ? item.amount : -item.amount), 0)
     }),
+    computeUserSummary: () => ({
+      balance: -50000
+    }),
     createTransactionForUser: (_userId, payload) => {
       const transaction = {
         id: `trx-${storedTransactions.length + 1}`,

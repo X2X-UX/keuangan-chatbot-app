@@ -11,6 +11,7 @@ function escapeHTML(value) {
 // core/runtime.js
 const state = {
   authMode: "login",
+  budgetMonth: "",
   chatHistory: [],
   compactMode: false,
   csvImport: null,
@@ -141,6 +142,18 @@ const elements = {
   authTitle: document.getElementById("authTitle"),
   balanceFoot: document.getElementById("balanceFoot"),
   balanceValue: document.getElementById("balanceValue"),
+  budgetAmount: document.getElementById("budgetAmount"),
+  budgetAttentionPromptButton: document.getElementById("budgetAttentionPromptButton"),
+  budgetCategory: document.getElementById("budgetCategory"),
+  budgetCurrentMeta: document.getElementById("budgetCurrentMeta"),
+  budgetForm: document.getElementById("budgetForm"),
+  budgetList: document.getElementById("budgetList"),
+  budgetMessage: document.getElementById("budgetMessage"),
+  budgetMonthInput: document.getElementById("budgetMonthInput"),
+  budgetMonthLabel: document.getElementById("budgetMonthLabel"),
+  budgetOverviewText: document.getElementById("budgetOverviewText"),
+  budgetOverviewValue: document.getElementById("budgetOverviewValue"),
+  budgetSubmitButton: document.getElementById("budgetSubmitButton"),
   cashflowChart: document.getElementById("cashflowChart"),
   categoryChart: document.getElementById("categoryChart"),
   chatForm: document.getElementById("chatForm"),
@@ -553,6 +566,8 @@ function rerenderLocaleAwareUI() {
     if (typeof renderSummary === "function") renderSummary();
     if (typeof renderCashflowChart === "function") renderCashflowChart();
     if (typeof renderCategoryChart === "function") renderCategoryChart();
+    if (typeof renderBudgetSummary === "function") renderBudgetSummary();
+    if (typeof renderBudgetFormOptions === "function") renderBudgetFormOptions();
     if (typeof renderTransactions === "function") renderTransactions();
     if (typeof renderInsights === "function") renderInsights();
   } else if (typeof clearDashboard === "function") {
@@ -1000,6 +1015,61 @@ function clearDashboard() {
   elements.flowTimeline.innerHTML = `<div class="empty-state">${t("dashboard.monthlyFlowEmpty")}</div>`;
   elements.cashflowChart.innerHTML = `<div class="empty-state">${t("dashboard.cashflowSignin")}</div>`;
   elements.categoryChart.innerHTML = `<div class="empty-state">${t("dashboard.categorySignin")}</div>`;
+  if (elements.budgetOverviewValue) {
+    elements.budgetOverviewValue.textContent = "Rp0";
+  }
+  if (elements.budgetMonthLabel) {
+    elements.budgetMonthLabel.textContent = state.user
+      ? formatMonth(todayInputValue().slice(0, 7))
+      : getActiveLocale() === "en"
+        ? "Active month"
+        : "Bulan aktif";
+  }
+  if (elements.budgetOverviewText) {
+    elements.budgetOverviewText.textContent = state.user
+      ? getActiveLocale() === "en"
+        ? "Set a monthly expense budget for each category you want to track."
+        : "Atur budget pengeluaran bulanan per kategori yang ingin dipantau."
+      : getActiveLocale() === "en"
+        ? "Sign in to start managing monthly expense budgets."
+        : "Login untuk mulai mengatur budget pengeluaran bulanan.";
+  }
+  if (elements.budgetAmount) {
+    elements.budgetAmount.value = "";
+  }
+  if (elements.budgetMonthInput) {
+    elements.budgetMonthInput.value = state.budgetMonth || todayInputValue().slice(0, 7);
+    elements.budgetMonthInput.disabled = !state.user;
+  }
+  if (elements.budgetCurrentMeta) {
+    elements.budgetCurrentMeta.textContent = state.user
+      ? getActiveLocale() === "en"
+        ? "No budget has been set for this category in the active month yet."
+        : "Belum ada budget untuk kategori ini pada bulan aktif."
+      : getActiveLocale() === "en"
+        ? "Sign in to see the active category budget."
+        : "Login untuk melihat budget kategori aktif.";
+  }
+  if (elements.budgetList) {
+    elements.budgetList.innerHTML = `<div class="empty-state">${
+      state.user
+        ? getActiveLocale() === "en"
+          ? "No category budget has been configured yet."
+          : "Belum ada budget kategori yang dikonfigurasi."
+        : getActiveLocale() === "en"
+          ? "Sign in to monitor monthly category budgets."
+          : "Login untuk memantau budget kategori bulanan."
+    }</div>`;
+  }
+  if (elements.budgetSubmitButton) {
+    elements.budgetSubmitButton.disabled = !state.user;
+  }
+  if (typeof renderBudgetFormOptions === "function") {
+    renderBudgetFormOptions();
+  }
+  if (typeof setBudgetMessage === "function") {
+    setBudgetMessage("");
+  }
   elements.insightList.innerHTML = `<div class="empty-state">${t("dashboard.insightSignin")}</div>`;
   elements.transactionTableBody.innerHTML = `
     <tr>
@@ -1045,6 +1115,21 @@ function computeInsights(summary) {
   }
 
   const insights = [];
+  const budgetOverview = summary.budgetOverview || null;
+
+  if (budgetOverview?.budgetCount) {
+    insights.push(
+      budgetOverview.warningCount
+        ? {
+            title: "Budget perlu perhatian",
+            text: `${budgetOverview.warningCount} kategori mendekati atau melewati limit dari total ${budgetOverview.budgetCount} budget aktif.`
+          }
+        : {
+            title: "Budget masih aman",
+            text: `${budgetOverview.onTrackCount} kategori budget aktif masih berada dalam batas aman bulan ini.`
+          }
+    );
+  }
 
   if (summary.topExpenseCategory) {
     insights.push({
@@ -1167,6 +1252,7 @@ function renderSummary() {
       : `${summary.transactionCount} transaksi • Rasio tabungan ${formatPercent(summary.savingsRate)} • ${summary.monthlyCashflow.length} bulan terpetakan`;
 
   renderFlowStats(summary);
+  renderBudgetSummary();
 }
 
 function renderFlowStats(summary) {
@@ -1323,6 +1409,90 @@ function renderCategoryChart() {
       </div>
     `;
     elements.categoryChart.appendChild(row);
+  });
+}
+
+function renderBudgetSummary() {
+  if (!elements.budgetOverviewValue || !elements.budgetOverviewText || !elements.budgetList) {
+    return;
+  }
+
+  const summary = state.summary;
+  const budgetOverview = summary?.budgetOverview || null;
+  const budgetStatus = Array.isArray(summary?.expenseBudgetStatus) ? summary.expenseBudgetStatus : [];
+
+  elements.budgetOverviewValue.textContent = formatCurrency(budgetOverview?.totalBudget || 0);
+  if (elements.budgetMonthLabel) {
+    elements.budgetMonthLabel.textContent = budgetOverview?.activeMonth
+      ? formatMonth(budgetOverview.activeMonth)
+      : getActiveLocale() === "en"
+        ? "Active month"
+        : "Bulan aktif";
+  }
+  if (elements.budgetMonthInput) {
+    elements.budgetMonthInput.value = budgetOverview?.activeMonth || state.budgetMonth || todayInputValue().slice(0, 7);
+    elements.budgetMonthInput.disabled = !state.user;
+  }
+  if (elements.budgetSubmitButton) {
+    elements.budgetSubmitButton.disabled = !state.user;
+  }
+  elements.budgetList.innerHTML = "";
+
+  if (!budgetStatus.length) {
+    elements.budgetOverviewText.textContent = state.user
+      ? getActiveLocale() === "en"
+        ? "Set a monthly expense budget for each category you want to track."
+        : "Atur budget pengeluaran bulanan per kategori yang ingin dipantau."
+      : getActiveLocale() === "en"
+        ? "Sign in to start managing monthly expense budgets."
+        : "Login untuk mulai mengatur budget pengeluaran bulanan.";
+    elements.budgetList.innerHTML = `<div class="empty-state">${
+      state.user
+        ? getActiveLocale() === "en"
+          ? "No category budget has been configured yet."
+          : "Belum ada budget kategori yang dikonfigurasi."
+        : getActiveLocale() === "en"
+          ? "Sign in to monitor monthly category budgets."
+          : "Login untuk memantau budget kategori bulanan."
+    }</div>`;
+    return;
+  }
+
+  elements.budgetOverviewText.textContent =
+    getActiveLocale() === "en"
+      ? `${budgetOverview.budgetCount} categories tracked. ${budgetOverview.warningCount ? `${budgetOverview.warningCount} need attention.` : `${budgetOverview.onTrackCount} are on track.`}`
+      : `${budgetOverview.budgetCount} kategori dipantau. ${budgetOverview.warningCount ? `${budgetOverview.warningCount} butuh perhatian.` : `${budgetOverview.onTrackCount} masih aman.`}`;
+
+  budgetStatus.forEach((entry, index) => {
+    const row = document.createElement("article");
+    const fillClass =
+      entry.status === "over" ? "chart-fill budget-fill is-over" : entry.status === "warning" ? "chart-fill budget-fill is-warning" : "chart-fill budget-fill";
+    const statusCopy =
+      entry.status === "over"
+        ? getActiveLocale() === "en"
+          ? `Over by ${formatCurrency(entry.overspentAmount)}`
+          : `Lewat ${formatCurrency(entry.overspentAmount)}`
+        : getActiveLocale() === "en"
+          ? `${formatCurrency(entry.remainingAmount)} left`
+          : `Sisa ${formatCurrency(entry.remainingAmount)}`;
+
+    row.className = "chart-row budget-status-row";
+    row.style.setProperty("--item-index", String(index));
+    row.innerHTML = `
+      <div class="chart-head">
+        <strong>${escapeHTML(entry.category)}</strong>
+        <span>${formatCurrency(entry.spentAmount)} / ${formatCurrency(entry.budgetAmount)}</span>
+      </div>
+      <div class="chart-track">
+        <div class="${fillClass}" style="width:${Math.max(Math.min(entry.shareUsed, 100), 6)}%"></div>
+      </div>
+      <small>${
+        getActiveLocale() === "en"
+          ? `${formatPercent(entry.shareUsed)} used - ${statusCopy}`
+          : `${formatPercent(entry.shareUsed)} terpakai - ${statusCopy}`
+      }</small>
+    `;
+    elements.budgetList.appendChild(row);
   });
 }
 
@@ -3205,19 +3375,27 @@ async function loadHealth() {
   renderHealth();
 }
 
-async function reloadDashboard() {
+async function reloadDashboard(month = state.budgetMonth || todayInputValue().slice(0, 7)) {
+  const activeMonth = String(month || todayInputValue().slice(0, 7)).trim();
+  const summaryParams = new URLSearchParams();
+  if (activeMonth) {
+    summaryParams.set("month", activeMonth);
+  }
   const [transactionsData, summaryData, telegramData] = await Promise.all([
     request("/api/transactions"),
-    request("/api/summary"),
+    request(`/api/summary?${summaryParams.toString()}`),
     request("/api/telegram/status")
   ]);
   state.transactions = transactionsData.transactions;
   state.summary = summaryData.summary;
+  state.budgetMonth = state.summary?.activeMonth || activeMonth;
   state.telegramStatus = telegramData;
   state.telegramCommand = null;
   renderSummary();
   renderCashflowChart();
   renderCategoryChart();
+  renderBudgetSummary();
+  renderBudgetFormOptions();
   renderTransactions();
   renderInsights();
   renderTelegramStatus();
@@ -3227,6 +3405,7 @@ async function loadSession() {
   try {
     const payload = await request("/api/auth/me");
     state.user = payload.user;
+    state.budgetMonth = state.budgetMonth || todayInputValue().slice(0, 7);
     renderSession();
     hideAuthGate();
     resetChat();
@@ -3316,6 +3495,7 @@ async function handleLogout() {
     }
   } finally {
     state.user = null;
+    state.budgetMonth = todayInputValue().slice(0, 7);
     resetTransactionForm();
     resetImportState();
     if (elements.importFileInput) {
@@ -3326,6 +3506,183 @@ async function handleLogout() {
     resetChat();
     setAuthMode("login");
     showAuthGate(t("auth.status.loggedOut"));
+  }
+}
+
+// actions/budgets.js
+function setBudgetMessage(message = "", tone = "default") {
+  if (!elements.budgetMessage) {
+    return;
+  }
+
+  elements.budgetMessage.textContent = message;
+  elements.budgetMessage.classList.toggle("is-success", tone === "success");
+  elements.budgetMessage.classList.toggle("is-error", tone === "error");
+}
+
+function updateBudgetAttentionPromptButton() {
+  if (!elements.budgetAttentionPromptButton) {
+    return;
+  }
+
+  const budgetStatus = Array.isArray(state.summary?.expenseBudgetStatus) ? state.summary.expenseBudgetStatus : [];
+  const needsAttention = budgetStatus.some((entry) => entry.status === "warning" || entry.status === "over");
+  elements.budgetAttentionPromptButton.disabled = !state.user;
+  elements.budgetAttentionPromptButton.textContent = !state.user
+    ? getActiveLocale() === "en"
+      ? "Sign in to review budget alerts"
+      : "Login untuk melihat alert budget"
+    : needsAttention
+      ? getActiveLocale() === "en"
+        ? "Review budgets that need attention"
+        : "Lihat budget yang perlu perhatian"
+      : getActiveLocale() === "en"
+        ? "Ask for a proactive budget review"
+        : "Minta review budget proaktif";
+}
+
+function buildBudgetAttentionPrompt() {
+  const budgetStatus = Array.isArray(state.summary?.expenseBudgetStatus) ? state.summary.expenseBudgetStatus : [];
+  const overBudget = budgetStatus.filter((entry) => entry.status === "over").map((entry) => entry.category);
+  const warningBudget = budgetStatus.filter((entry) => entry.status === "warning").map((entry) => entry.category);
+
+  if (overBudget.length || warningBudget.length) {
+    return [
+      "Tolong fokus ke budget kategori yang perlu perhatian.",
+      overBudget.length ? `Kategori yang sudah lewat budget: ${overBudget.join(", ")}.` : "",
+      warningBudget.length ? `Kategori yang mendekati limit: ${warningBudget.join(", ")}.` : "",
+      "Berikan ringkasan singkat dan saran tindakan berikutnya."
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  return "Tolong cek budget kategori saya bulan ini dan beri tahu area yang paling perlu saya pantau lebih dekat.";
+}
+
+function getActiveBudgetMonth() {
+  return String(state.summary?.activeMonth || state.budgetMonth || todayInputValue().slice(0, 7)).trim();
+}
+
+function syncBudgetFormWithSummary() {
+  if (!elements.budgetCategory || !elements.budgetAmount) {
+    return;
+  }
+
+  const selectedCategory = elements.budgetCategory.value || TRANSACTION_CATEGORY_OPTIONS.expense[0] || "";
+  const configuredBudgets = Array.isArray(state.summary?.expenseBudgets) ? state.summary.expenseBudgets : [];
+  const budgetStatus = Array.isArray(state.summary?.expenseBudgetStatus) ? state.summary.expenseBudgetStatus : [];
+  const activeBudget = configuredBudgets.find((entry) => entry.category === selectedCategory) || null;
+  const activeStatus = budgetStatus.find((entry) => entry.category === selectedCategory) || null;
+
+  elements.budgetAmount.value = activeBudget ? String(activeBudget.amount) : "";
+  if (elements.budgetCurrentMeta) {
+    elements.budgetCurrentMeta.textContent = activeStatus
+      ? getActiveLocale() === "en"
+        ? `Spent ${formatCurrency(activeStatus.spentAmount)} of ${formatCurrency(activeStatus.budgetAmount)} this month.`
+        : `Terpakai ${formatCurrency(activeStatus.spentAmount)} dari ${formatCurrency(activeStatus.budgetAmount)} bulan ini.`
+      : getActiveLocale() === "en"
+        ? "No budget has been set for this category in the active month yet."
+        : "Belum ada budget untuk kategori ini pada bulan aktif.";
+  }
+}
+
+function renderBudgetFormOptions() {
+  if (!elements.budgetCategory) {
+    return;
+  }
+
+  if (elements.budgetMonthInput) {
+    elements.budgetMonthInput.value = getActiveBudgetMonth();
+    elements.budgetMonthInput.disabled = !state.user;
+  }
+
+  const previousValue = elements.budgetCategory.value;
+  const categories = TRANSACTION_CATEGORY_OPTIONS.expense || [];
+  elements.budgetCategory.innerHTML = categories
+    .map((category) => `<option value="${escapeHTML(category)}">${escapeHTML(category)}</option>`)
+    .join("");
+  elements.budgetCategory.value = categories.includes(previousValue) ? previousValue : categories[0] || "";
+  syncBudgetFormWithSummary();
+  updateBudgetAttentionPromptButton();
+}
+
+async function handleBudgetSubmit(event) {
+  event.preventDefault();
+  if (!state.user) {
+    showAuthGate(getActiveLocale() === "en" ? "Please sign in before setting a budget." : "Silakan masuk sebelum mengatur budget.");
+    return;
+  }
+
+  const submitButton = elements.budgetSubmitButton;
+
+  try {
+    submitButton.disabled = true;
+    submitButton.textContent = getActiveLocale() === "en" ? "Saving..." : "Menyimpan...";
+    setBudgetMessage("");
+
+    const payload = await request("/api/budgets", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        amount: elements.budgetAmount.value,
+        category: elements.budgetCategory.value,
+        month: getActiveBudgetMonth()
+      })
+    });
+
+    await reloadDashboard(getActiveBudgetMonth());
+    renderBudgetFormOptions();
+    setBudgetMessage(payload.message, "success");
+  } catch (error) {
+    if (!handleUnauthorized(error)) {
+      setBudgetMessage(error.message, "error");
+    }
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = getActiveLocale() === "en" ? "Save budget" : "Simpan budget";
+  }
+}
+
+function handleBudgetCategoryChange() {
+  syncBudgetFormWithSummary();
+}
+
+async function handleBudgetMonthChange(event) {
+  const nextMonth = String(event?.target?.value || "").trim();
+  if (!nextMonth || !state.user) {
+    return;
+  }
+
+  try {
+    state.budgetMonth = nextMonth;
+    setBudgetMessage("");
+    await reloadDashboard(nextMonth);
+    renderBudgetFormOptions();
+  } catch (error) {
+    if (!handleUnauthorized(error)) {
+      setBudgetMessage(error.message, "error");
+    }
+  }
+}
+
+async function handleBudgetAttentionPrompt() {
+  if (!state.user) {
+    showAuthGate(getActiveLocale() === "en" ? "Please sign in before reviewing budget alerts." : "Silakan masuk sebelum meninjau alert budget.");
+    return;
+  }
+
+  const prompt = buildBudgetAttentionPrompt();
+  if (elements.chatInput) {
+    elements.chatInput.value = prompt;
+    elements.chatInput.focus();
+  }
+
+  await sendChatMessage(prompt);
+  if (elements.chatInput) {
+    elements.chatInput.value = "";
   }
 }
 
@@ -3577,6 +3934,22 @@ function bindEvents() {
   elements.importPresetSelect.addEventListener("change", handleImportPresetChange);
   elements.importPreviewButton.addEventListener("click", handleImportPreview);
   elements.importForm.addEventListener("submit", handleImportSubmit);
+  if (elements.budgetForm) {
+    elements.budgetForm.addEventListener("submit", handleBudgetSubmit);
+  }
+  if (elements.budgetCategory) {
+    elements.budgetCategory.addEventListener("change", handleBudgetCategoryChange);
+  }
+  if (elements.budgetMonthInput) {
+    elements.budgetMonthInput.addEventListener("change", handleBudgetMonthChange);
+  }
+  if (elements.budgetAttentionPromptButton) {
+    elements.budgetAttentionPromptButton.addEventListener("click", () => {
+      handleBudgetAttentionPrompt().catch((error) => {
+        window.alert(error.message);
+      });
+    });
+  }
   Object.values(IMPORT_MAPPING_ELEMENTS).forEach((element) => {
     element.addEventListener("change", handleImportMappingChange);
   });
@@ -3718,6 +4091,7 @@ async function registerServiceWorker() {
 
 async function initializeApp() {
   state.launchShortcut = getLaunchShortcutFromUrl();
+  state.budgetMonth = todayInputValue().slice(0, 7);
   setLocale(loadLocalePreference(), { persist: false, rerender: false });
   resetTransactionForm();
   resetImportState();
@@ -3725,6 +4099,7 @@ async function initializeApp() {
   setCompactMode(loadCompactModePreference(), { persist: false });
   renderSession();
   clearDashboard();
+  renderBudgetFormOptions();
   resetChat();
   bindEvents();
   await registerServiceWorker();

@@ -247,6 +247,61 @@ function clearDashboard() {
   elements.flowTimeline.innerHTML = `<div class="empty-state">${t("dashboard.monthlyFlowEmpty")}</div>`;
   elements.cashflowChart.innerHTML = `<div class="empty-state">${t("dashboard.cashflowSignin")}</div>`;
   elements.categoryChart.innerHTML = `<div class="empty-state">${t("dashboard.categorySignin")}</div>`;
+  if (elements.budgetOverviewValue) {
+    elements.budgetOverviewValue.textContent = "Rp0";
+  }
+  if (elements.budgetMonthLabel) {
+    elements.budgetMonthLabel.textContent = state.user
+      ? formatMonth(todayInputValue().slice(0, 7))
+      : getActiveLocale() === "en"
+        ? "Active month"
+        : "Bulan aktif";
+  }
+  if (elements.budgetOverviewText) {
+    elements.budgetOverviewText.textContent = state.user
+      ? getActiveLocale() === "en"
+        ? "Set a monthly expense budget for each category you want to track."
+        : "Atur budget pengeluaran bulanan per kategori yang ingin dipantau."
+      : getActiveLocale() === "en"
+        ? "Sign in to start managing monthly expense budgets."
+        : "Login untuk mulai mengatur budget pengeluaran bulanan.";
+  }
+  if (elements.budgetAmount) {
+    elements.budgetAmount.value = "";
+  }
+  if (elements.budgetMonthInput) {
+    elements.budgetMonthInput.value = state.budgetMonth || todayInputValue().slice(0, 7);
+    elements.budgetMonthInput.disabled = !state.user;
+  }
+  if (elements.budgetCurrentMeta) {
+    elements.budgetCurrentMeta.textContent = state.user
+      ? getActiveLocale() === "en"
+        ? "No budget has been set for this category in the active month yet."
+        : "Belum ada budget untuk kategori ini pada bulan aktif."
+      : getActiveLocale() === "en"
+        ? "Sign in to see the active category budget."
+        : "Login untuk melihat budget kategori aktif.";
+  }
+  if (elements.budgetList) {
+    elements.budgetList.innerHTML = `<div class="empty-state">${
+      state.user
+        ? getActiveLocale() === "en"
+          ? "No category budget has been configured yet."
+          : "Belum ada budget kategori yang dikonfigurasi."
+        : getActiveLocale() === "en"
+          ? "Sign in to monitor monthly category budgets."
+          : "Login untuk memantau budget kategori bulanan."
+    }</div>`;
+  }
+  if (elements.budgetSubmitButton) {
+    elements.budgetSubmitButton.disabled = !state.user;
+  }
+  if (typeof renderBudgetFormOptions === "function") {
+    renderBudgetFormOptions();
+  }
+  if (typeof setBudgetMessage === "function") {
+    setBudgetMessage("");
+  }
   elements.insightList.innerHTML = `<div class="empty-state">${t("dashboard.insightSignin")}</div>`;
   elements.transactionTableBody.innerHTML = `
     <tr>

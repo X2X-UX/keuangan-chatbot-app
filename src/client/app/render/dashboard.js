@@ -4,6 +4,21 @@ function computeInsights(summary) {
   }
 
   const insights = [];
+  const budgetOverview = summary.budgetOverview || null;
+
+  if (budgetOverview?.budgetCount) {
+    insights.push(
+      budgetOverview.warningCount
+        ? {
+            title: "Budget perlu perhatian",
+            text: `${budgetOverview.warningCount} kategori mendekati atau melewati limit dari total ${budgetOverview.budgetCount} budget aktif.`
+          }
+        : {
+            title: "Budget masih aman",
+            text: `${budgetOverview.onTrackCount} kategori budget aktif masih berada dalam batas aman bulan ini.`
+          }
+    );
+  }
 
   if (summary.topExpenseCategory) {
     insights.push({
@@ -126,6 +141,7 @@ function renderSummary() {
       : `${summary.transactionCount} transaksi • Rasio tabungan ${formatPercent(summary.savingsRate)} • ${summary.monthlyCashflow.length} bulan terpetakan`;
 
   renderFlowStats(summary);
+  renderBudgetSummary();
 }
 
 function renderFlowStats(summary) {
@@ -282,6 +298,90 @@ function renderCategoryChart() {
       </div>
     `;
     elements.categoryChart.appendChild(row);
+  });
+}
+
+function renderBudgetSummary() {
+  if (!elements.budgetOverviewValue || !elements.budgetOverviewText || !elements.budgetList) {
+    return;
+  }
+
+  const summary = state.summary;
+  const budgetOverview = summary?.budgetOverview || null;
+  const budgetStatus = Array.isArray(summary?.expenseBudgetStatus) ? summary.expenseBudgetStatus : [];
+
+  elements.budgetOverviewValue.textContent = formatCurrency(budgetOverview?.totalBudget || 0);
+  if (elements.budgetMonthLabel) {
+    elements.budgetMonthLabel.textContent = budgetOverview?.activeMonth
+      ? formatMonth(budgetOverview.activeMonth)
+      : getActiveLocale() === "en"
+        ? "Active month"
+        : "Bulan aktif";
+  }
+  if (elements.budgetMonthInput) {
+    elements.budgetMonthInput.value = budgetOverview?.activeMonth || state.budgetMonth || todayInputValue().slice(0, 7);
+    elements.budgetMonthInput.disabled = !state.user;
+  }
+  if (elements.budgetSubmitButton) {
+    elements.budgetSubmitButton.disabled = !state.user;
+  }
+  elements.budgetList.innerHTML = "";
+
+  if (!budgetStatus.length) {
+    elements.budgetOverviewText.textContent = state.user
+      ? getActiveLocale() === "en"
+        ? "Set a monthly expense budget for each category you want to track."
+        : "Atur budget pengeluaran bulanan per kategori yang ingin dipantau."
+      : getActiveLocale() === "en"
+        ? "Sign in to start managing monthly expense budgets."
+        : "Login untuk mulai mengatur budget pengeluaran bulanan.";
+    elements.budgetList.innerHTML = `<div class="empty-state">${
+      state.user
+        ? getActiveLocale() === "en"
+          ? "No category budget has been configured yet."
+          : "Belum ada budget kategori yang dikonfigurasi."
+        : getActiveLocale() === "en"
+          ? "Sign in to monitor monthly category budgets."
+          : "Login untuk memantau budget kategori bulanan."
+    }</div>`;
+    return;
+  }
+
+  elements.budgetOverviewText.textContent =
+    getActiveLocale() === "en"
+      ? `${budgetOverview.budgetCount} categories tracked. ${budgetOverview.warningCount ? `${budgetOverview.warningCount} need attention.` : `${budgetOverview.onTrackCount} are on track.`}`
+      : `${budgetOverview.budgetCount} kategori dipantau. ${budgetOverview.warningCount ? `${budgetOverview.warningCount} butuh perhatian.` : `${budgetOverview.onTrackCount} masih aman.`}`;
+
+  budgetStatus.forEach((entry, index) => {
+    const row = document.createElement("article");
+    const fillClass =
+      entry.status === "over" ? "chart-fill budget-fill is-over" : entry.status === "warning" ? "chart-fill budget-fill is-warning" : "chart-fill budget-fill";
+    const statusCopy =
+      entry.status === "over"
+        ? getActiveLocale() === "en"
+          ? `Over by ${formatCurrency(entry.overspentAmount)}`
+          : `Lewat ${formatCurrency(entry.overspentAmount)}`
+        : getActiveLocale() === "en"
+          ? `${formatCurrency(entry.remainingAmount)} left`
+          : `Sisa ${formatCurrency(entry.remainingAmount)}`;
+
+    row.className = "chart-row budget-status-row";
+    row.style.setProperty("--item-index", String(index));
+    row.innerHTML = `
+      <div class="chart-head">
+        <strong>${escapeHTML(entry.category)}</strong>
+        <span>${formatCurrency(entry.spentAmount)} / ${formatCurrency(entry.budgetAmount)}</span>
+      </div>
+      <div class="chart-track">
+        <div class="${fillClass}" style="width:${Math.max(Math.min(entry.shareUsed, 100), 6)}%"></div>
+      </div>
+      <small>${
+        getActiveLocale() === "en"
+          ? `${formatPercent(entry.shareUsed)} used - ${statusCopy}`
+          : `${formatPercent(entry.shareUsed)} terpakai - ${statusCopy}`
+      }</small>
+    `;
+    elements.budgetList.appendChild(row);
   });
 }
 

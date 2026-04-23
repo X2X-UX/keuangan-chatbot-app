@@ -14,6 +14,22 @@ function bindEvents() {
   elements.importPresetSelect.addEventListener("change", handleImportPresetChange);
   elements.importPreviewButton.addEventListener("click", handleImportPreview);
   elements.importForm.addEventListener("submit", handleImportSubmit);
+  if (elements.budgetForm) {
+    elements.budgetForm.addEventListener("submit", handleBudgetSubmit);
+  }
+  if (elements.budgetCategory) {
+    elements.budgetCategory.addEventListener("change", handleBudgetCategoryChange);
+  }
+  if (elements.budgetMonthInput) {
+    elements.budgetMonthInput.addEventListener("change", handleBudgetMonthChange);
+  }
+  if (elements.budgetAttentionPromptButton) {
+    elements.budgetAttentionPromptButton.addEventListener("click", () => {
+      handleBudgetAttentionPrompt().catch((error) => {
+        window.alert(error.message);
+      });
+    });
+  }
   Object.values(IMPORT_MAPPING_ELEMENTS).forEach((element) => {
     element.addEventListener("change", handleImportMappingChange);
   });
@@ -155,6 +171,7 @@ async function registerServiceWorker() {
 
 async function initializeApp() {
   state.launchShortcut = getLaunchShortcutFromUrl();
+  state.budgetMonth = todayInputValue().slice(0, 7);
   setLocale(loadLocalePreference(), { persist: false, rerender: false });
   resetTransactionForm();
   resetImportState();
@@ -162,6 +179,7 @@ async function initializeApp() {
   setCompactMode(loadCompactModePreference(), { persist: false });
   renderSession();
   clearDashboard();
+  renderBudgetFormOptions();
   resetChat();
   bindEvents();
   await registerServiceWorker();

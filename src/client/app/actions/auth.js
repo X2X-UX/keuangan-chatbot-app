@@ -17,19 +17,27 @@ async function loadHealth() {
   renderHealth();
 }
 
-async function reloadDashboard() {
+async function reloadDashboard(month = state.budgetMonth || todayInputValue().slice(0, 7)) {
+  const activeMonth = String(month || todayInputValue().slice(0, 7)).trim();
+  const summaryParams = new URLSearchParams();
+  if (activeMonth) {
+    summaryParams.set("month", activeMonth);
+  }
   const [transactionsData, summaryData, telegramData] = await Promise.all([
     request("/api/transactions"),
-    request("/api/summary"),
+    request(`/api/summary?${summaryParams.toString()}`),
     request("/api/telegram/status")
   ]);
   state.transactions = transactionsData.transactions;
   state.summary = summaryData.summary;
+  state.budgetMonth = state.summary?.activeMonth || activeMonth;
   state.telegramStatus = telegramData;
   state.telegramCommand = null;
   renderSummary();
   renderCashflowChart();
   renderCategoryChart();
+  renderBudgetSummary();
+  renderBudgetFormOptions();
   renderTransactions();
   renderInsights();
   renderTelegramStatus();
@@ -39,6 +47,7 @@ async function loadSession() {
   try {
     const payload = await request("/api/auth/me");
     state.user = payload.user;
+    state.budgetMonth = state.budgetMonth || todayInputValue().slice(0, 7);
     renderSession();
     hideAuthGate();
     resetChat();
@@ -128,6 +137,7 @@ async function handleLogout() {
     }
   } finally {
     state.user = null;
+    state.budgetMonth = todayInputValue().slice(0, 7);
     resetTransactionForm();
     resetImportState();
     if (elements.importFileInput) {

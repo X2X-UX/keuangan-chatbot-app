@@ -663,6 +663,58 @@
         </div>
 
         <aside class="right-column">
+          <article class="card budget-card tw-sidebar-card">
+            <div class="section-heading tw-section-heading">
+              <div class="section-title">
+                <span class="section-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4.5 12h15"></path>
+                    <path d="M12 4.5v15"></path>
+                    <path d="M7 7h10v10H7z"></path>
+                  </svg>
+                </span>
+                <div>
+                <span class="eyebrow">Budget</span>
+                <h2>Kontrol budget kategori</h2>
+                </div>
+              </div>
+            </div>
+
+            <div class="budget-overview tw-soft-panel">
+              <div class="budget-overview-head">
+                <strong id="budgetOverviewValue">Rp0</strong>
+                <span id="budgetMonthLabel">Bulan aktif</span>
+              </div>
+              <p id="budgetOverviewText" class="budget-overview-text">Login untuk mulai mengatur budget pengeluaran bulanan.</p>
+            </div>
+
+            <form id="budgetForm" class="budget-form">
+              <label>
+                <span>Bulan budget aktif</span>
+                <input id="budgetMonthInput" type="month" />
+              </label>
+              <label>
+                <span>Kategori pengeluaran</span>
+                <select id="budgetCategory"></select>
+              </label>
+              <label>
+                <span>Budget bulan aktif</span>
+                <input id="budgetAmount" type="text" inputmode="decimal" autocomplete="off" placeholder="Contoh: 500000 atau kosongkan untuk hapus" />
+                <small id="budgetCurrentMeta" class="field-hint">Belum ada budget kategori aktif.</small>
+              </label>
+              <div class="import-form-actions">
+                <button id="budgetSubmitButton" class="primary-button tw-action-primary" type="submit">Simpan budget</button>
+              </div>
+              <p id="budgetMessage" class="import-message"></p>
+            </form>
+
+            <div class="budget-actions">
+              <button id="budgetAttentionPromptButton" class="secondary-button" type="button">Lihat budget yang perlu perhatian</button>
+            </div>
+
+            <div id="budgetList" class="chart-list"></div>
+          </article>
+
           <article class="card telegram-card tw-sidebar-card">
             <div class="section-heading tw-section-heading">
               <div class="section-title">

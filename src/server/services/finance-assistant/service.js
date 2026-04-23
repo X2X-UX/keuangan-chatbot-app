@@ -3,6 +3,7 @@ function createFinanceAssistantService({
   findCanonicalCategory,
   formatTransactionCategoryList,
   inferTransactionCategory,
+  listCategoryBudgetsByUser,
   listTransactionsByUser,
   parseFlexibleAmount
 }) {
@@ -17,7 +18,7 @@ function createFinanceAssistantService({
     });
   }
 
-  function computeSummary(items) {
+  function computeSummary(items, options = {}) {
     const sorted = sortTransactions(items);
     const expenseCounts = sorted.filter((item) => item.type === "expense").length;
     const incomeCounts = sorted.filter((item) => item.type === "income").length;
@@ -25,6 +26,9 @@ function createFinanceAssistantService({
     const expenseCategories = new Map();
     const incomeCategories = new Map();
     const monthlyMap = new Map();
+    const activeMonth = String(options.activeMonth || "").trim() || todayDateValue().slice(0, 7);
+    const activeMonthExpenseCategories = new Map();
+    const configuredBudgetEntries = Array.isArray(options.expenseBudgets) ? options.expenseBudgets : [];
     let biggestExpense = null;
 
     for (const item of sorted) {
@@ -43,6 +47,9 @@ function createFinanceAssistantService({
         totals.expense += amount;
         monthlyMap.get(month).expense += amount;
         expenseCategories.set(item.category, (expenseCategories.get(item.category) || 0) + amount);
+        if (month === activeMonth) {
+          activeMonthExpenseCategories.set(item.category, (activeMonthExpenseCategories.get(item.category) || 0) + amount);
+        }
         if (!biggestExpense || amount > biggestExpense.amount) {
           biggestExpense = item;
         }
@@ -67,14 +74,60 @@ function createFinanceAssistantService({
       .map(([category, amount]) => ({ category, amount }))
       .sort((left, right) => right.amount - left.amount);
 
+    const budgetStatus = configuredBudgetEntries
+      .map((entry) => {
+        const budgetAmount = Math.round(Number(entry.amount) || 0);
+        const spentAmount = Math.round(Number(activeMonthExpenseCategories.get(entry.category) || 0));
+        const remainingAmount = Math.max(budgetAmount - spentAmount, 0);
+        const overspentAmount = Math.max(spentAmount - budgetAmount, 0);
+        return {
+          budgetAmount,
+          category: entry.category,
+          month: entry.month,
+          remainingAmount,
+          shareUsed: budgetAmount ? Number(((spentAmount / budgetAmount) * 100).toFixed(1)) : 0,
+          spentAmount,
+          status: overspentAmount > 0 ? "over" : spentAmount >= budgetAmount * 0.85 ? "warning" : "ok",
+          updatedAt: entry.updatedAt || null,
+          overspentAmount
+        };
+      })
+      .sort((left, right) => right.shareUsed - left.shareUsed || right.spentAmount - left.spentAmount);
+
+    const budgetOverview = budgetStatus.length
+      ? {
+          activeMonth,
+          budgetCount: budgetStatus.length,
+          onTrackCount: budgetStatus.filter((entry) => entry.status === "ok").length,
+          totalBudget: budgetStatus.reduce((sum, entry) => sum + entry.budgetAmount, 0),
+          totalOverspent: budgetStatus.reduce((sum, entry) => sum + entry.overspentAmount, 0),
+          totalRemaining: budgetStatus.reduce((sum, entry) => sum + entry.remainingAmount, 0),
+          totalSpent: budgetStatus.reduce((sum, entry) => sum + entry.spentAmount, 0),
+          warningCount: budgetStatus.filter((entry) => entry.status === "warning" || entry.status === "over").length
+        }
+      : {
+          activeMonth,
+          budgetCount: 0,
+          onTrackCount: 0,
+          totalBudget: 0,
+          totalOverspent: 0,
+          totalRemaining: 0,
+          totalSpent: 0,
+          warningCount: 0
+        };
+
     const balance = totals.income - totals.expense;
     const savingsRate = totals.income ? Number(((balance / totals.income) * 100).toFixed(1)) : 0;
 
     return {
+      activeMonth,
       averageExpense: expenseCounts ? Math.round(totals.expense / expenseCounts) : 0,
       averageIncome: incomeCounts ? Math.round(totals.income / incomeCounts) : 0,
       balance,
+      budgetOverview,
       biggestExpense,
+      expenseBudgetStatus: budgetStatus,
+      expenseBudgets: configuredBudgetEntries,
       expenseCategories: expenseList,
       incomeCategories: incomeList,
       monthlyCashflow,
@@ -85,6 +138,15 @@ function createFinanceAssistantService({
       totalIncome: totals.income,
       transactionCount: sorted.length
     };
+  }
+
+  function computeUserSummary(userId, options = {}) {
+    const activeMonth = String(options.activeMonth || "").trim() || todayDateValue().slice(0, 7);
+    const expenseBudgets = typeof listCategoryBudgetsByUser === "function" ? listCategoryBudgetsByUser(userId, activeMonth) : [];
+    return computeSummary(listTransactionsByUser(userId), {
+      activeMonth,
+      expenseBudgets
+    });
   }
 
   function todayDateValue() {
@@ -281,11 +343,47 @@ function createFinanceAssistantService({
     return `${Number(value || 0).toFixed(1)}%`;
   }
 
+  function formatBudgetMonth(monthKey) {
+    if (!monthKey) {
+      return "bulan aktif";
+    }
+
+    const [year, month] = String(monthKey).split("-");
+    return new Intl.DateTimeFormat("id-ID", {
+      month: "long",
+      year: "numeric"
+    }).format(new Date(Number(year), Number(month) - 1, 1));
+  }
+
+  function buildBudgetAlertLines(summary, options = {}) {
+    const budgetStatus = Array.isArray(summary?.expenseBudgetStatus) ? summary.expenseBudgetStatus : [];
+    if (!budgetStatus.length) {
+      return [];
+    }
+
+    const maxItems = Math.max(1, Number(options.maxItems) || 2);
+    const activeMonthLabel = formatBudgetMonth(summary.activeMonth);
+    const priorityItems = budgetStatus.filter((entry) => entry.status === "over" || entry.status === "warning").slice(0, maxItems);
+
+    if (priorityItems.length > 0) {
+      return priorityItems.map((entry) =>
+        entry.status === "over"
+          ? `Budget ${entry.category} untuk ${activeMonthLabel} sudah lewat ${formatCurrency(entry.overspentAmount)}.`
+          : `Budget ${entry.category} untuk ${activeMonthLabel} sudah terpakai ${formatPercent(entry.shareUsed)} dan tersisa ${formatCurrency(entry.remainingAmount)}.`
+      );
+    }
+
+    return [
+      `Semua ${budgetStatus.length} budget kategori untuk ${activeMonthLabel} masih dalam batas aman.`
+    ];
+  }
+
   function generateLocalReply(message, summary) {
     const lower = String(message || "").toLowerCase();
     const topCategory = summary.topExpenseCategory;
     const biggestExpense = summary.biggestExpense;
     const advice = [];
+    const budgetAlerts = buildBudgetAlertLines(summary);
 
     if (topCategory && topCategory.share >= 25) {
       advice.push(`Kategori ${topCategory.category} menyerap ${formatPercent(topCategory.share)} dari total pengeluaran.`);
@@ -301,11 +399,16 @@ function createFinanceAssistantService({
       advice.push(`Pengeluaran terbesar saat ini adalah ${biggestExpense.description} senilai ${formatCurrency(biggestExpense.amount)}.`);
     }
 
+    if (budgetAlerts.length) {
+      advice.push(...budgetAlerts);
+    }
+
     if (lower.includes("saldo") || lower.includes("ringkasan") || lower.includes("summary")) {
       return [
         `Pemasukan tercatat ${formatCurrency(summary.totalIncome)}, pengeluaran ${formatCurrency(summary.totalExpense)}, dan saldo bersih ${formatCurrency(summary.balance)}.`,
         `Rasio tabungan berada di ${formatPercent(summary.savingsRate)}.`,
-        topCategory ? `Kategori pengeluaran terbesar adalah ${topCategory.category}.` : "Belum ada kategori pengeluaran yang dominan."
+        topCategory ? `Kategori pengeluaran terbesar adalah ${topCategory.category}.` : "Belum ada kategori pengeluaran yang dominan.",
+        budgetAlerts[0] || "Belum ada alert budget yang perlu diperhatikan."
       ].join(" ");
     }
 
@@ -329,8 +432,11 @@ function createFinanceAssistantService({
     return [
       `Saldo Anda saat ini ${formatCurrency(summary.balance)} dari ${summary.transactionCount} transaksi.`,
       advice[0] || "Arus kas masih bisa dioptimalkan dengan menjaga pengeluaran rutin tetap proporsional.",
+      budgetAlerts[0] || "",
       "Anda dapat meminta ringkasan, melihat pengeluaran terbesar, meminta rekomendasi penghematan, atau mencatat transaksi lewat format `catat ...`."
-    ].join(" ");
+    ]
+      .filter(Boolean)
+      .join(" ");
   }
 
   async function buildChatReply(message, user) {
@@ -346,7 +452,7 @@ function createFinanceAssistantService({
 
       try {
         const transaction = createTransactionForUser(user.id, sanitizeTransaction(parsedInput.payload));
-        const summary = computeSummary(listTransactionsByUser(user.id));
+        const summary = computeUserSummary(user.id);
 
         return {
           action: "transaction-created",
@@ -355,7 +461,8 @@ function createFinanceAssistantService({
             "Transaksi berhasil dicatat.",
             `${transaction.type === "income" ? "Pemasukan" : "Pengeluaran"} ${formatCurrency(transaction.amount)} untuk ${transaction.description}.`,
             `Kategori: ${transaction.category}. Tanggal: ${transaction.date}.`,
-            `Saldo terbaru: ${formatCurrency(summary.balance)}.`
+            `Saldo terbaru: ${formatCurrency(summary.balance)}.`,
+            buildBudgetAlertLines(summary, { maxItems: 1 })[0] || ""
           ].join(" "),
           summary,
           transaction
@@ -369,8 +476,7 @@ function createFinanceAssistantService({
       }
     }
 
-    const userTransactions = listTransactionsByUser(user.id);
-    const summary = computeSummary(userTransactions);
+    const summary = computeUserSummary(user.id);
 
     return {
       mode: "local",
@@ -382,6 +488,7 @@ function createFinanceAssistantService({
     buildChatReply,
     buildTransactionInputGuide,
     computeSummary,
+    computeUserSummary,
     formatCurrency,
     generateLocalReply,
     parseChatTransactionCommand,

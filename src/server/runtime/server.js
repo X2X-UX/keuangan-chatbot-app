@@ -10,6 +10,7 @@ function createServerRuntime({
   getSecurityHeaders,
   getSessionFromRequest,
   handleAuthRoute,
+  handleBudgetRoute,
   handleChatRoute,
   handleSystemRoute,
   handleTelegramRoute,
@@ -97,6 +98,10 @@ function createServerRuntime({
       }
 
       if (await handleTelegramRoute(req, res, pathname, session)) {
+        return;
+      }
+
+      if (await handleBudgetRoute(req, res, url, session)) {
         return;
       }
 

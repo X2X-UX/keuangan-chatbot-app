@@ -1973,6 +1973,68 @@ th {
   background: linear-gradient(90deg, #0c4a87, #3f93e0);
 }
 
+.budget-overview {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.budget-overview-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.budget-overview-head strong {
+  font-size: 1.35rem;
+  color: var(--primary-strong);
+}
+
+.budget-overview-head span,
+.budget-overview-text {
+  color: var(--muted);
+}
+
+.budget-form {
+  display: grid;
+  gap: 14px;
+}
+
+.budget-form label {
+  display: grid;
+  gap: 8px;
+}
+
+.budget-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.budget-actions .secondary-button {
+  width: 100%;
+}
+
+.budget-status-row small {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.budget-fill {
+  background: linear-gradient(90deg, #148a6a, #0c7a67);
+}
+
+.budget-fill.is-warning {
+  background: linear-gradient(90deg, #d68a16, #f2b94b);
+}
+
+.budget-fill.is-over {
+  background: linear-gradient(90deg, #c04b37, #ef7d59);
+}
+
 .filters {
   display: flex;
   gap: 12px;

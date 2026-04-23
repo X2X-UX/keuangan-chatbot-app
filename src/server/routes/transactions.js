@@ -1,7 +1,7 @@
 function createTransactionRoutes({
   analyzeReceipt,
   buildTransactionFingerprint,
-  computeSummary,
+  computeUserSummary,
   createTransactionForUser,
   deleteTransactionForUser,
   enforceRateLimit,
@@ -22,6 +22,20 @@ function createTransactionRoutes({
   sendJson,
   updateTransactionForUser
 }) {
+  function todayMonthValue() {
+    const now = new Date();
+    const offsetMs = now.getTimezoneOffset() * 60_000;
+    return new Date(now.getTime() - offsetMs).toISOString().slice(0, 7);
+  }
+
+  function sanitizeSummaryMonth(value) {
+    const month = String(value || todayMonthValue()).trim();
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      throw new Error("Periode ringkasan harus memakai format YYYY-MM.");
+    }
+    return month;
+  }
+
   function getExportLocale(value) {
     return String(value || "").trim().toLowerCase() === "en" ? "en" : "id";
   }
@@ -446,7 +460,7 @@ function createTransactionRoutes({
       const transaction = createTransactionForUser(session.user.id, sanitized);
       sendJson(req, res, 201, {
         message: "Transaksi berhasil disimpan.",
-        summary: computeSummary(listTransactionsByUser(session.user.id)),
+        summary: computeUserSummary(session.user.id),
         transaction
       });
       return true;
@@ -496,7 +510,7 @@ function createTransactionRoutes({
         }
       }
 
-      const summary = computeSummary(listTransactionsByUser(session.user.id));
+      const summary = computeUserSummary(session.user.id);
       const detailParts = [];
       if (skippedDuplicates) {
         detailParts.push(`${skippedDuplicates} duplikat dilewati`);
@@ -547,8 +561,11 @@ function createTransactionRoutes({
 
       sendJson(req, res, 200, {
         message: "Transaksi berhasil diperbarui.",
-        summary: computeSummary(listTransactionsByUser(session.user.id)),
-        transaction
+        summary: computeUserSummary(session.user.id),
+        transaction: {
+          ...transaction,
+          previousReceiptPath: undefined
+        }
       });
       return true;
     }
@@ -568,13 +585,14 @@ function createTransactionRoutes({
 
       sendJson(req, res, 200, {
         message: "Transaksi berhasil dihapus.",
-        summary: computeSummary(listTransactionsByUser(session.user.id))
+        summary: computeUserSummary(session.user.id)
       });
       return true;
     }
 
     if (req.method === "GET" && pathname === "/api/summary") {
-      sendJson(req, res, 200, { summary: computeSummary(listTransactionsByUser(session.user.id)) });
+      const activeMonth = sanitizeSummaryMonth(url.searchParams.get("month"));
+      sendJson(req, res, 200, { summary: computeUserSummary(session.user.id, { activeMonth }) });
       return true;
     }
 

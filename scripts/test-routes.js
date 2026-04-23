@@ -192,6 +192,52 @@ async function run() {
     assert.strictEqual(summary.body.summary.totalExpense, 25000);
     assert.strictEqual(summary.body.summary.totalIncome, 5000000);
 
+    const summaryByMonth = await request(server, "GET", "/api/summary?month=2026-04", {
+      headers: {
+        Cookie: sessionCookie
+      }
+    });
+    assert.strictEqual(summaryByMonth.statusCode, 200);
+    assert.strictEqual(summaryByMonth.body.summary.activeMonth, "2026-04");
+
+    const saveBudget = await request(server, "PUT", "/api/budgets", {
+      body: {
+        amount: 100000,
+        category: "Belanja",
+        month: "2026-04"
+      },
+      headers: {
+        Cookie: sessionCookie
+      }
+    });
+    assert.strictEqual(saveBudget.statusCode, 200);
+    assert.strictEqual(saveBudget.body.budgets.length, 1);
+    assert.strictEqual(saveBudget.body.summary.budgetOverview.totalBudget, 100000);
+    assert.strictEqual(saveBudget.body.summary.expenseBudgetStatus[0].spentAmount, 25000);
+
+    const getBudgets = await request(server, "GET", "/api/budgets?month=2026-04", {
+      headers: {
+        Cookie: sessionCookie
+      }
+    });
+    assert.strictEqual(getBudgets.statusCode, 200);
+    assert.strictEqual(getBudgets.body.budgets.length, 1);
+    assert.strictEqual(getBudgets.body.summary.expenseBudgetStatus[0].budgetAmount, 100000);
+
+    const removeBudget = await request(server, "PUT", "/api/budgets", {
+      body: {
+        amount: "",
+        category: "Belanja",
+        month: "2026-04"
+      },
+      headers: {
+        Cookie: sessionCookie
+      }
+    });
+    assert.strictEqual(removeBudget.statusCode, 200);
+    assert.strictEqual(removeBudget.body.budgets.length, 0);
+    assert.strictEqual(removeBudget.body.summary.budgetOverview.totalBudget, 0);
+
     const exportCsv = await request(server, "GET", "/api/transactions/export?format=csv&type=expense&search=belanja&locale=en", {
       headers: {
         Cookie: sessionCookie

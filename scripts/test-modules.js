@@ -62,6 +62,17 @@ function runFinanceAssistantTests() {
     findCanonicalCategory,
     formatTransactionCategoryList: (type) => (type === "income" ? "Gaji, Hadiah" : "Makanan, Transportasi, Belanja"),
     inferTransactionCategory,
+    listCategoryBudgetsByUser: (_userId, month) =>
+      month === "2026-04"
+        ? [
+            {
+              amount: 100000,
+              category: "Makanan",
+              month: "2026-04",
+              updatedAt: "2026-04-01T00:00:00.000Z"
+            }
+          ]
+        : [],
     listTransactionsByUser: () => transactions,
     parseFlexibleAmount
   });
@@ -70,6 +81,11 @@ function runFinanceAssistantTests() {
   assert.strictEqual(summary.totalIncome, 5000000);
   assert.strictEqual(summary.totalExpense, 75000);
   assert.strictEqual(summary.topExpenseCategory.category, "Makanan");
+  const budgetedSummary = financeAssistant.computeUserSummary("user-1", { activeMonth: "2026-04" });
+  assert.strictEqual(budgetedSummary.budgetOverview.totalBudget, 100000);
+  assert.strictEqual(budgetedSummary.expenseBudgetStatus.length, 1);
+  assert.strictEqual(budgetedSummary.expenseBudgetStatus[0].spentAmount, 75000);
+  assert.strictEqual(budgetedSummary.expenseBudgetStatus[0].status, "ok");
 
   const parsed = financeAssistant.parseChatTransactionCommand("pengeluaran 25rb makan siang kategori makanan tanggal 2026-04-03");
   assert.strictEqual(parsed.payload.amount, 25000);
@@ -79,6 +95,9 @@ function runFinanceAssistantTests() {
   const reply = financeAssistant.generateLocalReply("ringkasan saldo", summary);
   assert.match(reply, /Pemasukan tercatat/);
   assert.match(reply, /saldo bersih/i);
+
+  const budgetReply = financeAssistant.generateLocalReply("bagaimana budget saya", budgetedSummary);
+  assert.match(budgetReply, /Budget Makanan|Semua 1 budget kategori/i);
 }
 
 function runReceiptParserTests() {
