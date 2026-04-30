@@ -98,6 +98,14 @@ function runFinanceAssistantTests() {
 
   const budgetReply = financeAssistant.generateLocalReply("bagaimana budget saya", budgetedSummary);
   assert.match(budgetReply, /Budget Makanan|Semua 1 budget kategori/i);
+  assert.strictEqual(budgetedSummary.expenseRatio, 1.5);
+  assert.strictEqual(budgetedSummary.averageRecentMonthlyExpense, 75000);
+  assert.strictEqual(budgetedSummary.cashRunwayMonths, 65.7);
+
+  const detailReply = financeAssistant.generateLocalReply("detail keuangan saya", budgetedSummary);
+  assert.match(detailReply, /Detail kondisi keuangan Anda/i);
+  assert.match(detailReply, /Tekanan pengeluaran/i);
+  assert.match(detailReply, /Daya tahan saldo/i);
 }
 
 function runReceiptParserTests() {

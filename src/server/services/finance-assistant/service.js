@@ -118,14 +118,35 @@ function createFinanceAssistantService({
 
     const balance = totals.income - totals.expense;
     const savingsRate = totals.income ? Number(((balance / totals.income) * 100).toFixed(1)) : 0;
+    const expenseRatio = totals.income ? Number(((totals.expense / totals.income) * 100).toFixed(1)) : 0;
+    const recentMonthlyExpenseEntries = monthlyCashflow.slice(-3);
+    const averageRecentMonthlyExpense = recentMonthlyExpenseEntries.length
+      ? Math.round(
+          recentMonthlyExpenseEntries.reduce((sum, entry) => sum + (Number(entry.expense) || 0), 0) / recentMonthlyExpenseEntries.length
+        )
+      : 0;
+    const cashRunwayMonths =
+      averageRecentMonthlyExpense > 0 && balance > 0 ? Number((balance / averageRecentMonthlyExpense).toFixed(1)) : 0;
+    const cashflowHealth =
+      savingsRate >= 20
+        ? "healthy-surplus"
+        : savingsRate >= 10
+          ? "tight-positive"
+          : balance >= 0
+            ? "thin-cushion"
+            : "deficit-pressure";
 
     return {
       activeMonth,
       averageExpense: expenseCounts ? Math.round(totals.expense / expenseCounts) : 0,
       averageIncome: incomeCounts ? Math.round(totals.income / incomeCounts) : 0,
+      averageRecentMonthlyExpense,
       balance,
       budgetOverview,
+      cashRunwayMonths,
+      cashflowHealth,
       biggestExpense,
+      expenseRatio,
       expenseBudgetStatus: budgetStatus,
       expenseBudgets: configuredBudgetEntries,
       expenseCategories: expenseList,
@@ -378,12 +399,76 @@ function createFinanceAssistantService({
     ];
   }
 
+  function formatRunwayMonths(value) {
+    const monthsValue = Number(value) || 0;
+    if (monthsValue <= 0) {
+      return "kurang dari 1 bulan";
+    }
+
+    if (monthsValue >= 24) {
+      return "lebih dari 24 bulan";
+    }
+
+    return `${String(monthsValue).replace(/\.0$/, "")} bulan`;
+  }
+
+  function buildFinanceDetailLines(summary, options = {}) {
+    if (!summary) {
+      return [];
+    }
+
+    const maxItems = Math.max(1, Number(options.maxItems) || 4);
+    const topCategory = summary.topExpenseCategory || null;
+    const budgetOverview = summary.budgetOverview || null;
+    const detailLines = [];
+
+    if (summary.cashflowHealth === "healthy-surplus") {
+      detailLines.push(`Kualitas cashflow: surplus sehat dengan rasio tabungan ${formatPercent(summary.savingsRate)}.`);
+    } else if (summary.cashflowHealth === "tight-positive") {
+      detailLines.push(`Kualitas cashflow: masih positif, tetapi ruang tabung hanya ${formatPercent(summary.savingsRate)}.`);
+    } else if (summary.cashflowHealth === "thin-cushion") {
+      detailLines.push(`Kualitas cashflow: saldo masih positif, tetapi bantalan kas sangat tipis dengan rasio tabungan ${formatPercent(summary.savingsRate)}.`);
+    } else {
+      detailLines.push(`Kualitas cashflow: sedang tertekan defisit dengan saldo ${formatCurrency(summary.balance)}.`);
+    }
+
+    detailLines.push(`Tekanan pengeluaran: ${formatPercent(summary.expenseRatio)} dari pemasukan sudah terpakai.`);
+
+    if (summary.averageRecentMonthlyExpense > 0) {
+      detailLines.push(
+        `Daya tahan saldo: sekitar ${formatRunwayMonths(summary.cashRunwayMonths)} berdasarkan rata-rata pengeluaran ${formatCurrency(summary.averageRecentMonthlyExpense)} per bulan.`
+      );
+    } else {
+      detailLines.push("Daya tahan saldo belum bisa dihitung akurat karena riwayat pengeluaran bulanan masih minim.");
+    }
+
+    if (topCategory) {
+      detailLines.push(
+        `Fokus pengeluaran utama ada di ${topCategory.category}, menyerap ${formatPercent(topCategory.share)} atau ${formatCurrency(topCategory.amount)} dari total pengeluaran.`
+      );
+    }
+
+    if (budgetOverview?.budgetCount) {
+      const budgetUsageRate = budgetOverview.totalBudget
+        ? Number(((budgetOverview.totalSpent / budgetOverview.totalBudget) * 100).toFixed(1))
+        : 0;
+      detailLines.push(
+        `Utilisasi budget bulan ${formatBudgetMonth(budgetOverview.activeMonth)} sudah ${formatPercent(budgetUsageRate)} untuk ${budgetOverview.budgetCount} kategori yang dipantau.`
+      );
+    } else {
+      detailLines.push(`Rata-rata transaksi pengeluaran saat ini sekitar ${formatCurrency(summary.averageExpense)} per transaksi.`);
+    }
+
+    return detailLines.slice(0, maxItems);
+  }
+
   function generateLocalReply(message, summary) {
     const lower = String(message || "").toLowerCase();
     const topCategory = summary.topExpenseCategory;
     const biggestExpense = summary.biggestExpense;
     const advice = [];
     const budgetAlerts = buildBudgetAlertLines(summary);
+    const financeDetails = buildFinanceDetailLines(summary);
 
     if (topCategory && topCategory.share >= 25) {
       advice.push(`Kategori ${topCategory.category} menyerap ${formatPercent(topCategory.share)} dari total pengeluaran.`);
@@ -412,6 +497,12 @@ function createFinanceAssistantService({
       ].join(" ");
     }
 
+    if (/\b(detail|rinci|mendalam|analisis|kesehatan)\b/i.test(lower)) {
+      return ["Detail kondisi keuangan Anda:", ...financeDetails.map((entry) => `- ${entry}`), budgetAlerts[0] ? `- ${budgetAlerts[0]}` : ""]
+        .filter(Boolean)
+        .join("\n");
+    }
+
     if (lower.includes("terbesar")) {
       if (!biggestExpense) {
         return "Belum ada data pengeluaran untuk dianalisis.";
@@ -432,8 +523,9 @@ function createFinanceAssistantService({
     return [
       `Saldo Anda saat ini ${formatCurrency(summary.balance)} dari ${summary.transactionCount} transaksi.`,
       advice[0] || "Arus kas masih bisa dioptimalkan dengan menjaga pengeluaran rutin tetap proporsional.",
+      financeDetails[1] || "",
       budgetAlerts[0] || "",
-      "Anda dapat meminta ringkasan, melihat pengeluaran terbesar, meminta rekomendasi penghematan, atau mencatat transaksi lewat format `catat ...`."
+      "Anda dapat meminta ringkasan, detail keuangan, melihat pengeluaran terbesar, meminta rekomendasi penghematan, atau mencatat transaksi lewat format `catat ...`."
     ]
       .filter(Boolean)
       .join(" ");
@@ -486,6 +578,7 @@ function createFinanceAssistantService({
 
   return {
     buildChatReply,
+    buildFinanceDetailLines,
     buildTransactionInputGuide,
     computeSummary,
     computeUserSummary,

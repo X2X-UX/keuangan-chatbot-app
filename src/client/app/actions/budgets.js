@@ -8,25 +8,30 @@ function setBudgetMessage(message = "", tone = "default") {
   elements.budgetMessage.classList.toggle("is-error", tone === "error");
 }
 
+function getBudgetReviewActionLabel() {
+  const budgetStatus = Array.isArray(state.summary?.expenseBudgetStatus) ? state.summary.expenseBudgetStatus : [];
+  const needsAttention = budgetStatus.some((entry) => entry.status === "warning" || entry.status === "over");
+
+  if (!state.user) {
+    return getActiveLocale() === "en" ? "Sign in to review budget alerts" : "Login untuk melihat alert budget";
+  }
+
+  return needsAttention
+    ? getActiveLocale() === "en"
+      ? "Review budgets that need attention"
+      : "Lihat budget yang perlu perhatian"
+    : getActiveLocale() === "en"
+      ? "Ask for a proactive budget review"
+      : "Minta review budget proaktif";
+}
+
 function updateBudgetAttentionPromptButton() {
   if (!elements.budgetAttentionPromptButton) {
     return;
   }
 
-  const budgetStatus = Array.isArray(state.summary?.expenseBudgetStatus) ? state.summary.expenseBudgetStatus : [];
-  const needsAttention = budgetStatus.some((entry) => entry.status === "warning" || entry.status === "over");
   elements.budgetAttentionPromptButton.disabled = !state.user;
-  elements.budgetAttentionPromptButton.textContent = !state.user
-    ? getActiveLocale() === "en"
-      ? "Sign in to review budget alerts"
-      : "Login untuk melihat alert budget"
-    : needsAttention
-      ? getActiveLocale() === "en"
-        ? "Review budgets that need attention"
-        : "Lihat budget yang perlu perhatian"
-      : getActiveLocale() === "en"
-        ? "Ask for a proactive budget review"
-        : "Minta review budget proaktif";
+  elements.budgetAttentionPromptButton.textContent = getBudgetReviewActionLabel();
 }
 
 function buildBudgetAttentionPrompt() {
@@ -138,6 +143,14 @@ function handleBudgetCategoryChange() {
   syncBudgetFormWithSummary();
 }
 
+function focusBudgetControls() {
+  const budgetCard = elements.budgetForm?.closest(".budget-card");
+  budgetCard?.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
+  window.requestAnimationFrame(() => {
+    elements.budgetCategory?.focus?.();
+  });
+}
+
 async function handleBudgetMonthChange(event) {
   const nextMonth = String(event?.target?.value || "").trim();
   if (!nextMonth || !state.user) {
@@ -172,4 +185,19 @@ async function handleBudgetAttentionPrompt() {
   if (elements.chatInput) {
     elements.chatInput.value = "";
   }
+}
+
+async function handleBudgetAlertAction() {
+  if (!state.user) {
+    showAuthGate(getActiveLocale() === "en" ? "Please sign in before managing budget alerts." : "Silakan masuk sebelum mengelola alert budget.");
+    return;
+  }
+
+  const budgetStatus = Array.isArray(state.summary?.expenseBudgetStatus) ? state.summary.expenseBudgetStatus : [];
+  if (!budgetStatus.length) {
+    focusBudgetControls();
+    return;
+  }
+
+  await handleBudgetAttentionPrompt();
 }

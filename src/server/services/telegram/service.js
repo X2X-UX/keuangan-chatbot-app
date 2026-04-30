@@ -154,12 +154,14 @@ function createTelegramService({
       "- `pemasukan 1,5jt gaji kategori Gaji`",
       "- foto struk dengan caption opsional seperti `pengeluaran` atau `pemasukan`",
       "- pertanyaan bebas seperti `ringkasan keuangan saya`",
+      "- pertanyaan bebas seperti `detail keuangan saya`",
       "",
       "Format nominal fleksibel: 15000, 15.000, Rp15.000, 15rb, 1,5jt",
       "",
       "Perintah opsional yang masih didukung:",
       "/start - lihat panduan singkat",
       "/summary - minta ringkasan keuangan",
+      "/detail - minta detail kondisi keuangan",
       "/unlink - putuskan koneksi Telegram dari akun",
       "/help - tampilkan bantuan",
       "",
@@ -408,6 +410,12 @@ function createTelegramService({
 
     if (/^\/summary\b/i.test(text)) {
       const result = await buildChatReply("Buat ringkasan keuangan saya.", linked.user);
+      await sendTelegramMessage(chatId, result.reply);
+      return;
+    }
+
+    if (/^\/detail\b/i.test(text)) {
+      const result = await buildChatReply("Buat detail keuangan saya.", linked.user);
       await sendTelegramMessage(chatId, result.reply);
       return;
     }

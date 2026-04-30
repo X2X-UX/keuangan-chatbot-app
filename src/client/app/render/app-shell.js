@@ -247,6 +247,28 @@ function clearDashboard() {
   elements.flowTimeline.innerHTML = `<div class="empty-state">${t("dashboard.monthlyFlowEmpty")}</div>`;
   elements.cashflowChart.innerHTML = `<div class="empty-state">${t("dashboard.cashflowSignin")}</div>`;
   elements.categoryChart.innerHTML = `<div class="empty-state">${t("dashboard.categorySignin")}</div>`;
+  if (elements.budgetAlertBanner) {
+    elements.budgetAlertBanner.classList.add("is-hidden");
+    elements.budgetAlertBanner.dataset.budgetAlertTone = "neutral";
+  }
+  if (elements.budgetAlertBadge) {
+    elements.budgetAlertBadge.textContent = getActiveLocale() === "en" ? "Budget update" : "Update budget";
+  }
+  if (elements.budgetAlertTitle) {
+    elements.budgetAlertTitle.textContent =
+      getActiveLocale() === "en"
+        ? "All category budgets are still on track."
+        : "Semua budget kategori masih aman.";
+  }
+  if (elements.budgetAlertText) {
+    elements.budgetAlertText.textContent =
+      getActiveLocale() === "en"
+        ? "Set monthly budgets to monitor important expense categories proactively."
+        : "Tambahkan budget bulanan untuk memantau kategori pengeluaran penting secara proaktif.";
+  }
+  if (elements.budgetAlertActionButton) {
+    elements.budgetAlertActionButton.textContent = getActiveLocale() === "en" ? "Ask for budget review" : "Minta review budget";
+  }
   if (elements.budgetOverviewValue) {
     elements.budgetOverviewValue.textContent = "Rp0";
   }
@@ -298,6 +320,26 @@ function clearDashboard() {
   }
   if (typeof renderBudgetFormOptions === "function") {
     renderBudgetFormOptions();
+  }
+  if (elements.financeDetailLead) {
+    elements.financeDetailLead.textContent = state.user
+      ? getActiveLocale() === "en"
+        ? "Detailed financial reading will update after the latest summary is loaded."
+        : "Pembacaan keuangan detail akan diperbarui setelah ringkasan terbaru dimuat."
+      : getActiveLocale() === "en"
+        ? "Sign in to view a deeper financial breakdown and practical reading of your numbers."
+        : "Login untuk melihat breakdown keuangan yang lebih mendalam beserta pembacaan praktis dari angkanya.";
+  }
+  if (elements.financeDetailList) {
+    elements.financeDetailList.innerHTML = `<div class="empty-state">${
+      state.user
+        ? getActiveLocale() === "en"
+          ? "Waiting for summary data to build a detailed financial reading."
+          : "Menunggu data ringkasan untuk menyusun pembacaan keuangan detail."
+        : getActiveLocale() === "en"
+          ? "Detailed financial analysis will appear after account data is loaded."
+          : "Analisis keuangan detail akan tampil setelah data akun berhasil dimuat."
+    }</div>`;
   }
   if (typeof setBudgetMessage === "function") {
     setBudgetMessage("");

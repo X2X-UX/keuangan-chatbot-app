@@ -147,6 +147,17 @@
         </div>
       </section>
 
+      <section id="budgetAlertBanner" class="budget-alert-banner card is-hidden" aria-live="polite">
+        <div class="budget-alert-copy">
+          <span id="budgetAlertBadge" class="budget-alert-badge">Budget update</span>
+          <strong id="budgetAlertTitle">Semua budget kategori masih aman.</strong>
+          <p id="budgetAlertText" class="budget-alert-text">Tambahkan budget bulanan untuk memantau kategori pengeluaran penting secara proaktif.</p>
+        </div>
+        <div class="budget-alert-actions">
+          <button id="budgetAlertActionButton" class="secondary-button" type="button">Minta review budget</button>
+        </div>
+      </section>
+
       <section class="overview grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <article class="metric card tw-metric-card">
           <div class="metric-head">
@@ -767,6 +778,7 @@
             <div class="quick-prompts tw-prompt-list" id="quickPrompts">
               <button class="tw-prompt-button" type="button" data-prompt="Buat ringkasan keuangan saya.">Ringkasan keuangan</button>
               <button class="tw-prompt-button" type="button" data-prompt="Pengeluaran terbesar saya apa?">Pengeluaran terbesar</button>
+              <button class="tw-prompt-button" type="button" data-prompt="Tolong cek budget kategori saya bulan ini dan beri tahu mana yang perlu perhatian.">Budget perlu perhatian</button>
               <button class="tw-prompt-button" type="button" data-prompt="Beri saran supaya saya lebih hemat.">Rekomendasi penghematan</button>
             </div>
 
@@ -782,6 +794,29 @@
               ></textarea>
               <button class="primary-button tw-action-primary" type="submit">Kirim</button>
             </form>
+          </article>
+
+          <article class="card insight-card tw-sidebar-card">
+            <div class="section-heading tw-section-heading">
+              <div class="section-title">
+                <span class="section-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4.5 17.5h15"></path>
+                    <path d="M6.5 14V9.5"></path>
+                    <path d="M12 14V6.5"></path>
+                    <path d="M17.5 14v-3"></path>
+                  </svg>
+                </span>
+                <div>
+                <span class="eyebrow">Detail</span>
+                <h2>Detail keuangan</h2>
+                </div>
+              </div>
+            </div>
+            <div class="finance-detail-panel">
+              <p id="financeDetailLead" class="finance-detail-lead">Login untuk melihat rincian kondisi keuangan yang lebih mendalam.</p>
+              <div id="financeDetailList" class="finance-detail-list"></div>
+            </div>
           </article>
 
           <article class="card insight-card tw-sidebar-card">
