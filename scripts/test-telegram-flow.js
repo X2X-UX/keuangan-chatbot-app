@@ -210,6 +210,15 @@ async function run() {
   await telegramService.handleTelegramUpdate({
     message: {
       chat: { id: 123, type: "private" },
+      text: "/detail"
+    }
+  });
+
+  assert.ok(sentMessages.some((entry) => /ok/i.test(entry.text)));
+
+  await telegramService.handleTelegramUpdate({
+    message: {
+      chat: { id: 123, type: "private" },
       text: "kategori Belanja"
     }
   });

@@ -30,6 +30,13 @@ function bindEvents() {
       });
     });
   }
+  if (elements.budgetAlertActionButton) {
+    elements.budgetAlertActionButton.addEventListener("click", () => {
+      handleBudgetAlertAction().catch((error) => {
+        window.alert(error.message);
+      });
+    });
+  }
   Object.values(IMPORT_MAPPING_ELEMENTS).forEach((element) => {
     element.addEventListener("change", handleImportMappingChange);
   });

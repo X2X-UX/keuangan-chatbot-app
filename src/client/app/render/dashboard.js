@@ -142,6 +142,7 @@ function renderSummary() {
 
   renderFlowStats(summary);
   renderBudgetSummary();
+  renderFinanceDetails();
 }
 
 function renderFlowStats(summary) {
@@ -301,7 +302,276 @@ function renderCategoryChart() {
   });
 }
 
+function formatRunwayEstimate(monthsValue) {
+  if (!Number.isFinite(monthsValue) || monthsValue <= 0) {
+    return getActiveLocale() === "en" ? "Less than 1 month" : "Kurang dari 1 bulan";
+  }
+
+  if (monthsValue >= 24) {
+    return getActiveLocale() === "en" ? "More than 24 months" : "Lebih dari 24 bulan";
+  }
+
+  const rounded = Math.round(monthsValue * 10) / 10;
+  return getActiveLocale() === "en"
+    ? `${String(rounded).replace(/\.0$/, "")} months`
+    : `${String(rounded).replace(/\.0$/, "")} bulan`;
+}
+
+function buildFinanceDetailItems(summary) {
+  if (!summary) {
+    return [];
+  }
+
+  const items = [];
+  const income = Number(summary.totalIncome) || 0;
+  const expense = Number(summary.totalExpense) || 0;
+  const balance = Number(summary.balance) || 0;
+  const savingsRate = Number(summary.savingsRate) || 0;
+  const expenseRatio = Number.isFinite(Number(summary.expenseRatio)) ? Number(summary.expenseRatio) : income > 0 ? (expense / income) * 100 : 0;
+  const latestMonths = Array.isArray(summary.monthlyCashflow) ? summary.monthlyCashflow.slice(-3) : [];
+  const averageMonthlyExpense = Number.isFinite(Number(summary.averageRecentMonthlyExpense))
+    ? Number(summary.averageRecentMonthlyExpense)
+    : latestMonths.length
+      ? latestMonths.reduce((sum, entry) => sum + (Number(entry.expense) || 0), 0) / latestMonths.length
+      : 0;
+  const runwayMonths = Number.isFinite(Number(summary.cashRunwayMonths))
+    ? Number(summary.cashRunwayMonths)
+    : averageMonthlyExpense > 0 && balance > 0
+      ? balance / averageMonthlyExpense
+      : 0;
+  const budgetOverview = summary.budgetOverview || null;
+  const budgetUsageRate = budgetOverview?.totalBudget ? (budgetOverview.totalSpent / budgetOverview.totalBudget) * 100 : 0;
+  const cashflowHealth =
+    summary.cashflowHealth ||
+    (savingsRate >= 20 ? "healthy-surplus" : savingsRate >= 10 ? "tight-positive" : balance >= 0 ? "thin-cushion" : "deficit-pressure");
+
+  items.push({
+    label: getActiveLocale() === "en" ? "Cashflow quality" : "Kualitas cashflow",
+    tone: cashflowHealth === "healthy-surplus" ? "positive" : cashflowHealth === "tight-positive" ? "neutral" : "caution",
+    value:
+      getActiveLocale() === "en"
+        ? cashflowHealth === "healthy-surplus"
+          ? "Healthy surplus"
+          : cashflowHealth === "tight-positive"
+            ? "Tight but positive"
+            : cashflowHealth === "thin-cushion"
+              ? "Very thin cushion"
+              : "Deficit pressure"
+        : cashflowHealth === "healthy-surplus"
+          ? "Surplus sehat"
+          : cashflowHealth === "tight-positive"
+            ? "Masih positif tapi ketat"
+            : cashflowHealth === "thin-cushion"
+              ? "Cadangan sangat tipis"
+              : "Tertekan defisit",
+    text:
+      getActiveLocale() === "en"
+        ? `Net balance ${formatCurrency(balance)} with a savings rate of ${formatPercent(savingsRate)}.`
+        : `Saldo bersih ${formatCurrency(balance)} dengan rasio tabungan ${formatPercent(savingsRate)}.`
+  });
+
+  items.push({
+    label: getActiveLocale() === "en" ? "Expense pressure" : "Tekanan pengeluaran",
+    tone: expenseRatio <= 70 ? "positive" : expenseRatio <= 90 ? "neutral" : "caution",
+    value:
+      getActiveLocale() === "en"
+        ? `${formatPercent(expenseRatio)} of income spent`
+        : `${formatPercent(expenseRatio)} dari pemasukan terpakai`,
+    text:
+      getActiveLocale() === "en"
+        ? `Expenses total ${formatCurrency(expense)} against income of ${formatCurrency(income)}.`
+        : `Pengeluaran total ${formatCurrency(expense)} dibanding pemasukan ${formatCurrency(income)}.`
+  });
+
+  items.push({
+    label: getActiveLocale() === "en" ? "Cash runway" : "Daya tahan saldo",
+    tone: runwayMonths >= 6 ? "positive" : runwayMonths >= 3 ? "neutral" : "caution",
+    value:
+      balance > 0 && averageMonthlyExpense > 0
+        ? formatRunwayEstimate(runwayMonths)
+        : getActiveLocale() === "en"
+          ? "Not enough history"
+          : "Riwayat belum cukup",
+    text:
+      getActiveLocale() === "en"
+        ? averageMonthlyExpense > 0
+          ? `Estimated from an average monthly expense of ${formatCurrency(averageMonthlyExpense)} over the last ${latestMonths.length} months.`
+          : "Add more monthly spending history to estimate how long your current balance could last."
+        : averageMonthlyExpense > 0
+          ? `Estimasi dari rata-rata pengeluaran ${formatCurrency(averageMonthlyExpense)} per bulan selama ${latestMonths.length} bulan terakhir.`
+          : "Tambahkan riwayat pengeluaran bulanan agar daya tahan saldo bisa diperkirakan lebih akurat."
+  });
+
+  if (summary.topExpenseCategory) {
+    items.push({
+      label: getActiveLocale() === "en" ? "Main spending focus" : "Fokus pengeluaran utama",
+      tone: summary.topExpenseCategory.share >= 35 ? "caution" : "neutral",
+      value: summary.topExpenseCategory.category,
+      text:
+        getActiveLocale() === "en"
+          ? `${formatCurrency(summary.topExpenseCategory.amount)} or ${formatPercent(summary.topExpenseCategory.share)} of all expenses.`
+          : `${formatCurrency(summary.topExpenseCategory.amount)} atau ${formatPercent(summary.topExpenseCategory.share)} dari total pengeluaran.`
+    });
+  }
+
+  if (budgetOverview?.budgetCount) {
+    items.push({
+      label: getActiveLocale() === "en" ? "Budget utilization" : "Utilisasi budget",
+      tone: budgetOverview.warningCount ? "caution" : "positive",
+      value:
+        getActiveLocale() === "en"
+          ? `${formatPercent(budgetUsageRate)} used`
+          : `${formatPercent(budgetUsageRate)} terpakai`,
+      text:
+        getActiveLocale() === "en"
+          ? `${budgetOverview.budgetCount} category budgets tracked for ${formatMonth(budgetOverview.activeMonth)}.`
+          : `${budgetOverview.budgetCount} budget kategori dipantau untuk ${formatMonth(budgetOverview.activeMonth)}.`
+    });
+  } else {
+    items.push({
+      label: getActiveLocale() === "en" ? "Average transaction" : "Rata-rata transaksi",
+      tone: "neutral",
+      value: formatCurrency(summary.averageExpense || 0),
+      text:
+        getActiveLocale() === "en"
+          ? "Average expense size based on recorded spending transactions."
+          : "Rata-rata nominal pengeluaran berdasarkan transaksi belanja yang sudah tercatat."
+    });
+  }
+
+  return items.slice(0, 5);
+}
+
+function renderFinanceDetails() {
+  if (!elements.financeDetailLead || !elements.financeDetailList) {
+    return;
+  }
+
+  const summary = state.summary;
+  if (!state.user || !summary) {
+    elements.financeDetailLead.textContent =
+      getActiveLocale() === "en"
+        ? "Sign in to view a deeper financial breakdown and practical reading of your numbers."
+        : "Login untuk melihat breakdown keuangan yang lebih mendalam beserta pembacaan praktis dari angkanya.";
+    elements.financeDetailList.innerHTML = `<div class="empty-state">${
+      getActiveLocale() === "en"
+        ? "Detailed financial analysis will appear after account data is loaded."
+        : "Analisis keuangan detail akan tampil setelah data akun berhasil dimuat."
+    }</div>`;
+    return;
+  }
+
+  const items = buildFinanceDetailItems(summary);
+  elements.financeDetailLead.textContent =
+    getActiveLocale() === "en"
+      ? `Detailed reading for ${formatMonth(summary.activeMonth)} based on ${summary.transactionCount} recorded transactions.`
+      : `Pembacaan detail untuk ${formatMonth(summary.activeMonth)} berdasarkan ${summary.transactionCount} transaksi yang tercatat.`;
+
+  elements.financeDetailList.innerHTML = "";
+  items.forEach((item, index) => {
+    const card = document.createElement("article");
+    card.className = "finance-detail-item";
+    card.dataset.detailTone = item.tone || "neutral";
+    card.style.setProperty("--item-index", String(index));
+    card.innerHTML = `
+      <div class="finance-detail-head">
+        <span class="finance-detail-label">${escapeHTML(item.label)}</span>
+        <strong class="finance-detail-value">${escapeHTML(item.value)}</strong>
+      </div>
+      <p class="finance-detail-text">${escapeHTML(item.text)}</p>
+    `;
+    elements.financeDetailList.appendChild(card);
+  });
+}
+
+function renderBudgetAlertBanner() {
+  if (
+    !elements.budgetAlertBanner ||
+    !elements.budgetAlertBadge ||
+    !elements.budgetAlertTitle ||
+    !elements.budgetAlertText ||
+    !elements.budgetAlertActionButton
+  ) {
+    return;
+  }
+
+  if (!state.user || !state.summary) {
+    elements.budgetAlertBanner.classList.add("is-hidden");
+    elements.budgetAlertBanner.dataset.budgetAlertTone = "neutral";
+    return;
+  }
+
+  const budgetOverview = state.summary.budgetOverview || null;
+  const budgetStatus = Array.isArray(state.summary.expenseBudgetStatus) ? state.summary.expenseBudgetStatus : [];
+  const overBudget = budgetStatus.filter((entry) => entry.status === "over");
+  const warningBudget = budgetStatus.filter((entry) => entry.status === "warning");
+  let badge = "";
+  let title = "";
+  let text = "";
+  let tone = "neutral";
+
+  if (!budgetStatus.length) {
+    tone = "setup";
+    badge = getActiveLocale() === "en" ? "Budget setup" : "Setup budget";
+    title =
+      getActiveLocale() === "en"
+        ? "Set monthly category budgets to stay ahead."
+        : "Atur budget kategori bulanan supaya lebih antisipatif.";
+    text =
+      getActiveLocale() === "en"
+        ? "Choose the expense categories you want to watch this month, then set a safe spending limit for each one."
+        : "Pilih kategori pengeluaran yang ingin dipantau bulan ini, lalu tetapkan batas belanja yang aman untuk tiap kategori.";
+    elements.budgetAlertActionButton.textContent = getActiveLocale() === "en" ? "Open budget controls" : "Buka kontrol budget";
+  } else if (overBudget.length) {
+    const primaryItem = overBudget[0];
+    tone = "over";
+    badge = getActiveLocale() === "en" ? "Over budget" : "Lewati budget";
+    title =
+      getActiveLocale() === "en"
+        ? `${overBudget.length} category budgets are over limit.`
+        : `${overBudget.length} budget kategori melewati limit.`;
+    text =
+      getActiveLocale() === "en"
+        ? `${primaryItem.category} is over by ${formatCurrency(primaryItem.overspentAmount)}${overBudget.length > 1 ? `, and ${overBudget.length - 1} more categories also need review.` : "."}`
+        : `${primaryItem.category} sudah lewat ${formatCurrency(primaryItem.overspentAmount)}${overBudget.length > 1 ? `, dan ${overBudget.length - 1} kategori lain juga perlu ditinjau.` : "."}`;
+    elements.budgetAlertActionButton.textContent = getBudgetReviewActionLabel();
+  } else if (warningBudget.length) {
+    const primaryItem = warningBudget[0];
+    tone = "warning";
+    badge = getActiveLocale() === "en" ? "Budget watch" : "Waspada budget";
+    title =
+      getActiveLocale() === "en"
+        ? `${warningBudget.length} category budgets need attention.`
+        : `${warningBudget.length} budget kategori perlu perhatian.`;
+    text =
+      getActiveLocale() === "en"
+        ? `${primaryItem.category} has used ${formatPercent(primaryItem.shareUsed)} of its monthly budget and has ${formatCurrency(primaryItem.remainingAmount)} left.`
+        : `${primaryItem.category} sudah memakai ${formatPercent(primaryItem.shareUsed)} dari budget bulan ini dan tersisa ${formatCurrency(primaryItem.remainingAmount)}.`;
+    elements.budgetAlertActionButton.textContent = getBudgetReviewActionLabel();
+  } else {
+    tone = "ok";
+    badge = getActiveLocale() === "en" ? "On track" : "Aman";
+    title =
+      getActiveLocale() === "en"
+        ? "All category budgets are still on track."
+        : "Semua budget kategori masih aman.";
+    text =
+      getActiveLocale() === "en"
+        ? `${budgetOverview?.onTrackCount || budgetStatus.length} categories are within limit for ${formatMonth(budgetOverview?.activeMonth || state.summary.activeMonth)}.`
+        : `${budgetOverview?.onTrackCount || budgetStatus.length} kategori masih dalam batas aman untuk ${formatMonth(budgetOverview?.activeMonth || state.summary.activeMonth)}.`;
+    elements.budgetAlertActionButton.textContent = getBudgetReviewActionLabel();
+  }
+
+  elements.budgetAlertBanner.dataset.budgetAlertTone = tone;
+  elements.budgetAlertBadge.textContent = badge;
+  elements.budgetAlertTitle.textContent = title;
+  elements.budgetAlertText.textContent = text;
+  elements.budgetAlertBanner.classList.remove("is-hidden");
+}
+
 function renderBudgetSummary() {
+  renderBudgetAlertBanner();
+
   if (!elements.budgetOverviewValue || !elements.budgetOverviewText || !elements.budgetList) {
     return;
   }
